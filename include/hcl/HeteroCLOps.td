@@ -1,4 +1,4 @@
-//===- StandaloneOps.td - Standalone dialect ops -----------*- tablegen -*-===//
+//===- HeteroCLOps.td - hcl dialect ops -----------*- tablegen -*-===//
 //
 // This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,16 +9,16 @@
 #ifndef STANDALONE_OPS
 #define STANDALONE_OPS
 
-include "StandaloneDialect.td"
+include "HeteroCLDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 
 
-def Standalone_FooOp : Standalone_Op<"foo", [NoSideEffect,
+def HeteroCL_FooOp : HeteroCL_Op<"foo", [NoSideEffect,
                                              SameOperandsAndResultType]> {
     let summary = "Illustrates how to define an operation.";
     let description = [{
-        The `standalone.foo` operation illustrates how to define a new
+        The `hcl.foo` operation illustrates how to define a new
         operation in a dialect. It uses an operation trait to declare that it
         has no side effects.
 
@@ -29,7 +29,7 @@ def Standalone_FooOp : Standalone_Op<"foo", [NoSideEffect,
         ```mlir
         %0 = constant 2 : i32
         // Apply the foo operation to %0
-        %1 = standalone.foo %0 : i32
+        %1 = hcl.foo %0 : i32
         ```
     }];
 
@@ -41,7 +41,7 @@ def Standalone_FooOp : Standalone_Op<"foo", [NoSideEffect,
     }];
 }
 
-def Standalone_GetLoop : Standalone_Op<"getLoop", [NoSideEffect, SameOperandsAndResultType]> {
+def HeteroCL_GetLoop : HeteroCL_Op<"getLoop", [NoSideEffect, SameOperandsAndResultType]> {
     let summary = "placeholder";
     let description = [{
         Get loop handle from loop id
@@ -55,7 +55,7 @@ def Standalone_GetLoop : Standalone_Op<"getLoop", [NoSideEffect, SameOperandsAnd
     }];
 }
 
-def Standalone_LoopSplit : Standalone_Op<"split"> 
+def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
 {
     let summary = "placeholder";
     let description = [{
@@ -74,7 +74,7 @@ def Standalone_LoopSplit : Standalone_Op<"split">
     }];
 }
 
-def Standalone_LoopReorder : Standalone_Op<"reorder"> 
+def HeteroCL_LoopReorder : HeteroCL_Op<"reorder"> 
 {
     let summary = "placeholder";
     let description = [{

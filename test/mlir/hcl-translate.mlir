@@ -1,4 +1,4 @@
-// RUN: standalone-translate --help | FileCheck %s
+// RUN: hcl-translate --help | FileCheck %s
 // CHECK: --deserialize-spirv
 // CHECK: --import-llvm
 // CHECK: --mlir-to-llvmir

@@ -1,4 +1,4 @@
-//===- StandaloneOps.h - Standalone dialect ops -----------------*- C++ -*-===//
+//===- HeteroCLOps.h - hcl dialect ops -----------------*- C++ -*-===//
 //
 // This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,6 +15,6 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #define GET_OP_CLASSES
-#include "Standalone/StandaloneOps.h.inc"
+#include "hcl/HeteroCLOps.h.inc"
 
 #endif // STANDALONE_STANDALONEOPS_H

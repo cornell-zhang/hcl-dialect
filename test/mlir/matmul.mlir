@@ -1,4 +1,4 @@
-// RUN: standalone-opt %s | standalone-opt | FileCheck %s
+// RUN: hcl-opt %s | hcl-opt | FileCheck %s
 
 module {
     // CHECK-LABEL: func @bar()
@@ -19,12 +19,12 @@ module {
         }
         %0 = constant 0 : i32
         %1 = constant 1 : i32
-        %li = standalone.getLoop %0 : i32
-        %lj = standalone.getLoop %1 : i32
+        %li = hcl.getLoop %0 : i32
+        %lj = hcl.getLoop %1 : i32
         %block_size = constant 8 : i32
-        %ii0 = standalone.split %li %block_size : i32 i32 i32
-        %ii1 = standalone.split %lj %block_size : i32 i32 i32
-        standalone.reorder [%li, %lj, %ii0, %ii1] : i32 i32 i32 i32
+        %ii0 = hcl.split %li %block_size : i32 i32 i32
+        %ii1 = hcl.split %lj %block_size : i32 i32 i32
+        hcl.reorder [%li, %lj, %ii0, %ii1] : i32 i32 i32 i32
         return %C : tensor<?x?xf32>
     }
 

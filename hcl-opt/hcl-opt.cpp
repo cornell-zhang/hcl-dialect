@@ -1,4 +1,4 @@
-//===- standalone-opt.cpp ---------------------------------------*- C++ -*-===//
+//===- hcl-opt.cpp ---------------------------------------*- C++ -*-===//
 //
 // This file is licensed under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -19,14 +19,14 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 
-#include "Standalone/StandaloneDialect.h"
+#include "hcl/HeteroCLDialect.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
-  // TODO: Register standalone passes here.
+  // TODO: Register hcl passes here.
 
   mlir::DialectRegistry registry;
-  registry.insert<mlir::standalone::StandaloneDialect>();
+  registry.insert<mlir::hcl::HeteroCLDialect>();
   registry.insert<mlir::StandardOpsDialect>();
   //registry.insert<AffineDialect>();
   // Add the following to include *all* MLIR Core dialects, or selectively
@@ -35,5 +35,5 @@ int main(int argc, char **argv) {
   registerAllDialects(registry);
 
   return failed(
-      mlir::MlirOptMain(argc, argv, "Standalone optimizer driver\n", registry));
+      mlir::MlirOptMain(argc, argv, "hcl optimizer driver\n", registry));
 }

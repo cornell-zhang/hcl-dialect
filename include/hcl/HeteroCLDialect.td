@@ -33,4 +33,7 @@ def HeteroCL_Dialect : Dialect {
 class HeteroCL_Op<string mnemonic, list<OpTrait> traits = []> :
         Op<HeteroCL_Dialect, mnemonic, traits>;
 
+class HeteroCL_Type<string name, list<Trait> traits = []> : 
+        TypeDef<HeteroCL_Dialect, name, traits>;
+
 #endif // STANDALONE_DIALECT

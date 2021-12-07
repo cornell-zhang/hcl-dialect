@@ -12,5 +12,5 @@
 #include "mlir/IR/Dialect.h"
 
 #include "hcl/HeteroCLOpsDialect.h.inc"
-
+#include "hcl/HeteroCLOpsTypes.h.inc"
 #endif // STANDALONE_STANDALONEDIALECT_H

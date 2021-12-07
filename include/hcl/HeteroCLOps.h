@@ -16,5 +16,5 @@
 
 #define GET_OP_CLASSES
 #include "hcl/HeteroCLOps.h.inc"
-
+#include "hcl/HeteroCLOpsTypes.h.inc"
 #endif // STANDALONE_STANDALONEOPS_H

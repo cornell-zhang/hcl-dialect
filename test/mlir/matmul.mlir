@@ -5,9 +5,9 @@ module {
     func @matrix_multiply( %A: tensor<?x?xf32>, %B: tensor<?x?xf32>, %C: tensor<?x?xf32>) 
 	-> tensor<?x?xf32>
     { 
-        %l0 = constant 0 : i32
-        %l1 = constant 1 : i32
-        %l2 = constant 2 : i32
+        %l0 = hcl.create_handle : i32
+        %l1 = hcl.create_handle : i32
+        %l2 = hcl.create_handle : i32
         %li, %lj, %lk = affine.for %i = 0 to 1024 iter_args(%label_i0=%l0, %label_i1=%l1, %label_i2=%l2) -> (i32, i32, i32) {
             %lj:2 = affine.for %j = 0 to 1024 iter_args(%label_j0=%l1, %label_j1=%l2) -> (i32, i32)  {
                 %lk = affine.for %k = 0 to 1024 iter_args(%label_k0=%l2) -> i32 {

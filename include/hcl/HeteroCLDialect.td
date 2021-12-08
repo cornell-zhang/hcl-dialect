@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef STANDALONE_DIALECT
-#define STANDALONE_DIALECT
+#ifndef HETEROCL_DIALECT
+#define HETEROCL_DIALECT
 
 include "mlir/IR/OpBase.td"
 
@@ -36,4 +36,4 @@ class HeteroCL_Op<string mnemonic, list<OpTrait> traits = []> :
 class HeteroCL_Type<string name, list<Trait> traits = []> : 
         TypeDef<HeteroCL_Dialect, name, traits>;
 
-#endif // STANDALONE_DIALECT
+#endif // HETEROCL_DIALECT

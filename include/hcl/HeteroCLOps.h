@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef STANDALONE_STANDALONEOPS_H
-#define STANDALONE_STANDALONEOPS_H
+#ifndef HETEROCL_OPS_H
+#define HETEROCL_OPS_H
 
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
@@ -17,4 +17,4 @@
 #define GET_OP_CLASSES
 #include "hcl/HeteroCLOps.h.inc"
 #include "hcl/HeteroCLOpsTypes.h.inc"
-#endif // STANDALONE_STANDALONEOPS_H
+#endif // HETEROCL_OPS_H

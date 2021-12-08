@@ -20,20 +20,30 @@
 #include "llvm/Support/ToolOutputFile.h"
 
 #include "hcl/HeteroCLDialect.h"
+#include "hcl/HeteroCLOps.h"
+#include "hcl/HeteroCLPasses.h"
 
 int main(int argc, char **argv) {
-  mlir::registerAllPasses();
-  // TODO: Register hcl passes here.
 
-  mlir::DialectRegistry registry;
-  registry.insert<mlir::hcl::HeteroCLDialect>();
-  registry.insert<mlir::StandardOpsDialect>();
+  mlir::MLIRContext context;
+  mlir::registerAllDialects(context);
+  mlir::registerAllPasses();
+  
+  //mlir::registerDialect<mlir::hcl::HeteroCLDialect>();
+  context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
+  mlir::hcl::registerHCLLoopReorderPass();
+
+ // mlir::DialectRegistry registry;
+ // registry.insert<mlir::hcl::HeteroCLDialect>();
+  //registry.insert<mlir::StandardOpsDialect>();
   //registry.insert<AffineDialect>();
   // Add the following to include *all* MLIR Core dialects, or selectively
   // include what you need like above. You only need to register dialects that
   // will be *parsed* by the tool, not the one generated
-  registerAllDialects(registry);
+//  registerAllDialects(registry);
 
-  return failed(
-      mlir::MlirOptMain(argc, argv, "hcl optimizer driver\n", registry));
+  // return failed(
+  //     mlir::MlirOptMain(argc, argv, "hcl optimizer driver\n", registry));
+
+  return 0;
 }

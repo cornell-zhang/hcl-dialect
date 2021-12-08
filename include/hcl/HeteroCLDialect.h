@@ -6,11 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef STANDALONE_STANDALONEDIALECT_H
-#define STANDALONE_STANDALONEDIALECT_H
+#ifndef HETEROCL_DIALECT_H
+#define HETEROCL_DIALECT_H
 
 #include "mlir/IR/Dialect.h"
-
 #include "hcl/HeteroCLOpsDialect.h.inc"
 #include "hcl/HeteroCLOpsTypes.h.inc"
-#endif // STANDALONE_STANDALONEDIALECT_H
+#endif // HETEROCL_DIALECT_H

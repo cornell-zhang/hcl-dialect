@@ -92,20 +92,6 @@ def HeteroCL_CreateHandle : HeteroCL_Op<"create_handle">
     }];
 }
 
-// def HeteroCL_LoopReorder : HeteroCL_Op<"reorder"> 
-// {
-//     let summary = "placeholder";
-//     let description = [{
-//         reorder
-//     }];
-
-//     let arguments = (ins AnyType:$in1, AnyType:$in2, AnyType:$in3, AnyType:$in4);
-//     let results = (outs );
-
-//     let assemblyFormat = [{
-//         `[` $in1 `,` $in2 `,` $in3 `,` $in4 `]` attr-dict `:` type($in1) type($in2) type($in3) type($in4)
-//     }];
-// }
 
 def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
 {

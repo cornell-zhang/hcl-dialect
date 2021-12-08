@@ -10,6 +10,8 @@
 #include "mlir/Pass/PassManager.h"
 #include "llvm/Support/Debug.h"
 
+#include <iostream>
+
 using namespace mlir;
 
 namespace {
@@ -17,11 +19,12 @@ namespace {
 struct HCLLoopReorder : public PassWrapper<HCLLoopReorder, OperationPass<>> {
   void runOnOperation() override {
     Operation *op = getOperation();
+    std::cout << "in HCLLoopReorder." << std::endl;
   }
-  // StringRef getArgument() const final { return "hcl-loop-reorder"; }
-  // StringRef getDescription() const final {
-  //     return "Loop Reorder in HeteroCL";
-  // }
+  StringRef getArgument() const final { return "hcl-loop-reorder"; }
+  StringRef getDescription() const {
+      return "Loop Reorder in HeteroCL";
+  }
 };
 
 } // namespace

@@ -12,6 +12,7 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Parser.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Support/MlirOptMain.h"
 #include "llvm/Support/CommandLine.h"
@@ -20,30 +21,90 @@
 #include "llvm/Support/ToolOutputFile.h"
 
 #include "hcl/HeteroCLDialect.h"
-#include "hcl/HeteroCLOps.h"
 #include "hcl/HeteroCLPasses.h"
 
-int main(int argc, char **argv) {
+static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
+                                                llvm::cl::desc("<input file>"),
+                                                llvm::cl::init("-"));
 
+static llvm::cl::opt<std::string>
+    outputFilename("o", llvm::cl::desc("Output filename"),
+                   llvm::cl::value_desc("filename"), llvm::cl::init("-"));
+
+static llvm::cl::opt<bool> splitInputFile(
+    "split-input-file",
+    llvm::cl::desc("Split the input file into pieces and process each "
+                   "chunk independently"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> verifyDiagnostics(
+    "verify-diagnostics",
+    llvm::cl::desc("Check that emitted diagnostics match "
+                   "expected-* lines on the corresponding line"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> verifyPasses(
+    "verify-each",
+    llvm::cl::desc("Run the verifier after each transformation pass"),
+    llvm::cl::init(true));
+
+static llvm::cl::opt<bool> allowUnregisteredDialects(
+    "allow-unregistered-dialect",
+    llvm::cl::desc("Allow operation with no registered dialects"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> preloadDialectsInContext(
+    "preload-dialects-in-context",
+    llvm::cl::desc("Preloads dialects in context"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> enableOpt("opt", llvm::cl::desc("Enable optimizations"));
+
+int main(int argc, char **argv) {
   mlir::MLIRContext context;
+  
+  // Register dialects and passes in current context
   mlir::registerAllDialects(context);
   mlir::registerAllPasses();
-  
-  //mlir::registerDialect<mlir::hcl::HeteroCLDialect>();
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::hcl::registerHCLLoopReorderPass();
 
- // mlir::DialectRegistry registry;
- // registry.insert<mlir::hcl::HeteroCLDialect>();
-  //registry.insert<mlir::StandardOpsDialect>();
-  //registry.insert<AffineDialect>();
-  // Add the following to include *all* MLIR Core dialects, or selectively
-  // include what you need like above. You only need to register dialects that
-  // will be *parsed* by the tool, not the one generated
-//  registerAllDialects(registry);
+  // Parse pass names in main to ensure static initialization completed.
+  llvm::cl::ParseCommandLineOptions(argc, argv,
+                                    "MLIR modular optimizer driver\n");
 
-  // return failed(
-  //     mlir::MlirOptMain(argc, argv, "hcl optimizer driver\n", registry));
 
+  // Set up the input output file file.
+  std::string errorMessage;
+  auto file = mlir::openInputFile(inputFilename, &errorMessage);
+  if (!file) {
+    llvm::errs() << errorMessage << "\n";
+    return 1;
+  }
+
+  auto output = mlir::openOutputFile(outputFilename, &errorMessage);
+  if (!output) {
+    llvm::errs() << errorMessage << "\n";
+    exit(1);
+  }
+
+  // initialize source manager
+  llvm::SourceMgr sourceMgr;
+  // Tell sourceMgr about this buffer, which is what the parser will pick up.
+  sourceMgr.AddNewSourceBuffer(std::move(file), llvm::SMLoc());
+  // Parse input mlir assembly file
+  mlir::OwningModuleRef module(mlir::parseSourceFile(sourceMgr, &context));
+  // Initialize a pass manager
+  mlir::PassManager pm(&context);
+  // Add desired passes
+  if (enableOpt) {
+    pm.addPass(mlir::hcl::createHCLLoopReorderPass());
+  }
+  // Run the pass pipeline
+  pm.run(*module);
+
+  // print output
+  module->print(output->os());
+  output->os() << "\n";
   return 0;
 }

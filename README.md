@@ -1,6 +1,6 @@
 # HeteroCL Dialect Prototype
 
-This is an example of an out-of-tree [MLIR](https://mlir.llvm.org/) dialect along with a hcl `opt`-like tool to operate on that dialect.
+This is an example of an out-of-tree [MLIR](https://mlir.llvm.org/) dialect along with an  `opt`-like tool to operate on that dialect.
 
 ## Building
 
@@ -33,13 +33,15 @@ cmake --build . --target hcl-opt
 ```
 **Note**: Make sure to pass `-DLLVM_INSTALL_UTILS=ON` when building LLVM with CMake in order to install `FileCheck` to the chosen installation prefix.
 
-### For Internall Developers
+### For Internal Developers
 LLVM doesn’t support newer GLIBCXX library thread API. We must build cmake and llvm with GLIBCXX lower than 3.4.20. I don’t think this is documented in LLVM’s guide. 
 
 Error message: Undefined reference in standard C++ library
 `libLLVMSupport.so: undefined reference to std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)())@GLIBCXX_3.4.22`
 
 I recommend build on `zhang-x1` server, where GLIBCXX library is older.
+
+Details about this issue: [group wiki](https://zhang-21.ece.cornell.edu/doku.php?id=research:personal:niansongzhang:tools:dylib)
 
 ### Run Our Dialect
 ```sh

@@ -60,7 +60,7 @@ static llvm::cl::opt<bool> preloadDialectsInContext(
 
 static llvm::cl::opt<bool> enableOpt(
     "opt", llvm::cl::desc("Enable optimizations"),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 
 int main(int argc, char **argv) {
   mlir::MLIRContext context;

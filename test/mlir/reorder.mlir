@@ -14,11 +14,11 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
                     %0 = tensor.insert %sum into %C[%i, %j] : tensor<?x?xf32> 
-                } 
-            } 
-        } {loop_handle =  "l1"}
+                } {loop_handle =  "k"}
+            } {loop_handle =  "j"} 
+        } {loop_handle =  "i"}
 
-        hcl.reorder {loop_id=["l1.i", "l1.k", "l1.j"]}
+        hcl.reorder {loop_id=["i", "k", "j"]}
         return %C : tensor<?x?xf32>
     }
 

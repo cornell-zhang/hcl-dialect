@@ -58,7 +58,9 @@ static llvm::cl::opt<bool> preloadDialectsInContext(
     llvm::cl::desc("Preloads dialects in context"),
     llvm::cl::init(false));
 
-static llvm::cl::opt<bool> enableOpt("opt", llvm::cl::desc("Enable optimizations"));
+static llvm::cl::opt<bool> enableOpt(
+    "opt", llvm::cl::desc("Enable optimizations"),
+    llvm::cl::init(true));
 
 int main(int argc, char **argv) {
   mlir::MLIRContext context;
@@ -98,10 +100,20 @@ int main(int argc, char **argv) {
   mlir::PassManager pm(&context);
   // Add desired passes
   if (enableOpt) {
-    pm.addPass(mlir::hcl::createHCLLoopReorderPass());
+    // Add operation agnostic passes here
+    // e.g. pm.addPass(mlir::hcl::createMyPass());
+
+    // Add operation specific passes here
+    // e.g. 
+    // mlir::OpPassManager &optPM = pm.nest<mlir::AffineForOp>();
+    // optPM.addPass(mlir::hcl::createMyPass());
+    mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+    optPM.addPass(mlir::hcl::createHCLLoopReorderPass());
   }
   // Run the pass pipeline
-  pm.run(*module);
+  if (mlir::failed(pm.run(*module))){
+    return 4;
+  }
 
   // print output
   module->print(output->os());

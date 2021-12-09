@@ -12,6 +12,8 @@
 using namespace mlir;
 using namespace mlir::hcl;
 
+#include "hcl/HeteroCLOpsDialect.cpp.inc"
+
 //===----------------------------------------------------------------------===//
 // hcl dialect.
 //===----------------------------------------------------------------------===//

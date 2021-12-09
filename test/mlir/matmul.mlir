@@ -16,7 +16,7 @@ module {
                     %c = tensor.extract %C[%i, %j] : tensor<?x?xf32> 
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
-                    //%0 = tensor.insert %sum into %C[%i, %j] : tensor<?x?xf32> 
+                    %0 = tensor.insert %sum into %C[%i, %j] : tensor<?x?xf32> 
                     affine.yield %label_k0 : i32
                 }
                 affine.yield %label_j0, %label_j1 : i32, i32
@@ -26,7 +26,6 @@ module {
         %block_size = constant 8 : i32
         %ii0 = hcl.split %li %block_size : i32 i32 i32
         %ii1 = hcl.split %lj %block_size : i32 i32 i32
-        hcl.reorder [%li, %lj, %ii0, %ii1] : i32 i32 i32 i32
         return %C : tensor<?x?xf32>
     }
 

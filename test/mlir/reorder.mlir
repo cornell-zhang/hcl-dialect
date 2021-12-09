@@ -13,6 +13,7 @@ module {
                     %c = tensor.extract %C[%i, %j] : tensor<?x?xf32> 
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
+                    %0 = tensor.insert %sum into %C[%i, %j] : tensor<?x?xf32> 
                 } 
             } 
         } {loop_handle =  "l1"}

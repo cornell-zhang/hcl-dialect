@@ -9,9 +9,8 @@ This is an example of an out-of-tree [MLIR](https://mlir.llvm.org/) dialect alon
 - cmake >= 3.13.4
 - [ninja](https://ninja-build.org)
 
-### Install LLVM 14.0.git
-- Git clone LLVM from here: [llvm-project](https://github.com/llvm/llvm-project).
-- Checkout this commit: `0c8fab9af`
+### Install LLVM 13.0.0
+- Download LLVM from here: [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-13.0.0).
 - Build:
 ```sh
 cmake \

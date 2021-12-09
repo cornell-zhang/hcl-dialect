@@ -39,7 +39,7 @@ LLVM doesn’t support newer GLIBCXX library thread API. We must build cmake and
 Error message: Undefined reference in standard C++ library
 `libLLVMSupport.so: undefined reference to std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)())@GLIBCXX_3.4.22`
 
-I recommend build on `zhang-x1` server, where GLIBCXX library is older.
+I recommend building on `zhang-x1` server, where GLIBCXX library is older.
 
 Details about this issue: [group wiki](https://zhang-21.ece.cornell.edu/doku.php?id=research:personal:niansongzhang:tools:dylib)
 

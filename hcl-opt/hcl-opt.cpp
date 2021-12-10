@@ -23,13 +23,18 @@
 #include "hcl/HeteroCLDialect.h"
 #include "hcl/HeteroCLPasses.h"
 
-static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
-                                                llvm::cl::desc("<input file>"),
-                                                llvm::cl::init("-"));
+#include <iostream>
 
-static llvm::cl::opt<std::string>
-    outputFilename("o", llvm::cl::desc("Output filename"),
-                   llvm::cl::value_desc("filename"), llvm::cl::init("-"));
+static llvm::cl::opt<std::string> inputFilename(
+    llvm::cl::Positional,
+    llvm::cl::desc("<input file>"),
+    llvm::cl::init("-"));
+
+static llvm::cl::opt<std::string> outputFilename(
+    "o",
+    llvm::cl::desc("Output filename"),
+    llvm::cl::value_desc("filename"),
+    llvm::cl::init("-"));
 
 static llvm::cl::opt<bool> splitInputFile(
     "split-input-file",
@@ -62,61 +67,69 @@ static llvm::cl::opt<bool> enableOpt(
     "opt", llvm::cl::desc("Enable optimizations"),
     llvm::cl::init(false));
 
-int main(int argc, char **argv) {
-  mlir::MLIRContext context;
-  
-  // Register dialects and passes in current context
-  mlir::registerAllDialects(context);
-  mlir::registerAllPasses();
-  context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
-  mlir::hcl::registerHCLLoopReorderPass();
-
-  // Parse pass names in main to ensure static initialization completed.
-  llvm::cl::ParseCommandLineOptions(argc, argv,
-                                    "MLIR modular optimizer driver\n");
-
-
-  // Set up the input output file file.
+int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
+  // Set up the input and output file
   std::string errorMessage;
-  auto file = mlir::openInputFile(inputFilename, &errorMessage);
-  if (!file) {
+  auto infile = mlir::openInputFile(inputFilename, &errorMessage);
+  if (!infile) {
     llvm::errs() << errorMessage << "\n";
     return 1;
   }
 
-  auto output = mlir::openOutputFile(outputFilename, &errorMessage);
-  if (!output) {
-    llvm::errs() << errorMessage << "\n";
-    exit(1);
-  }
-
-  // initialize source manager
+  // Parse the input MLIR
   llvm::SourceMgr sourceMgr;
-  // Tell sourceMgr about this buffer, which is what the parser will pick up.
-  sourceMgr.AddNewSourceBuffer(std::move(file), llvm::SMLoc());
-  // Parse input mlir assembly file
-  mlir::OwningModuleRef module(mlir::parseSourceFile(sourceMgr, &context));
+  sourceMgr.AddNewSourceBuffer(std::move(infile), llvm::SMLoc());
+  module = mlir::parseSourceFile(sourceMgr, &context);
+  if (!module) {
+    llvm::errs() << "Error can't load file " << inputFilename << "\n";
+    return 3;
+  }
+  return 0;
+}
+
+int main(int argc, char **argv) {
+
+  // Register dialects and passes in current context
+  mlir::MLIRContext context;
+  mlir::registerAllDialects(context);
+  context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
+  mlir::registerAllPasses();
+  mlir::hcl::registerHCLLoopReorderPass();
+
+  // Parse pass names in main to ensure static initialization completed
+  llvm::cl::ParseCommandLineOptions(argc, argv,
+                                    "MLIR modular optimizer driver\n");
+
+  mlir::OwningModuleRef module;
+  if (int error = loadMLIR(context, module))
+    return error;
+
   // Initialize a pass manager
+  // https://mlir.llvm.org/docs/PassManagement/
   mlir::PassManager pm(&context);
-  // Add desired passes
   if (enableOpt) {
+    std::cout << "Enable opt" << std::endl;
     // Add operation agnostic passes here
-    // e.g. pm.addPass(mlir::hcl::createMyPass());
+    // pm.addPass(mlir::createCanonicalizerPass());
 
     // Add operation specific passes here
-    // e.g. 
-    // mlir::OpPassManager &optPM = pm.nest<mlir::AffineForOp>();
-    // optPM.addPass(mlir::hcl::createMyPass());
     mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
     optPM.addPass(mlir::hcl::createHCLLoopReorderPass());
   }
+
   // Run the pass pipeline
   if (mlir::failed(pm.run(*module))){
     return 4;
   }
 
   // print output
-  module->print(output->os());
-  output->os() << "\n";
+  std::string errorMessage;
+  auto outfile = mlir::openOutputFile(outputFilename, &errorMessage);
+  if (!outfile) {
+    llvm::errs() << errorMessage << "\n";
+    return 2;
+  }
+  module->print(outfile->os());
+  outfile->os() << "\n";
   return 0;
 }

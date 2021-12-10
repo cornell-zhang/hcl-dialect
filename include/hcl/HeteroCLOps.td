@@ -41,17 +41,17 @@ def HeteroCL_FooOp : HeteroCL_Op<"foo", [NoSideEffect,
     }];
 }
 
-def HeteroCL_GetLoop : HeteroCL_Op<"getLoop", [NoSideEffect, SameOperandsAndResultType]> {
-    let summary = "placeholder";
+def HeteroCL_LoopHandle : HeteroCL_Op<"loop_handle"> 
+{
+    let summary = "loop handle";
     let description = [{
-        Get loop handle from loop id
+        loop handle
     }];
 
-    let arguments = (ins I32:$input);
-    let results = (outs I32:$res);
-
+    let arguments = (ins );
+    let results = (outs LoopType:$result);
     let assemblyFormat = [{
-        $input attr-dict `:` type($input)
+       attr-dict `:` type($result)
     }];
 }
 
@@ -69,8 +69,6 @@ def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
     }];
 }
 
-
-
 def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
 {
     let summary = "placeholder";
@@ -82,20 +80,6 @@ def HeteroCL_LoopSplit : HeteroCL_Op<"split">
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `,` $factor `:` type($factor) `)` attr-dict
-    }];
-}
-
-def HeteroCL_LoopHandle : HeteroCL_Op<"loop_handle"> 
-{
-    let summary = "loop handle";
-    let description = [{
-        loop handle
-    }];
-
-    let arguments = (ins );
-    let results = (outs LoopType:$result);
-    let assemblyFormat = [{
-       attr-dict `:` type($result)
     }];
 }
 

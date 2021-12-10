@@ -13,6 +13,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 
 #define GET_TYPEDEF_CLASSES
-#include "hcl/HeteroCLOpsTypes.h.inc"
+#include "hcl/HeteroCLTypes.h.inc"
 
 #endif // HCLTYPES_H

@@ -7,6 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/HeteroCLDialect.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/DialectImplementation.h"
+#include "mlir/Transforms/InliningUtils.h"
 #include "hcl/HeteroCLOps.h"
 #include "hcl/HeteroCLTypes.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -15,14 +18,14 @@
 using namespace mlir;
 using namespace mlir::hcl;
 
-#include "hcl/HeteroCLOpsDialect.cpp.inc"
+#include "hcl/HeteroCLDialect.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Tablegen Type Definitions
 //===----------------------------------------------------------------------===//
 
 #define GET_TYPEDEF_CLASSES
-#include "hcl/HeteroCLOpsTypes.cpp.inc"
+#include "hcl/HeteroCLTypes.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Dialect initialize method.
@@ -34,7 +37,7 @@ void HeteroCLDialect::initialize() {
       >();
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "hcl/HeteroCLOpsTypes.cpp.inc"
+#include "hcl/HeteroCLTypes.cpp.inc"
       >();
 }
 

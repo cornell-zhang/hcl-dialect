@@ -7,6 +7,7 @@ add_mlir_dialect_library(MLIRHeteroCL
 
         DEPENDS
         MLIRHeteroCLOpsIncGen
+        MLIRHeteroCLTypesIncGen
 
 	LINK_LIBS PUBLIC
 	MLIRIR

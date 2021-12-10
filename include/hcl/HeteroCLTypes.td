@@ -9,6 +9,8 @@
 #ifndef HCL_TYPES
 #define HCL_TYPES
 
+include "HeteroCLDialect.td"
+
 // // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
 // https://github.com/llvm/torch-mlir/blob/main/include/torch-mlir/Dialect/Torch/IR/TorchTypes.td#L50
 def LoopType : HeteroCL_Type<"Loop"> {
@@ -16,10 +18,9 @@ def LoopType : HeteroCL_Type<"Loop"> {
   let mnemonic = "Loop";
   let parameters = (ins StringRefParameter<"loop name">:$loopName);
   let printer = [{
-        $_printer << "<";
-        llvm::printEscapedString(getImpl()->loopName, $_printer.getStream());
-        $_printer << ">";
+        $_printer << "Loop '" << getImpl()->loopName << "'";
     }];
+  // llvm::printEscapedString(getImpl()->loopName, $_printer.getStream());
   let parser = [{
     if (parser.parseLess())
       return Type();

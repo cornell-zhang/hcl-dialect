@@ -8,35 +8,25 @@
 
 #include "hcl/HeteroCLDialect.h"
 #include "hcl/HeteroCLOps.h"
+#include "hcl/HeteroCLTypes.h"
+#include "llvm/ADT/TypeSwitch.h"
+#include "llvm/ADT/StringExtras.h"
 
 using namespace mlir;
 using namespace mlir::hcl;
 
-#include "llvm/ADT/TypeSwitch.h"
-#include "llvm/ADT/StringExtras.h"
 #include "hcl/HeteroCLOpsDialect.cpp.inc"
+
+//===----------------------------------------------------------------------===//
+// Tablegen Type Definitions
+//===----------------------------------------------------------------------===//
+
 #define GET_TYPEDEF_CLASSES
 #include "hcl/HeteroCLOpsTypes.cpp.inc"
 
 //===----------------------------------------------------------------------===//
-// hcl dialect.
+// Dialect initialize method.
 //===----------------------------------------------------------------------===//
-
-mlir::Type mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser& parser) const {
-  llvm::StringRef ref;
-    if (parser.parseKeyword(&ref))
-    {
-        return {};
-    }
-    mlir::Type genType;
-    generatedTypeParser(getContext(), parser, ref, genType);
-    return genType;
-}
-
-void mlir::hcl::HeteroCLDialect::printType(mlir::Type type, mlir::DialectAsmPrinter& printer) const {
-  auto res = generatedTypePrinter(type, printer);
-}
-
 void HeteroCLDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
@@ -46,4 +36,28 @@ void HeteroCLDialect::initialize() {
 #define GET_TYPEDEF_LIST
 #include "hcl/HeteroCLOpsTypes.cpp.inc"
       >();
+}
+
+//===----------------------------------------------------------------------===//
+// Type-related Dialect methods.
+//===----------------------------------------------------------------------===//
+
+mlir::Type mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser& parser) const {
+  StringRef keyword;
+  if (parser.parseKeyword(&keyword))
+    return Type();
+  Type type;
+  OptionalParseResult parseResult =
+      generatedTypeParser(getContext(), parser, keyword, type);
+  if (parseResult.hasValue())
+    return type;
+
+  parser.emitError(parser.getNameLoc(), "invalid 'hcl' type: `")
+      << keyword << "'";
+  return Type();
+}
+
+void mlir::hcl::HeteroCLDialect::printType(mlir::Type type, mlir::DialectAsmPrinter& printer) const {
+  if(failed(generatedTypePrinter(type, printer)))
+    llvm_unreachable("unknown 'hcl' type");
 }

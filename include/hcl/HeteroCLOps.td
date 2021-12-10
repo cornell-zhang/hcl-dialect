@@ -6,12 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef STANDALONE_OPS
-#define STANDALONE_OPS
+#ifndef HCL_OPS
+#define HCL_OPS
 
 include "HeteroCLDialect.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
+include "HeteroCLTypes.td"
 
+include "mlir/Interfaces/SideEffectInterfaces.td"
 
 def HeteroCL_FooOp : HeteroCL_Op<"foo", [NoSideEffect,
                                              SameOperandsAndResultType]> {
@@ -54,26 +55,6 @@ def HeteroCL_GetLoop : HeteroCL_Op<"getLoop", [NoSideEffect, SameOperandsAndResu
     }];
 }
 
-def HeteroCL_CreateHandle : HeteroCL_Op<"create_handle"> 
-{
-    let summary = "placeholder";
-    let description = [{
-        blank
-    }];
-
-    let arguments = (ins );
-    let results = (outs AnyType:$out1);
-
-    // let builders = [OpBuilder<
-    //     "Builder builder, OperationState &result, int64_t loop, int64_t block_size"
-    // >];
-
-    let assemblyFormat = [{
-       attr-dict `:` type($out1)
-    }];
-}
-
-
 def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
 {
     let summary = "placeholder";
@@ -88,17 +69,7 @@ def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
     }];
 }
 
-// // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
-def LoopType : HeteroCL_Type<"Loop"> {
-  let mnemonic = "Loop";
-  let parameters = (ins StringRefParameter<>:$loop_name);
-  let printer = [{
-        $_printer << "string";
-    }];
-  let parser = [{
-      return Type();
-  }];
-}
+
 
 def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
 {
@@ -114,37 +85,18 @@ def HeteroCL_LoopSplit : HeteroCL_Op<"split">
     }];
 }
 
-// def HandleType : HeteroCL_Type<"handle"> {
-//     let mnemonic = "handle";
+def HeteroCL_LoopHandle : HeteroCL_Op<"loop_handle"> 
+{
+    let summary = "loop handle";
+    let description = [{
+        loop handle
+    }];
 
-//     let summary = "An integer type with special semantics";
+    let arguments = (ins );
+    let results = (outs LoopType:$result);
+    let assemblyFormat = [{
+       attr-dict `:` type($result)
+    }];
+}
 
-//     let description = [{
-//         An alternate integer type. This type differentiates itself from the
-//         standard integer type by not having a SignednessSemantics parameter, just
-//         a width.
-//     }];
-
-//     let parameters = (ins "unsigned":$width);
-
-//     // We define the printer inline.
-//     let printer = [{
-//         $_printer << "int<" << getImpl()->width << ">";
-//     }];
-
-//     // The parser is defined here also.
-//     let parser = [{
-//         if ($_parser.parseLess())
-//         return Type();
-//         int width;
-//         if ($_parser.parseInteger(width))
-//         return Type();
-//         if ($_parser.parseGreater())
-//         return Type();
-//         return get($_ctxt, width);
-//     }];
-// }
-
-
-
-#endif // STANDALONE_OPS
+#endif // HCL_OPS

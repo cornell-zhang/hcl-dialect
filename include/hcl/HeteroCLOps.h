@@ -10,11 +10,17 @@
 #define HETEROCL_OPS_H
 
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Dialect.h"
+#include "mlir/IR/Matchers.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/OpImplementation.h"
+#include "mlir/IR/SymbolTable.h"
+#include "mlir/Interfaces/CastInterfaces.h"
+#include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "hcl/HeteroCLTypes.h"
 
 #define GET_OP_CLASSES
 #include "hcl/HeteroCLOps.h.inc"
-#include "hcl/HeteroCLOpsTypes.h.inc"
+
 #endif // HETEROCL_OPS_H

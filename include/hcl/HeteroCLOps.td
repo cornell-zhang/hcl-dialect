@@ -54,25 +54,6 @@ def HeteroCL_GetLoop : HeteroCL_Op<"getLoop", [NoSideEffect, SameOperandsAndResu
     }];
 }
 
-def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
-{
-    let summary = "placeholder";
-    let description = [{
-        split
-    }];
-
-    let arguments = (ins AnyType:$loop, I32:$block_size);
-    let results = (outs AnyType:$out1);
-
-    // let builders = [OpBuilder<
-    //     "Builder builder, OperationState &result, int64_t loop, int64_t block_size"
-    // >];
-
-    let assemblyFormat = [{
-        $loop $block_size attr-dict `:` type($loop) type($block_size) type($out1)
-    }];
-}
-
 def HeteroCL_CreateHandle : HeteroCL_Op<"create_handle"> 
 {
     let summary = "placeholder";
@@ -107,6 +88,19 @@ def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
     }];
 }
 
+def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
+{
+    let summary = "placeholder";
+    let description = [{
+        split
+    }];
+
+    let arguments = (ins I32:$loop, I32:$factor);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $loop `:` type($loop) `,` $factor `:` type($factor) `)` attr-dict
+    }];
+}
 
 // def HandleType : HeteroCL_Type<"handle"> {
 //     let mnemonic = "handle";

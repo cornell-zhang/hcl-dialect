@@ -14,6 +14,8 @@ module {
                 } {loop_handle = "k"}
             } {loop_handle = "j"}
         } {loop_handle = "i"}
+        %0 = constant 2 : i32
+        hcl.split (%0: i32, %0: i32)
         return %C : tensor<?x?xf32>
     }
 }

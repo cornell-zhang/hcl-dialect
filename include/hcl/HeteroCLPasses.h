@@ -9,7 +9,11 @@ namespace mlir {
 namespace hcl {
 
 void registerHCLLoopReorderPass();
-std::unique_ptr<Pass> createHCLLoopReorderPass();
+std::unique_ptr<mlir::Pass> createHCLLoopReorderPass();
+
+void registerHCLLoopTilingPass();
+std::unique_ptr<mlir::Pass> createHCLLoopTilingPass();
+
 } // namespace hcl
 } // namespace mlir
 

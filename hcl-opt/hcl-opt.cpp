@@ -95,6 +95,7 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::registerAllPasses();
   mlir::hcl::registerHCLLoopReorderPass();
+  mlir::hcl::registerHCLLoopTilingPass();
 
   // Parse pass names in main to ensure static initialization completed
   llvm::cl::ParseCommandLineOptions(argc, argv,
@@ -114,7 +115,8 @@ int main(int argc, char **argv) {
 
     // Add operation specific passes here
     mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
-    optPM.addPass(mlir::hcl::createHCLLoopReorderPass());
+    // optPM.addPass(mlir::hcl::createHCLLoopReorderPass());
+    optPM.addPass(mlir::hcl::createHCLLoopTilingPass());
   }
 
   // Run the pass pipeline

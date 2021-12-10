@@ -11,5 +11,10 @@
 
 #include "mlir/IR/Dialect.h"
 #include "hcl/HeteroCLOpsDialect.h.inc"
+
+#include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/IR/Types.h"
+#define GET_TYPEDEF_CLASSES
 #include "hcl/HeteroCLOpsTypes.h.inc"
 #endif // HETEROCL_DIALECT_H

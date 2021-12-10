@@ -88,6 +88,18 @@ def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
     }];
 }
 
+// // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
+def LoopType : HeteroCL_Type<"Loop"> {
+  let mnemonic = "Loop";
+  let parameters = (ins StringRefParameter<>:$loop_name);
+  let printer = [{
+        $_printer << "string";
+    }];
+  let parser = [{
+      return Type();
+  }];
+}
+
 def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
 {
     let summary = "placeholder";
@@ -95,7 +107,7 @@ def HeteroCL_LoopSplit : HeteroCL_Op<"split">
         split
     }];
 
-    let arguments = (ins I32:$loop, I32:$factor);
+    let arguments = (ins LoopType:$loop, I32:$factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `,` $factor `:` type($factor) `)` attr-dict

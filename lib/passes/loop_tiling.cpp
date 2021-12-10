@@ -27,18 +27,18 @@ struct HCLLoopTiling : public PassWrapper<HCLLoopTiling, FunctionPass> {
 
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTiling::runOnFunction()  {
-  // tile(ArrayRef<AffineForOp> forOps,
-  //               ArrayRef<uint64_t> sizes,
-  //               ArrayRef<AffineForOp> targets);
   FuncOp f = getFunction();
-  // for (AffineForOp forOp : f.getOps<AffineForOp>()) { }
-  ArrayRef<AffineForOp> forOps;
-  f.walk([&](AffineForOp forOp) { forOps.push_back(forOp); });
-  ArrayRef<uint64_t> size;
-  size.push_back(2);
-  size.push_back(2);
-  size.push_back(2);
-  tile(forOps, size, forOps);
+  SmallVector<AffineForOp, 6> forOps;
+  for (AffineForOp forOp : f.getOps<AffineForOp>()) {
+    forOps.push_back(forOp);
+    break;
+  }
+  // f.walk([&](AffineForOp forOp) { forOps.push_back(forOp); });
+  SmallVector<unsigned, 6> tileSizes;
+  tileSizes.push_back(2);
+  SmallVector<AffineForOp, 12> tiledNest;
+  if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
+    return signalPassFailure();
 }
 
 

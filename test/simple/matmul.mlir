@@ -3,6 +3,9 @@
 module {
     func @matrix_multiply( %A: tensor<?x?xf32>, %B: tensor<?x?xf32>, %C: tensor<?x?xf32>) -> tensor<?x?xf32>
     {
+        %l1 = hcl.loop_handle {} : !hcl.Loop<"i">
+        %l2 = hcl.loop_handle {} : !hcl.Loop<"j">
+        %l3 = hcl.loop_handle {} : !hcl.Loop<"k">
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
@@ -11,12 +14,10 @@ module {
                     %c = tensor.extract %C[%i, %j] : tensor<?x?xf32>
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
-                } {loop_handle = "k"}
-            } {loop_handle = "j"}
-        } {loop_handle = "i"}
-        %0 = constant 2 : i32
-        %1 = hcl.loop_handle {} : !hcl.Loop<"i">
-        hcl.split (%1: !hcl.Loop<"i">, %0: i32)
+                } { loop_name = "k" }
+            } { loop_name = "j" }
+        } { loop_name = "i" }
+        hcl.split (%l3: !hcl.Loop<"k">, 16)
         return %C : tensor<?x?xf32>
     }
 }

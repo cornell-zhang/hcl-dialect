@@ -41,7 +41,7 @@ def HeteroCL_FooOp : HeteroCL_Op<"foo", [NoSideEffect,
     }];
 }
 
-def HeteroCL_LoopHandle : HeteroCL_Op<"loop_handle"> 
+def HeteroCL_LoopHandleOp : HeteroCL_Op<"loop_handle"> 
 {
     let summary = "loop handle";
     let description = [{
@@ -55,7 +55,7 @@ def HeteroCL_LoopHandle : HeteroCL_Op<"loop_handle">
     }];
 }
 
-def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
+def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 {
     let summary = "placeholder";
     let description = [{
@@ -69,18 +69,20 @@ def HeteroCL_LoopReorder : HeteroCL_Op<"reorder">
     }];
 }
 
-def HeteroCL_LoopSplit : HeteroCL_Op<"split"> 
+def HeteroCL_SplitOp : HeteroCL_Op<"split"> 
 {
     let summary = "placeholder";
     let description = [{
         split
     }];
 
-    let arguments = (ins LoopType:$loop, I32:$factor);
+    let arguments = (ins LoopType:$loop, UI32Attr:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop `:` type($loop) `,` $factor `:` type($factor) `)` attr-dict
+        `(` $loop `:` type($loop) `,` $factor `)` attr-dict
     }];
+    // https://mlir.llvm.org/docs/OpDefinitions/#custom-builder-methods
+    // let builders = [];
 }
 
 #endif // HCL_OPS

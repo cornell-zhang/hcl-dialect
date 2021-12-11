@@ -13,12 +13,13 @@ include "HeteroCLDialect.td"
 
 // // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
 // https://github.com/llvm/torch-mlir/blob/main/include/torch-mlir/Dialect/Torch/IR/TorchTypes.td#L50
-def LoopType : HeteroCL_Type<"Loop"> {
+def LoopHandle : HeteroCL_Type<"LoopHandle"> {
   let summary = "loop handle";
-  let mnemonic = "Loop";
-  let parameters = (ins StringRefParameter<"loop name">:$loopName);
+  let mnemonic = "LoopHandle";
+  let parameters = (ins StringRefParameter<"loopName">:$loopName);
   let printer = [{
-        $_printer << "Loop '" << getImpl()->loopName << "'";
+        StringRef loopName = getImpl()->loopName;
+        $_printer << "Loop <" << loopName.str() << ">";
     }];
   // llvm::printEscapedString(getImpl()->loopName, $_printer.getStream());
   let parser = [{

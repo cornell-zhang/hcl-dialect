@@ -3,9 +3,9 @@
 module {
     func @matrix_multiply( %A: tensor<?x?xf32>, %B: tensor<?x?xf32>, %C: tensor<?x?xf32>) -> tensor<?x?xf32>
     {
-        %l1 = hcl.loop_handle {} : !hcl.Loop<"i">
-        %l2 = hcl.loop_handle {} : !hcl.Loop<"j">
-        %l3 = hcl.loop_handle {} : !hcl.Loop<"k">
+        %l1 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i">
+        %l2 = hcl.create_loop_handle {} : !hcl.LoopHandle<"j">
+        %l3 = hcl.create_loop_handle {} : !hcl.LoopHandle<"k">
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
@@ -17,10 +17,10 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i" }
-        // hcl.split (%l1: !hcl.Loop<"i">, 8)
-        // hcl.split (%l3: !hcl.Loop<"k">, 16)
-        // hcl.tile (%l2: !hcl.Loop<"j">, %l3: !hcl.Loop<"k">, 2, 4)
-        hcl.tile (%l1: !hcl.Loop<"i">, %l2: !hcl.Loop<"j">, 4, 8)
+        // hcl.split (%l1: !hcl.LoopHandle<"i">, 8)
+        // hcl.split (%l3: !hcl.LoopHandle<"k">, 16)
+        // hcl.tile (%l2: !hcl.LoopHandle<"j">, %l3: !hcl.LoopHandle<"k">, 2, 4)
+        hcl.tile (%l1: !hcl.LoopHandle<"i">, %l2: !hcl.LoopHandle<"j">, 4, 8)
         return %C : tensor<?x?xf32>
     }
 }

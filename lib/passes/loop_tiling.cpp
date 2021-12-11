@@ -38,7 +38,7 @@ void HCLLoopTiling::runOnFunction()  {
   FuncOp f = getFunction();
   for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
     unsigned int factor = splitOp.factor();
-    const auto loop_name = splitOp.loop().getType().cast<hcl::LoopType>().getLoopName();
+    const auto loop_name = splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
     f.walk([&](AffineForOp forOp) { // loop nest traversal
       const NamedAttribute* attr = findArg(forOp->getAttrs(), "loop_name");
       if (loop_name == attr->second.cast<StringAttr>().getValue()) {
@@ -55,8 +55,8 @@ void HCLLoopTiling::runOnFunction()  {
   for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
     unsigned int x_factor = tileOp.x_factor();
     unsigned int y_factor = tileOp.y_factor();
-    const StringRef x_loop = tileOp.x_loop().getType().cast<hcl::LoopType>().getLoopName();
-    const StringRef y_loop = tileOp.y_loop().getType().cast<hcl::LoopType>().getLoopName();
+    const StringRef x_loop = tileOp.x_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+    const StringRef y_loop = tileOp.y_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
     SmallVector<AffineForOp, 6> forOps;
     SmallVector<unsigned, 6> tileSizes;
     tileSizes.push_back(x_factor);

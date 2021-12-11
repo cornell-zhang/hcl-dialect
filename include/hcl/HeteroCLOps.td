@@ -41,7 +41,7 @@ def HeteroCL_FooOp : HeteroCL_Op<"foo", [NoSideEffect,
     }];
 }
 
-def HeteroCL_LoopHandleOp : HeteroCL_Op<"loop_handle"> 
+def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
 {
     let summary = "loop handle";
     let description = [{
@@ -49,7 +49,7 @@ def HeteroCL_LoopHandleOp : HeteroCL_Op<"loop_handle">
     }];
 
     let arguments = (ins );
-    let results = (outs LoopType:$result);
+    let results = (outs LoopHandle:$result);
     let assemblyFormat = [{
        attr-dict `:` type($result)
     }];
@@ -76,7 +76,7 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
         split
     }];
 
-    let arguments = (ins LoopType:$loop, UI32Attr:$factor);
+    let arguments = (ins LoopHandle:$loop, UI32Attr:$factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `,` $factor `)` attr-dict
@@ -92,7 +92,7 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
         tile
     }];
 
-    let arguments = (ins LoopType:$x_loop, LoopType:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
+    let arguments = (ins LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $x_loop `:` type($x_loop) `,` $y_loop `:` type($y_loop) `,` $x_factor `,` $y_factor `)` attr-dict

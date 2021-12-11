@@ -71,7 +71,7 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 
 def HeteroCL_SplitOp : HeteroCL_Op<"split"> 
 {
-    let summary = "placeholder";
+    let summary = "split";
     let description = [{
         split
     }];
@@ -83,6 +83,20 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
     }];
     // https://mlir.llvm.org/docs/OpDefinitions/#custom-builder-methods
     // let builders = [];
+}
+
+def HeteroCL_TileOp : HeteroCL_Op<"tile"> 
+{
+    let summary = "tile";
+    let description = [{
+        tile
+    }];
+
+    let arguments = (ins LoopType:$x_loop, LoopType:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $x_loop `:` type($x_loop) `,` $y_loop `:` type($y_loop) `,` $x_factor `,` $y_factor `)` attr-dict
+    }];
 }
 
 #endif // HCL_OPS

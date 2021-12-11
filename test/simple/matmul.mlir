@@ -17,7 +17,10 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i" }
-        hcl.split (%l3: !hcl.Loop<"k">, 16)
+        // hcl.split (%l1: !hcl.Loop<"i">, 8)
+        // hcl.split (%l3: !hcl.Loop<"k">, 16)
+        // hcl.tile (%l2: !hcl.Loop<"j">, %l3: !hcl.Loop<"k">, 2, 4)
+        hcl.tile (%l1: !hcl.Loop<"i">, %l2: !hcl.Loop<"j">, 4, 8)
         return %C : tensor<?x?xf32>
     }
 }

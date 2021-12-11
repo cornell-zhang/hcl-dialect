@@ -65,6 +65,7 @@ void HCLLoopTiling::runOnFunction()  {
       }
       newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), new_name));
     }
+    splitOp.erase();
   }
   for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
     unsigned int x_factor = tileOp.x_factor();
@@ -110,6 +111,7 @@ void HCLLoopTiling::runOnFunction()  {
     SmallVector<AffineForOp, 6> tiledNest;
     if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
       return signalPassFailure();
+    tileOp.erase();
   }
 }
 

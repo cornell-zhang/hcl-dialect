@@ -36,21 +36,35 @@ static auto findArg(RangeT &&range, StringRef name) {
 void HCLLoopTiling::runOnFunction()  {
   // TODO: Support multiple splits/tiles
   FuncOp f = getFunction();
+  SmallVector<AffineForOp, 6> tiledNest;
   for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
     unsigned int factor = splitOp.factor();
     const auto loop_name = splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
     f.walk([&](AffineForOp forOp) { // loop nest traversal
-      const NamedAttribute* attr = findArg(forOp->getAttrs(), "loop_name");
-      if (loop_name == attr->second.cast<StringAttr>().getValue()) {
+      // mlir/IR/Operation.h
+      Attribute attr = forOp->getAttr("loop_name");
+      if (loop_name == attr.cast<StringAttr>().getValue()) {
         SmallVector<AffineForOp, 6> forOps;
         forOps.push_back(forOp);
         SmallVector<unsigned, 6> tileSizes;
         tileSizes.push_back(factor);
-        SmallVector<AffineForOp, 6> tiledNest;
         if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
           return signalPassFailure();
       }
     });
+    bool outLoopFlag = true;
+    for (AffineForOp newForOp : tiledNest) {
+      // llvm::raw_ostream &output = llvm::outs();
+      // newForOp->print(output);
+      std::string new_name = loop_name.str();
+      if (outLoopFlag) {
+        outLoopFlag = false;
+        new_name += ".outer";
+      } else {
+        new_name += ".inner";
+      }
+      newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), new_name));
+    }
   }
   for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
     unsigned int x_factor = tileOp.x_factor();

@@ -35,15 +35,13 @@ static auto findArg(RangeT &&range, StringRef name) {
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTiling::runOnFunction()  {
   FuncOp f = getFunction();
-  // SmallVector<hcl::SplitOp, 6> splitOps;
   for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
     unsigned int factor = splitOp.factor();
     const auto loop_name = splitOp.loop().getType().cast<hcl::LoopType>().getLoopName();
-    SmallVector<AffineForOp, 6> forOps;
-    // for (AffineForOp forOp : f.getOps<AffineForOp>()) {
     f.walk([&](AffineForOp forOp) { // loop nest traversal
       const NamedAttribute* attr = findArg(forOp->getAttrs(), "loop_name");
       if (loop_name == attr->second.cast<StringAttr>().getValue()) {
+        SmallVector<AffineForOp, 6> forOps;
         forOps.push_back(forOp);
         SmallVector<unsigned, 6> tileSizes;
         tileSizes.push_back(factor);

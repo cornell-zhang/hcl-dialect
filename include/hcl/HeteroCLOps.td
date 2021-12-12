@@ -77,9 +77,9 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
     }];
 
     let arguments = (ins LoopHandle:$loop, UI32Attr:$factor);
-    let results = (outs );
+    let results = (outs LoopHandle:$outer, LoopHandle:$inner);
     let assemblyFormat = [{
-        `(` $loop `:` type($loop) `,` $factor `)` attr-dict
+        `(` $loop `:` type($loop) `,` $factor `)` attr-dict `->` `(` type($outer) `,` type($inner) `)`
     }];
     // https://mlir.llvm.org/docs/OpDefinitions/#custom-builder-methods
     // let builders = [];

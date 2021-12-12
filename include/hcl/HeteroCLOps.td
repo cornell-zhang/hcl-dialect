@@ -99,4 +99,18 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
     }];
 }
 
+def HeteroCL_UnrollOp : HeteroCL_Op<"unroll"> 
+{
+    let summary = "unroll";
+    let description = [{
+        unroll
+    }];
+
+    let arguments = (ins LoopHandle:$loop, UI32Attr:$factor);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $loop `:` type($loop) `,` $factor `)` attr-dict
+    }];
+}
+
 #endif // HCL_OPS

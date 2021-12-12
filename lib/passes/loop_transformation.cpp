@@ -25,6 +25,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
 
   void runSplitting();
   void runTiling();
+  void runUnrolling();
 };
 
 } // namespace
@@ -153,10 +154,36 @@ void HCLLoopTransformation::runTiling() {
   //   tileOp.erase();
 }
 
+void HCLLoopTransformation::runUnrolling() {
+  FuncOp f = getFunction();
+  for (hcl::UnrollOp unrollOp : f.getOps<hcl::UnrollOp>()) {
+    // 1) get schedule
+    unsigned int factor = unrollOp.factor();
+    const auto loop_name = unrollOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the nested loops and find the requested one
+    //    and split the loop
+    f.walk([&](AffineForOp forOp) {
+      Attribute attr = forOp->getAttr("loop_name");
+      if (loop_name == attr.cast<StringAttr>().getValue()) {
+        forOp->setAttr("unroll",
+                      IntegerAttr::get(
+                        IntegerType::get(
+                          forOp->getContext(),
+                          32,
+                          IntegerType::SignednessSemantics::Signless),
+                        factor)
+                      );
+      }
+    });
+  }
+}
+
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
   runTiling();
+  runUnrolling();
 }
 
 namespace mlir {

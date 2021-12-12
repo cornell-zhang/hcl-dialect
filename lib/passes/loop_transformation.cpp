@@ -26,6 +26,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   void runSplitting();
   void runTiling();
   void runUnrolling();
+  void runPipelining();
 };
 
 } // namespace
@@ -162,7 +163,6 @@ void HCLLoopTransformation::runUnrolling() {
     const auto loop_name = unrollOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
 
     // 2) Traverse all the nested loops and find the requested one
-    //    and split the loop
     f.walk([&](AffineForOp forOp) {
       Attribute attr = forOp->getAttr("loop_name");
       if (loop_name == attr.cast<StringAttr>().getValue()) {
@@ -179,11 +179,36 @@ void HCLLoopTransformation::runUnrolling() {
   }
 }
 
+void HCLLoopTransformation::runPipelining() {
+  FuncOp f = getFunction();
+  for (hcl::PipelineOp pipelineOp : f.getOps<hcl::PipelineOp>()) {
+    // 1) get schedule
+    unsigned int ii = pipelineOp.ii();
+    const auto loop_name = pipelineOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the nested loops and find the requested one
+    f.walk([&](AffineForOp forOp) {
+      Attribute attr = forOp->getAttr("loop_name");
+      if (loop_name == attr.cast<StringAttr>().getValue()) {
+        forOp->setAttr("pipeline_ii",
+                      IntegerAttr::get(
+                        IntegerType::get(
+                          forOp->getContext(),
+                          32,
+                          IntegerType::SignednessSemantics::Signless),
+                        ii)
+                      );
+      }
+    });
+  }
+}
+
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
   runTiling();
   runUnrolling();
+  runPipelining();
 }
 
 namespace mlir {

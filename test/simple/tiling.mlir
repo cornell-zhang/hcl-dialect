@@ -23,6 +23,7 @@ module {
         %l10, %l11, %l12, %l13 = hcl.tile (%l2: !hcl.LoopHandle<"j">, %l3: !hcl.LoopHandle<"k">, 2, 4) -> (!hcl.LoopHandle<"j.outer">, !hcl.LoopHandle<"j.inner">, !hcl.LoopHandle<"k.outer">, !hcl.LoopHandle<"k.inner">) // split & tile
         // %l14, %l15, %l16, %l17 = hcl.tile (%l6: !hcl.LoopHandle<"i.inner.outer">, %l7: !hcl.LoopHandle<"i.inner.inner">, 2, 2) -> (!hcl.LoopHandle<"i.inner.outer.outer">, !hcl.LoopHandle<"i.inner.outer.inner">, !hcl.LoopHandle<"i.inner.inner.outer">, !hcl.LoopHandle<"i.inner.outer">) // nest with split (failed)
         hcl.unroll (%l13: !hcl.LoopHandle<"k.inner">, 16) // unroll
+        hcl.pipeline (%l12: !hcl.LoopHandle<"k.outer">, 1) // pipeline
         return %C : tensor<?x?xf32>
     }
 }

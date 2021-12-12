@@ -113,4 +113,22 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
     }];
 }
 
+def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline"> 
+{
+    let summary = "pipeline";
+    let description = [{
+        pipeline
+    }];
+
+    let arguments = (ins LoopHandle:$loop, UI32Attr:$ii);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $loop `:` type($loop) `,` $ii `)` attr-dict
+    }];
+    let builders = [
+        OpBuilder<(ins "hcl::LoopHandleType":$loop,
+                   CArg<"uint64_t", "1">:$ii)>
+    ];
+}
+
 #endif // HCL_OPS

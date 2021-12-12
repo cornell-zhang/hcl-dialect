@@ -106,7 +106,8 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
         unroll
     }];
 
-    let arguments = (ins LoopHandle:$loop, UI32Attr:$factor);
+    // factor=0 means fully unroll the loop
+    let arguments = (ins LoopHandle:$loop, DefaultValuedAttr<UI32Attr,"0">:$factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `,` $factor `)` attr-dict
@@ -120,7 +121,7 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
         pipeline
     }];
 
-    let arguments = (ins LoopHandle:$loop, UI32Attr:$ii);
+    let arguments = (ins LoopHandle:$loop, DefaultValuedAttr<UI32Attr, "1">:$ii);
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `,` $ii `)` attr-dict

@@ -17,10 +17,11 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i" }
-        // hcl.split (%l1: !hcl.LoopHandle<"i">, 8)
-        // hcl.split (%l3: !hcl.LoopHandle<"k">, 16)
-        // hcl.tile (%l2: !hcl.LoopHandle<"j">, %l3: !hcl.LoopHandle<"k">, 2, 4)
-        hcl.tile (%l1: !hcl.LoopHandle<"i">, %l2: !hcl.LoopHandle<"j">, 4, 8)
+        %l4, %l5 = hcl.split (%l1: !hcl.LoopHandle<"i">, 8) -> (!hcl.LoopHandle<"i.outer">, !hcl.LoopHandle<"i.inner">)
+        %l6, %l7 = hcl.split (%l5: !hcl.LoopHandle<"i.inner">, 16) -> (!hcl.LoopHandle<"i.inner.outer">, !hcl.LoopHandle<"i.inner.inner">) // nest with split
+        %l8, %l9 = hcl.split (%l4: !hcl.LoopHandle<"i.outer">, 2) -> (!hcl.LoopHandle<"i.outer.outer">, !hcl.LoopHandle<"i.outer.inner">) // multiple split
+        %l10, %l11, %l12, %l13 = hcl.tile (%l2: !hcl.LoopHandle<"j">, %l3: !hcl.LoopHandle<"k">, 2, 4) -> (!hcl.LoopHandle<"j.outer">, !hcl.LoopHandle<"j.outer">, !hcl.LoopHandle<"k.outer">, !hcl.LoopHandle<"k.outer">) // split & tile
+        // %l14, %l15, %l16, %l17 = hcl.tile (%l6: !hcl.LoopHandle<"i.inner.outer">, %l7: !hcl.LoopHandle<"i.inner.inner">, 2, 2) -> (!hcl.LoopHandle<"i.inner.outer.outer">, !hcl.LoopHandle<"i.inner.outer.inner">, !hcl.LoopHandle<"i.inner.inner.outer">, !hcl.LoopHandle<"i.inner.outer">) // nest with split (failed)
         return %C : tensor<?x?xf32>
     }
 }

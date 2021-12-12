@@ -72,10 +72,11 @@ void HCLLoopTiling::runSplitting() {
       }
       newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), new_name));
     }
-
-    // 4) Remove the schedule operator
-    splitOp.erase();
   }
+  // 4) Remove the schedule operator
+  // TODO: Fix bug
+  // for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>())
+  //   splitOp.erase();
 }
 
 void HCLLoopTiling::runTiling() {
@@ -153,7 +154,6 @@ void HCLLoopTiling::runTiling() {
 }
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTiling::runOnFunction()  {
-  // TODO: Support multiple splits/tiles
   runSplitting();
   runTiling();
 }

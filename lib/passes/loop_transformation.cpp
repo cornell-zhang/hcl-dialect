@@ -14,13 +14,13 @@ using namespace mlir;
 
 namespace {
 
-struct HCLLoopTiling : public PassWrapper<HCLLoopTiling, FunctionPass> {
+struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, FunctionPass> {
 
   void runOnFunction() override;
   
-  StringRef getArgument() const final { return "hcl-loop-split"; }
+  StringRef getArgument() const final { return "hcl-loop-transformation"; }
   StringRef getDescription() const final {
-    return "Loop tiling in HeteroCL";
+    return "Loop transformation in HeteroCL";
   }
 
   void runSplitting();
@@ -36,7 +36,7 @@ struct HCLLoopTiling : public PassWrapper<HCLLoopTiling, FunctionPass> {
  *  3) Add names to new loops
  *  4) Remove the schedule operator
  */
-void HCLLoopTiling::runSplitting() {
+void HCLLoopTransformation::runSplitting() {
   FuncOp f = getFunction();
   SmallVector<AffineForOp, 6> tiledNest;
   for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
@@ -79,7 +79,7 @@ void HCLLoopTiling::runSplitting() {
   //   splitOp.erase();
 }
 
-void HCLLoopTiling::runTiling() {
+void HCLLoopTransformation::runTiling() {
   FuncOp f = getFunction();
   for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
     // 1) get schedule
@@ -152,8 +152,9 @@ void HCLLoopTiling::runTiling() {
   // for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>())
   //   tileOp.erase();
 }
+
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
-void HCLLoopTiling::runOnFunction()  {
+void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
   runTiling();
 }
@@ -161,13 +162,13 @@ void HCLLoopTiling::runOnFunction()  {
 namespace mlir {
 namespace hcl{
 // Register Loop Tiling Pass
-void registerHCLLoopTilingPass() {
-  PassRegistration<HCLLoopTiling>();
+void registerHCLLoopTransformationPass() {
+  PassRegistration<HCLLoopTransformation>();
 }
 
 // Create A Loop Tiling Pass
-std::unique_ptr<mlir::Pass> createHCLLoopTilingPass() {
-  return std::make_unique<HCLLoopTiling>();
+std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
+  return std::make_unique<HCLLoopTransformation>();
 }
 } // namespace hcl
 } // namespace mlir

@@ -11,6 +11,9 @@
 #include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
 
+#include <map>
+#include <vector>
+#include <algorithm>
 #include <iostream>
 using namespace mlir;
 
@@ -27,6 +30,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
 
   void runSplitting();
   void runTiling();
+  void runReordering();
   void runUnrolling();
   void runPipelining();
   void runFusing();
@@ -157,6 +161,55 @@ void HCLLoopTransformation::runTiling() {
   // TODO: may have !NodePtr->isKnownSentinel() bug
   // for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>())
   //   tileOp.erase();
+}
+
+void HCLLoopTransformation::runReordering() {
+  FuncOp f = getFunction();
+  for (hcl::ReorderOp reorderOp : f.getOps<hcl::ReorderOp>()) {
+    // 1) get schedule
+    const auto loop1_name = reorderOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName().str();
+    const auto loop2_name = reorderOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName().str();
+    SmallVector<AffineForOp, 6> forOps;
+    SmallVector<unsigned, 6> permMap;
+    unsigned int curr_depth = 0;
+    std::map<std::string, unsigned> loop_map;
+    std::vector<std::string> name_vec;
+    f.walk([&](AffineForOp rootAffineForOp) { // from the inner most!
+      std::string curr_loop_name = rootAffineForOp->getAttr("loop_name").cast<StringAttr>().getValue().str();
+      loop_map[curr_loop_name] = curr_depth;
+      name_vec.push_back(curr_loop_name);
+      curr_depth++;
+    });
+    std::reverse(name_vec.begin(),name_vec.end());
+    for (auto name : name_vec) { // need to reverse
+      loop_map[name] = curr_depth - 1 - loop_map[name];
+    }
+    // TODO: traverse all input arguments (loops)
+    unsigned loop1_idx = loop_map[loop1_name];
+    loop_map[loop1_name] = loop_map[loop2_name];
+    loop_map[loop2_name] = loop1_idx;
+    // get permMap
+    for (auto name : name_vec) {
+      unsigned idx = loop_map[name];
+      std::cout << idx << std::endl;
+      permMap.push_back(idx);
+    }
+    SmallVector<AffineForOp, 6> nest;
+    for (auto forOp : f.getOps<AffineForOp>()) {
+      std::cout << "t " << forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() << std::endl;
+      // Get the maximal perfect nest.
+      getPerfectlyNestedLoops(nest, forOp);
+      // Permute if the nest's size is consistent with the specified
+      // permutation.
+      if (nest.size() >= 2 && nest.size() == permMap.size()) {
+        std::cout << "permute" << std::endl;
+        permuteLoops(nest, permMap);
+      } else {
+        // TODO: raise error
+      }
+      break; // only the outer-most loop
+    }
+  }
 }
 
 void HCLLoopTransformation::runUnrolling() {
@@ -304,6 +357,7 @@ void HCLLoopTransformation::runComputeAt() {
 void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
   runTiling();
+  runReordering();
   runUnrolling();
   runPipelining();
   runFusing();

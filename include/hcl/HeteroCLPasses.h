@@ -8,9 +8,6 @@
 namespace mlir {
 namespace hcl {
 
-void registerHCLLoopReorderPass();
-std::unique_ptr<mlir::Pass> createHCLLoopReorderPass();
-
 void registerHCLLoopTransformationPass();
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
 

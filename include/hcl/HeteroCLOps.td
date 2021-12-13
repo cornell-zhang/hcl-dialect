@@ -57,15 +57,15 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
 
 def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 {
-    let summary = "placeholder";
+    let summary = "reorder";
     let description = [{
         reorder
     }];
 
-    let arguments = (ins Confined<ArrayAttr, [ArrayMinCount<2>]>:$loop_id);
+    let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
     let results = (outs );
     let assemblyFormat = [{
-        attr-dict
+        `(` $loop1 `:` type($loop1) `,` $loop2 `:` type($loop2) `)` attr-dict
     }];
 }
 

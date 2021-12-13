@@ -113,6 +113,20 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
     }];
 }
 
+def HeteroCL_ComputeAtOp : HeteroCL_Op<"compute_at"> 
+{
+    let summary = "compute_at";
+    let description = [{
+        compute_at
+    }];
+
+    let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $loop1 `:` type($loop1) `,` $loop2 `:` type($loop2) `)` attr-dict
+    }];
+}
+
 def HeteroCL_UnrollOp : HeteroCL_Op<"unroll"> 
 {
     let summary = "unroll";

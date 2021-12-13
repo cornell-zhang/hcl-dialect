@@ -6,6 +6,8 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/Analysis/Utils.h"
+#include "mlir/Transforms/LoopFusionUtils.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
 
@@ -28,6 +30,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   void runUnrolling();
   void runPipelining();
   void runFusing();
+  void runComputeAt();
 };
 
 } // namespace
@@ -266,6 +269,37 @@ void HCLLoopTransformation::runFusing() {
   }
 }
 
+void HCLLoopTransformation::runComputeAt() {
+  FuncOp f = getFunction();
+  for (hcl::ComputeAtOp computeAtOp : f.getOps<hcl::ComputeAtOp>()) {
+    // 1) get schedule
+    const auto loop1_name = computeAtOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName();
+    const auto loop2_name = computeAtOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the outer-most loops and find the requested one
+      SmallVector<AffineForOp, 6> forOps;
+    for (auto rootAffineForOp : f.getOps<AffineForOp>()) {
+      Attribute attr = rootAffineForOp->getAttr("loop_name");
+      if (loop1_name == attr.cast<StringAttr>().getValue() ||
+          loop2_name == attr.cast<StringAttr>().getValue()) {
+          forOps.push_back(rootAffineForOp);
+          std::cout << "found" << std::endl;
+      }
+    }
+    ComputationSliceState sliceUnion;
+    for (int i = 3; i >= 1; --i){ // TODO: Change depth
+      FusionResult result = canFuseLoops(forOps[0], forOps[1], i/*depth*/, &sliceUnion);
+      if (result.value == FusionResult::Success) {
+        fuseLoops(forOps[0], forOps[1], sliceUnion);
+        forOps[0].erase();
+        std::cout << std::to_string(i) << " yes" << std::endl;
+        return;
+      } else
+        std::cout << std::to_string(i) << " no" << std::endl;
+    }
+  }
+}
+
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
@@ -273,6 +307,7 @@ void HCLLoopTransformation::runOnFunction()  {
   runUnrolling();
   runPipelining();
   runFusing();
+  runComputeAt();
 }
 
 namespace mlir {

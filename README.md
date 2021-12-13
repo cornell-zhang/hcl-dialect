@@ -43,5 +43,5 @@ make -j
 
 ## Run HeteroCL Dialect
 ```sh
-./bin/hcl-opt ../test/mlir/matmul.mlir
+./bin/hcl-opt --opt ../test/simple/tiling.mlir
 ```

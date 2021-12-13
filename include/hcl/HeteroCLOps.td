@@ -99,6 +99,20 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
     }];
 }
 
+def HeteroCL_FuseOp : HeteroCL_Op<"fuse"> 
+{
+    let summary = "fuse";
+    let description = [{
+        fuse
+    }];
+
+    let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
+    let results = (outs LoopHandle:$fused_loop);
+    let assemblyFormat = [{
+        `(` $loop1 `:` type($loop1) `,` $loop2 `:` type($loop2) `)` attr-dict `->` type($fused_loop)
+    }];
+}
+
 def HeteroCL_UnrollOp : HeteroCL_Op<"unroll"> 
 {
     let summary = "unroll";

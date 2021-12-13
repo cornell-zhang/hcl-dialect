@@ -27,6 +27,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   void runTiling();
   void runUnrolling();
   void runPipelining();
+  void runFusing();
 };
 
 } // namespace
@@ -203,12 +204,75 @@ void HCLLoopTransformation::runPipelining() {
   }
 }
 
+// Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
+// which fuses contiguous loops. This is actually the case of hcl.compute_at.
+void HCLLoopTransformation::runFusing() {
+  FuncOp f = getFunction();
+  for (hcl::FuseOp fuseOp : f.getOps<hcl::FuseOp>()) {
+    // 1) get schedule
+    const auto loop1_name = fuseOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName();
+    const auto loop2_name = fuseOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the nested loops and find the requested one
+    AffineForOp loop_to_be_destroyed;
+    f.walk([&](AffineForOp rootAffineForOp) {
+      SmallVector<AffineForOp, 6> forOps;
+      AffineForOp rootForOp = rootAffineForOp;
+      Attribute attr = rootAffineForOp->getAttr("loop_name");
+      if (loop1_name == attr.cast<StringAttr>().getValue()) {
+        for (unsigned i = 0; i < 2; ++i) {
+          if (i == 1) {
+            Attribute attr_y = rootForOp->getAttr("loop_name");
+            const StringRef curr_y_loop = attr_y.cast<StringAttr>().getValue();
+            if (curr_y_loop != loop2_name)
+              break;
+          }
+          forOps.push_back(rootForOp);
+          Block &body = rootForOp.region().front();
+          if (body.begin() != std::prev(body.end(), 2))
+            break;
+
+          rootForOp = dyn_cast<AffineForOp>(&body.front());
+          if (!rootForOp)
+            break;
+        }
+        // LoopUtils.cpp interchangeLoops
+        auto &forOpBBody = forOps[1].getBody()->getOperations();
+        Location loc = rootAffineForOp.getLoc();
+        OpBuilder b(rootAffineForOp.getOperation());
+        AffineForOp fusedLoop = b.create<AffineForOp>(loc, 0, 0);
+        // OperandRange newLbOperands = origLoops[i].getLowerBoundOperands();
+        // OperandRange newUbOperands = origLoops[i].getUpperBoundOperands();
+        // fusedLoop.setLowerBound(newLbOperands, origLoops[i].getLowerBoundMap());
+        // fusedLoop.setUpperBound(newUbOperands, origLoops[i].getUpperBoundMap());
+        fusedLoop.setConstantLowerBound(0);
+        fusedLoop.setConstantUpperBound(forOps[0].getConstantUpperBound() * forOps[1].getConstantUpperBound());
+        fusedLoop.setStep(1);
+        auto &fusedLoopBody = fusedLoop.getBody()->getOperations();
+        // put forOpBBody from forOpBBody.begin() to std::prev(forOpBBody.end()) before fusedLoopBody.begin()
+        forOpBBody.splice(fusedLoopBody.begin(), forOpBBody, forOpBBody.begin(),
+                    std::prev(forOpBBody.end()));
+        // Add names to new loop
+        std::string new_name = loop1_name.str() + "_" + loop2_name.str() + "_fused";
+        fusedLoop->setAttr("loop_name", StringAttr::get(fusedLoop->getContext(), new_name));
+        // Replace original IVs with intra-tile loop IVs.
+        // forOps[0].replaceAllUsesWith(fusedLoop.getInductionVar());
+        // forOps[1].replaceAllUsesWith(fusedLoop.getInductionVar());
+        // TODO: remove the original loop (bug)
+        loop_to_be_destroyed = rootAffineForOp;
+      }
+    });
+    // loop_to_be_destroyed.erase();
+  }
+}
+
 // https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTransformation::runOnFunction()  {
   runSplitting();
   runTiling();
   runUnrolling();
   runPipelining();
+  runFusing();
 }
 
 namespace mlir {

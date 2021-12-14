@@ -40,8 +40,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   bool findContiguousNestedLoops(
       const AffineForOp& rootAffineForOp,
       const SmallVector<StringRef, 6>& nameArr,
-      SmallVector<AffineForOp, 6>& resForOps,
-      unsigned depth);
+      SmallVector<AffineForOp, 6>& resForOps);
   bool addNamesToLoops(
       SmallVector<AffineForOp, 6>& forOps,
       const SmallVector<std::string, 6>& nameArr);
@@ -52,9 +51,9 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
 bool HCLLoopTransformation::findContiguousNestedLoops(
       const AffineForOp& rootAffineForOp,
       const SmallVector<StringRef, 6>& nameArr,
-      SmallVector<AffineForOp, 6>& resForOps,
-      unsigned depth) {
+      SmallVector<AffineForOp, 6>& resForOps) {
   AffineForOp forOp = rootAffineForOp;
+  unsigned int depth = nameArr.size();
   resForOps.clear();
   for (unsigned i = 0; i < depth; ++i) {
     if (!forOp)
@@ -149,7 +148,7 @@ void HCLLoopTransformation::runTiling() {
     //    and do tiling
     bool isFound = false;
     f.walk([&](AffineForOp forOp) {
-      if(!isFound && findContiguousNestedLoops(forOp,nameArr,forOps,2))
+      if(!isFound && findContiguousNestedLoops(forOp,nameArr,forOps))
         isFound = true;
       return;
     });
@@ -321,59 +320,65 @@ void HCLLoopTransformation::runFusing() {
   FuncOp f = getFunction();
   for (hcl::FuseOp fuseOp : f.getOps<hcl::FuseOp>()) {
     // 1) get schedule
-    const auto loop1_name = fuseOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName();
-    const auto loop2_name = fuseOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName();
+    const auto loopsToBeFused = fuseOp.loops(); // operand_range
+    unsigned int sizeOfFusedLoops = loopsToBeFused.size();
+    SmallVector<StringRef, 6> nameArr;
+    for (auto loop : loopsToBeFused) {
+      nameArr.push_back(loop.getType().cast<hcl::LoopHandleType>().getLoopName());
+    }
 
-    // 2) Traverse all the nested loops and find the requested one
-    AffineForOp loop_to_be_destroyed;
-    f.walk([&](AffineForOp rootAffineForOp) {
-      SmallVector<AffineForOp, 6> forOps;
-      AffineForOp rootForOp = rootAffineForOp;
-      Attribute attr = rootAffineForOp->getAttr("loop_name");
-      if (loop1_name == attr.cast<StringAttr>().getValue()) {
-        for (unsigned i = 0; i < 2; ++i) {
-          if (i == 1) {
-            Attribute attr_y = rootForOp->getAttr("loop_name");
-            const StringRef curr_y_loop = attr_y.cast<StringAttr>().getValue();
-            if (curr_y_loop != loop2_name)
-              break;
-          }
-          forOps.push_back(rootForOp);
-          Block &body = rootForOp.region().front();
-          if (body.begin() != std::prev(body.end(), 2))
-            break;
-
-          rootForOp = dyn_cast<AffineForOp>(&body.front());
-          if (!rootForOp)
-            break;
-        }
-        // LoopUtils.cpp interchangeLoops
-        auto &forOpBBody = forOps[1].getBody()->getOperations();
-        Location loc = rootAffineForOp.getLoc();
-        OpBuilder b(rootAffineForOp.getOperation());
-        AffineForOp fusedLoop = b.create<AffineForOp>(loc, 0, 0);
-        // OperandRange newLbOperands = origLoops[i].getLowerBoundOperands();
-        // OperandRange newUbOperands = origLoops[i].getUpperBoundOperands();
-        // fusedLoop.setLowerBound(newLbOperands, origLoops[i].getLowerBoundMap());
-        // fusedLoop.setUpperBound(newUbOperands, origLoops[i].getUpperBoundMap());
-        fusedLoop.setConstantLowerBound(0);
-        fusedLoop.setConstantUpperBound(forOps[0].getConstantUpperBound() * forOps[1].getConstantUpperBound());
-        fusedLoop.setStep(1);
-        auto &fusedLoopBody = fusedLoop.getBody()->getOperations();
-        // put forOpBBody from forOpBBody.begin() to std::prev(forOpBBody.end()) before fusedLoopBody.begin()
-        forOpBBody.splice(fusedLoopBody.begin(), forOpBBody, forOpBBody.begin(),
-                    std::prev(forOpBBody.end()));
-        // Add names to new loop
-        std::string new_name = loop1_name.str() + "_" + loop2_name.str() + "_fused";
-        fusedLoop->setAttr("loop_name", StringAttr::get(fusedLoop->getContext(), new_name));
-        // Replace original IVs with intra-tile loop IVs.
-        // forOps[0].replaceAllUsesWith(fusedLoop.getInductionVar());
-        // forOps[1].replaceAllUsesWith(fusedLoop.getInductionVar());
-        // TODO: remove the original loop (bug)
-        loop_to_be_destroyed = rootAffineForOp;
-      }
+    // 2) Traverse all the nested loops and find the requested ones
+    AffineForOp loopToBeDestroyed;
+    SmallVector<AffineForOp, 6> forOps;
+    bool isFound = false;
+    f.walk([&](AffineForOp forOp) {
+      if(!isFound && findContiguousNestedLoops(forOp,nameArr,forOps))
+        isFound = true;
+      return;
     });
-    // loop_to_be_destroyed.erase();
+    // handle exception
+    if (!isFound) {
+      f.emitError("Cannot find contiguous nested loops starting from Loop ")
+          << nameArr[0].str();
+      return signalPassFailure();
+    }
+    
+    // 3) construct new loop
+    // 3.1) create a fused loop
+    Location loc = forOps[0].getLoc();
+    OpBuilder b(forOps[0].getOperation());
+    AffineForOp fusedLoop = b.create<AffineForOp>(loc, 0, 0);
+    // 3.2) set upper/lower bounds and step
+    // TODO: only support [0 to prod(factors) step 1] constant pattern now
+    // OperandRange newLbOperands = origLoops[i].getLowerBoundOperands();
+    // OperandRange newUbOperands = origLoops[i].getUpperBoundOperands();
+    // fusedLoop.setLowerBound(newLbOperands, origLoops[i].getLowerBoundMap());
+    // fusedLoop.setUpperBound(newUbOperands, origLoops[i].getUpperBoundMap());
+    fusedLoop.setConstantLowerBound(0);
+    unsigned int prod = 1;
+    for (auto forOp : forOps) {
+      prod *= forOp.getConstantUpperBound();
+    }
+    fusedLoop.setConstantUpperBound(prod);
+    fusedLoop.setStep(1);
+    auto &fusedLoopBody = fusedLoop.getBody()->getOperations();
+    // 3.3) Put original loop body into the fused loop
+    auto &forOpInnerMostBody = forOps[sizeOfFusedLoops - 1].getBody()->getOperations();
+    // put forOpInnerMostBody from forOpInnerMostBody.begin() to std::prev(forOpInnerMostBody.end()) before fusedLoopBody.begin()
+    forOpInnerMostBody.splice(fusedLoopBody.begin(), forOpInnerMostBody, forOpInnerMostBody.begin(),
+                std::prev(forOpInnerMostBody.end()));
+    // 3.4) add name to the new loop
+    std::string new_name;
+    for (auto forOp : forOps) {
+      new_name += forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() + "_";
+    }
+    new_name += "fused";
+    fusedLoop->setAttr("loop_name", StringAttr::get(fusedLoop->getContext(), new_name));
+    // Replace original IVs with intra-tile loop IVs.
+    // forOps[0].replaceAllUsesWith(fusedLoop.getInductionVar());
+    // TODO: remove the original loop (bug)
+    loopToBeDestroyed = forOps[0];
+    // loopToBeDestroyed.erase();
   }
 }
 

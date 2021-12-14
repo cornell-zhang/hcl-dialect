@@ -16,8 +16,7 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i" }
         %l4, %l5 = hcl.split (%l1: !hcl.LoopHandle<"i">, 8) -> (!hcl.LoopHandle<"i.outer">, !hcl.LoopHandle<"i.inner">)
-        // hcl.reorder (%l5: !hcl.LoopHandle<"i.inner">, %l4: !hcl.LoopHandle<"i.outer">)
-        hcl.reorder (%l3: !hcl.LoopHandle<"k">, %l2: !hcl.LoopHandle<"j">)
+        hcl.reorder (%l3, %l2, %l5: !hcl.LoopHandle<"k">, !hcl.LoopHandle<"j">, !hcl.LoopHandle<"i.inner">)
         return %C : tensor<?x?xf32>
     }
 }

@@ -62,10 +62,14 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
         reorder
     }];
 
-    let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
+    // variadic
+    let arguments = (ins Variadic<LoopHandle>:$loops);
     let results = (outs );
+    // optional groups
+    // https://mlir.llvm.org/docs/OpDefinitions/#optional-groups
+    // TODO: should at least have one input
     let assemblyFormat = [{
-        `(` $loop1 `:` type($loop1) `,` $loop2 `:` type($loop2) `)` attr-dict
+        `(` ($loops^ `:` type($loops))? `)` attr-dict
     }];
 }
 

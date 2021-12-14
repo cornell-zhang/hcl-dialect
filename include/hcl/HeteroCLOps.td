@@ -160,4 +160,18 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
     ];
 }
 
+def HeteroCL_ParallelOp : HeteroCL_Op<"parallel"> 
+{
+    let summary = "parallel";
+    let description = [{
+        parallel
+    }];
+
+    let arguments = (ins LoopHandle:$loop);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $loop `:` type($loop) `)` attr-dict
+    }];
+}
+
 #endif // HCL_OPS

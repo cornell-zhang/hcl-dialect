@@ -33,6 +33,7 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   void runReordering();
   void runUnrolling();
   void runPipelining();
+  void runParallel();
   void runFusing();
   void runComputeAt();
 };
@@ -236,6 +237,29 @@ void HCLLoopTransformation::runUnrolling() {
   }
 }
 
+void HCLLoopTransformation::runParallel() {
+  FuncOp f = getFunction();
+  for (hcl::ParallelOp parallelOp : f.getOps<hcl::ParallelOp>()) {
+    // 1) get schedule
+    const auto loop_name = parallelOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the nested loops and find the requested one
+    f.walk([&](AffineForOp forOp) {
+      Attribute attr = forOp->getAttr("loop_name");
+      if (loop_name == attr.cast<StringAttr>().getValue()) {
+        forOp->setAttr("parallel",
+                      IntegerAttr::get(
+                        IntegerType::get(
+                          forOp->getContext(),
+                          32,
+                          IntegerType::SignednessSemantics::Signless),
+                        1) // true
+                      );
+      }
+    });
+  }
+}
+
 void HCLLoopTransformation::runPipelining() {
   FuncOp f = getFunction();
   for (hcl::PipelineOp pipelineOp : f.getOps<hcl::PipelineOp>()) {
@@ -360,6 +384,7 @@ void HCLLoopTransformation::runOnFunction()  {
   runReordering();
   runUnrolling();
   runPipelining();
+  runParallel();
   runFusing();
   runComputeAt();
 }

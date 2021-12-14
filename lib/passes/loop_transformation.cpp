@@ -49,56 +49,6 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
 
 } // namespace
 
-/*
- *  Algorithm:
- *  1) Iterate schedule and get all SplitOp
- *  2) For each SplitOp, find corresponding loop
- *  3) Add names to new loops
- *  4) Remove the schedule operator
- */
-void HCLLoopTransformation::runSplitting() {
-  FuncOp f = getFunction();
-  SmallVector<AffineForOp, 6> tiledNest;
-  for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
-    // 1) get schedule
-    unsigned int factor = splitOp.factor();
-    const auto loop_name = splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
-
-    // 2) Traverse all the nested loops and find the requested one
-    //    and split the loop
-    f.walk([&](AffineForOp forOp) {
-      // mlir/IR/Operation.h
-      Attribute attr = forOp->getAttr("loop_name");
-      if (loop_name == attr.cast<StringAttr>().getValue()) {
-        SmallVector<AffineForOp, 6> forOps;
-        forOps.push_back(forOp);
-        SmallVector<unsigned, 6> tileSizes;
-        tileSizes.push_back(factor);
-        if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
-          return signalPassFailure();
-      }
-    });
-
-    // 3) Add names to new loops
-    bool outLoopFlag = true;
-    for (AffineForOp newForOp : tiledNest) {
-      // TODO: check whether tiledNest only has two loops
-      std::string new_name = loop_name.str();
-      if (outLoopFlag) {
-        outLoopFlag = false;
-        new_name += ".outer";
-      } else {
-        new_name += ".inner";
-      }
-      newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), new_name));
-    }
-  }
-  // 4) Remove the schedule operator
-  // TODO: Fix bug
-  // for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>())
-  //   splitOp.erase();
-}
-
 bool HCLLoopTransformation::findContiguousNestedLoops(
       const AffineForOp& rootAffineForOp,
       const SmallVector<StringRef, 6>& nameArr,
@@ -135,6 +85,48 @@ bool HCLLoopTransformation::addNamesToLoops(
     cnt_loop++;
   }
   return true;
+}
+
+/*
+ *  Algorithm:
+ *  1) Iterate schedule and get all SplitOp
+ *  2) For each SplitOp, find corresponding loop
+ *  3) Add names to new loops
+ *  4) Remove the schedule operator
+ */
+void HCLLoopTransformation::runSplitting() {
+  FuncOp f = getFunction();
+  SmallVector<AffineForOp, 6> tiledNest;
+  for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
+    // 1) get schedule
+    unsigned int factor = splitOp.factor();
+    const auto loop_name = splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+
+    // 2) Traverse all the nested loops and find the requested one
+    //    and split the loop
+    f.walk([&](AffineForOp forOp) {
+      // mlir/IR/Operation.h
+      Attribute attr = forOp->getAttr("loop_name");
+      if (loop_name == attr.cast<StringAttr>().getValue()) {
+        SmallVector<AffineForOp, 6> forOps;
+        forOps.push_back(forOp);
+        SmallVector<unsigned, 6> tileSizes;
+        tileSizes.push_back(factor);
+        if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
+          return signalPassFailure();
+      }
+    });
+
+    // 3) Add names to new loops
+    SmallVector<std::string, 6> newNameArr;
+    newNameArr.push_back(loop_name.str() + ".outer");
+    newNameArr.push_back(loop_name.str() + ".inner");
+    addNamesToLoops(tiledNest,newNameArr);
+  }
+  // 4) Remove the schedule operator
+  // TODO: Fix bug
+  // for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>())
+  //   splitOp.erase();
 }
 
 void HCLLoopTransformation::runTiling() {

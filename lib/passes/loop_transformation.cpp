@@ -36,6 +36,15 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
   void runParallel();
   void runFusing();
   void runComputeAt();
+  // utils
+  bool findContiguousNestedLoops(
+      const AffineForOp& rootAffineForOp,
+      const SmallVector<StringRef, 6>& nameArr,
+      SmallVector<AffineForOp, 6>& resForOps,
+      unsigned depth);
+  bool addNamesToLoops(
+      SmallVector<AffineForOp, 6>& forOps,
+      const SmallVector<std::string, 6>& nameArr);
 };
 
 } // namespace
@@ -90,6 +99,44 @@ void HCLLoopTransformation::runSplitting() {
   //   splitOp.erase();
 }
 
+bool HCLLoopTransformation::findContiguousNestedLoops(
+      const AffineForOp& rootAffineForOp,
+      const SmallVector<StringRef, 6>& nameArr,
+      SmallVector<AffineForOp, 6>& resForOps,
+      unsigned depth) {
+  AffineForOp forOp = rootAffineForOp;
+  resForOps.clear();
+  for (unsigned i = 0; i < depth; ++i) {
+    if (!forOp)
+      return false;
+
+    Attribute attr = forOp->getAttr("loop_name");
+    const StringRef curr_loop = attr.cast<StringAttr>().getValue();
+    if (curr_loop != nameArr[i])
+      return false;
+
+    resForOps.push_back(forOp);
+    Block &body = forOp.region().front();
+    // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
+    //   break;
+
+    forOp = dyn_cast<AffineForOp>(&body.front());
+  }
+  return true;
+}
+
+bool HCLLoopTransformation::addNamesToLoops(
+      SmallVector<AffineForOp, 6>& forOps,
+      const SmallVector<std::string, 6>& nameArr) {
+  assert(forOps.size() == nameArr.size());
+  unsigned cnt_loop = 0;
+  for (AffineForOp newForOp : forOps) {
+    newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), nameArr[cnt_loop]));
+    cnt_loop++;
+  }
+  return true;
+}
+
 void HCLLoopTransformation::runTiling() {
   FuncOp f = getFunction();
   for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
@@ -102,61 +149,36 @@ void HCLLoopTransformation::runTiling() {
     SmallVector<unsigned, 6> tileSizes;
     tileSizes.push_back(x_factor);
     tileSizes.push_back(y_factor);
+    SmallVector<StringRef, 6> nameArr;
+    nameArr.push_back(x_loop);
+    nameArr.push_back(y_loop);
 
     // 2) Traverse all the nested loops and find the requested one
     //    and do tiling
     bool isFound = false;
     f.walk([&](AffineForOp forOp) {
-      if (isFound)
-        return;
-      Attribute attr = forOp->getAttr("loop_name");
-      const StringRef curr_loop_name = attr.cast<StringAttr>().getValue();
-      if (x_loop == curr_loop_name) {
-        // LoopUtils.cpp getPerfectlyNestedLoopsImpl
-        forOps.clear();
-        AffineForOp rootForOp = forOp;
-        for (unsigned i = 0; i < 2; ++i) {
-          if (i == 1) {
-            Attribute attr_y = rootForOp->getAttr("loop_name");
-            const StringRef curr_y_loop = attr_y.cast<StringAttr>().getValue();
-            if (curr_y_loop != y_loop)
-              break;
-          }
-          forOps.push_back(rootForOp);
-          Block &body = rootForOp.region().front();
-          if (body.begin() != std::prev(body.end(), 2))
-            break;
-
-          rootForOp = dyn_cast<AffineForOp>(&body.front());
-          if (!rootForOp)
-            break;
-        }
-        if (forOps.size() < 2) { // not this forOp
-          return;
-        }
+      if(!isFound && findContiguousNestedLoops(forOp,nameArr,forOps,2))
         isFound = true;
-      }
+      return;
     });
+    // handle exception
+    if (!isFound) {
+      f.emitError("Cannot find contiguous nested loops starting from Loop ")
+          << nameArr[0].str();
+      return signalPassFailure();
+    }
+    // try tiling
     SmallVector<AffineForOp, 6> tiledNest;
     if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
       return signalPassFailure();
 
     // 3) Add names to new loops
-    unsigned cnt_loop = 0;
-    for (AffineForOp newForOp : tiledNest) {
-      // TODO: check whether tiledNest only has four loops
-      std::string new_name;
-      if (cnt_loop < 2)
-        new_name = x_loop.str();
-      else
-        new_name = y_loop.str();
-      if (cnt_loop % 2 == 0)
-        new_name += ".outer";
-      else
-        new_name += ".inner";
-      newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(), new_name));
-      cnt_loop++;
-    }
+    SmallVector<std::string, 6> newNameArr;
+    newNameArr.push_back(x_loop.str() + ".outer");
+    newNameArr.push_back(x_loop.str() + ".inner");
+    newNameArr.push_back(y_loop.str() + ".outer");
+    newNameArr.push_back(y_loop.str() + ".inner");
+    addNamesToLoops(tiledNest,newNameArr);
   }
   // 4) Remove the schedule operator
   // TODO: may have !NodePtr->isKnownSentinel() bug

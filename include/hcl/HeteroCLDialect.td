@@ -24,6 +24,12 @@ def HeteroCL_Dialect : Dialect {
         working inside of the LLVM source tree.
     }];
     let cppNamespace = "::mlir::hcl";
+    let extraClassDeclaration = [{
+        Attribute parseAttribute(DialectAsmParser &parser,
+                                Type type) const override;
+        void printAttribute(Attribute attr,
+                                DialectAsmPrinter &printer) const override;
+        }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -33,7 +39,10 @@ def HeteroCL_Dialect : Dialect {
 class HeteroCL_Op<string mnemonic, list<OpTrait> traits = []> :
         Op<HeteroCL_Dialect, mnemonic, traits>;
 
-class HeteroCL_Type<string name, list<Trait> traits = []> : 
-        TypeDef<HeteroCL_Dialect, name, traits>;
+class HeteroCL_Type<string mnemonic, list<Trait> traits = []> : 
+        TypeDef<HeteroCL_Dialect, mnemonic, traits>;
+
+class HeteroCL_Attr<string mnemonic, list<Trait> traits = []> : 
+        AttrDef<HeteroCL_Dialect, mnemonic, traits>;
 
 #endif // HETEROCL_DIALECT

@@ -14,7 +14,7 @@ module {
                     %c = tensor.extract %C[%i, %j] : tensor<?x?xf32>
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
-                } { loop_name = "k" }
+                } { loop_name = "k" } // #hcl.Loop<"k">
             } { loop_name = "j" }
         } { loop_name = "i" }
         %l4, %l5 = hcl.split (%l1: !hcl.LoopHandle<"i">, 8) -> (!hcl.LoopHandle<"i.outer">, !hcl.LoopHandle<"i.inner">)

@@ -12,6 +12,7 @@
 #include "mlir/Transforms/InliningUtils.h"
 #include "hcl/HeteroCLOps.h"
 #include "hcl/HeteroCLTypes.h"
+#include "hcl/HeteroCLAttrs.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/ADT/StringExtras.h"
 
@@ -27,6 +28,9 @@ using namespace mlir::hcl;
 #define GET_TYPEDEF_CLASSES
 #include "hcl/HeteroCLTypes.cpp.inc"
 
+#define GET_ATTRDEF_CLASSES
+#include "hcl/HeteroCLAttrs.cpp.inc"
+
 //===----------------------------------------------------------------------===//
 // Dialect initialize method.
 //===----------------------------------------------------------------------===//
@@ -38,6 +42,10 @@ void HeteroCLDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "hcl/HeteroCLTypes.cpp.inc"
+      >();
+  addAttributes< // test/lib/Dialect/Test/TestAttributes.cpp
+#define GET_ATTRDEF_LIST
+#include "hcl/HeteroCLAttrs.cpp.inc"
       >();
 }
 
@@ -63,4 +71,24 @@ mlir::Type mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser& parser)
 void mlir::hcl::HeteroCLDialect::printType(mlir::Type type, mlir::DialectAsmPrinter& printer) const {
   if(failed(generatedTypePrinter(type, printer)))
     llvm_unreachable("unknown 'hcl' type");
+}
+
+Attribute HeteroCLDialect::parseAttribute(DialectAsmParser &parser, Type type) const {
+  StringRef attrTag;
+  if (failed(parser.parseKeyword(&attrTag)))
+    return Attribute();
+  {
+    Attribute attr;
+    auto parseResult =
+        generatedAttributeParser(getContext(), parser, attrTag, type, attr);
+    if (parseResult.hasValue())
+      return attr;
+  }
+  parser.emitError(parser.getNameLoc(), "unknown hcl attribute");
+  return Attribute();
+}
+
+void HeteroCLDialect::printAttribute(Attribute attr, DialectAsmPrinter &printer) const {
+  if (succeeded(generatedAttributePrinter(attr, printer)))
+    return;
 }

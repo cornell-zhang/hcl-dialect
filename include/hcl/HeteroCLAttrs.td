@@ -11,14 +11,13 @@
 
 include "HeteroCLDialect.td"
 
-def Loop : HeteroCL_Attr<"Loop"> {
-  let mnemonic = "Loop";
+def LoopAttr : HeteroCL_Attr<"LoopAttr"> {
+  let mnemonic = "LoopAttr";
   let parameters = (ins "hcl::LoopHandleType":$loopName);
   let printer = [{
     StringRef loopName = getImpl()->loopName.getLoopName();
     $_printer << "Loop <" << loopName.str() << ">";
   }];
-  // llvm::printEscapedString(getImpl()->loopName, $_printer.getStream());
   let parser = [{
     if (parser.parseLess())
       return Attribute();

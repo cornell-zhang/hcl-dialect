@@ -10,6 +10,7 @@
 #include "mlir/Transforms/LoopFusionUtils.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/IR/Dominance.h"
 
 #include <map>
 #include <vector>
@@ -226,6 +227,7 @@ void HCLLoopTransformation::runReordering() {
     // 4) permute the loops
     // TODO: a) multiple stages
     //       b) bug: cannot permute the outer-most loop
+    //       c) imperfect loops
     SmallVector<AffineForOp, 6> nest;
     for (auto forOp : f.getOps<AffineForOp>()) {
       // Get the maximal perfect nest
@@ -346,8 +348,8 @@ void HCLLoopTransformation::runFusing() {
     // 3) construct new loop
     // 3.1) create a fused loop
     Location loc = forOps[0].getLoc();
-    OpBuilder b(forOps[0].getOperation());
-    AffineForOp fusedLoop = b.create<AffineForOp>(loc, 0, 0);
+    OpBuilder builder(forOps[0].getOperation()); // create before forOps[0]
+    AffineForOp fusedLoop = builder.create<AffineForOp>(loc, 0, 0);
     // 3.2) set upper/lower bounds and step
     // TODO: only support [0 to prod(factors) step 1] constant pattern now
     // OperandRange newLbOperands = origLoops[i].getLowerBoundOperands();
@@ -361,12 +363,18 @@ void HCLLoopTransformation::runFusing() {
     }
     fusedLoop.setConstantUpperBound(prod);
     fusedLoop.setStep(1);
+    Operation *topLoop = forOps[0].getOperation();
     auto &fusedLoopBody = fusedLoop.getBody()->getOperations();
+    fusedLoopBody.splice(fusedLoop.getBody()->begin(),
+                         topLoop->getBlock()->getOperations(),
+                         topLoop);
     // 3.3) Put original loop body into the fused loop
     auto &forOpInnerMostBody = forOps[sizeOfFusedLoops - 1].getBody()->getOperations();
     // put forOpInnerMostBody from forOpInnerMostBody.begin() to std::prev(forOpInnerMostBody.end()) before fusedLoopBody.begin()
-    forOpInnerMostBody.splice(fusedLoopBody.begin(), forOpInnerMostBody, forOpInnerMostBody.begin(),
-                std::prev(forOpInnerMostBody.end()));
+    forOpInnerMostBody.splice(fusedLoopBody.begin(), // fusedLoop.getBody()->begin()
+                              forOpInnerMostBody,
+                              forOpInnerMostBody.begin(),
+                              std::prev(forOpInnerMostBody.end()));
     // 3.4) add name to the new loop
     std::string new_name;
     for (auto forOp : forOps) {
@@ -374,11 +382,15 @@ void HCLLoopTransformation::runFusing() {
     }
     new_name += "fused";
     fusedLoop->setAttr("loop_name", StringAttr::get(fusedLoop->getContext(), new_name));
-    // Replace original IVs with intra-tile loop IVs.
-    // forOps[0].replaceAllUsesWith(fusedLoop.getInductionVar());
-    // TODO: remove the original loop (bug)
-    loopToBeDestroyed = forOps[0];
-    // loopToBeDestroyed.erase();
+    
+    // 4) TODO: remove the original loop (bug)
+    for (int i = 0; i < forOps.size(); ++i){
+      auto blockArg = forOps[i].getInductionVar();
+      blockArg.replaceAllUsesWith(fusedLoop.getInductionVar());
+    }
+    forOps[0].erase();
+    llvm::raw_ostream &output = llvm::outs();
+    f.print(output);
   }
 }
 

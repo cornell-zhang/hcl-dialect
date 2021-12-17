@@ -7,6 +7,7 @@
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Analysis/Utils.h"
+#include "mlir/Transforms/RegionUtils.h"
 #include "mlir/Transforms/LoopFusionUtils.h"
 #include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Transforms/Passes.h"
@@ -316,6 +317,70 @@ void HCLLoopTransformation::runPipelining() {
   }
 }
 
+// modified from lib/Transforms/Utils/LoopUtils.cpp
+void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
+  if (loops.size() < 2)
+    return;
+
+  AffineForOp innermost = loops.back();
+  AffineForOp outermost = loops.front();
+
+  // TODO!
+  // 1. Make sure all loops iterate from 0 to upperBound with step 1.  This
+  // allows the following code to assume upperBound is the number of iterations.
+  // for (auto loop : loops)
+  //   normalizeLoop(loop, outermost, innermost);
+
+  // 2. Emit code computing the upper bound of the coalesced loop as product
+  // of the number of iterations of all loops.
+  OpBuilder builder(outermost);
+  Location loc = outermost.getLoc();
+  // Value upperBound = outermost.getUpperBound();
+  // for (auto loop : loops.drop_front())
+  //   upperBound = builder.create<MulIOp>(loc, upperBound, loop.getUpperBound());
+  // outermost.setUpperBound(upperBound);
+  // TODO: Support non-constant bounds
+  unsigned int upperBound = outermost.getConstantUpperBound();
+  for (auto loop : loops.drop_front())
+    upperBound *= loop.getConstantUpperBound();
+  outermost.setConstantUpperBound(upperBound);
+
+  builder.setInsertionPointToStart(outermost.getBody());
+
+  // 3. Remap induction variables.  For each original loop, the value of the
+  // induction variable can be obtained by dividing the induction variable of
+  // the linearized loop by the total number of iterations of the loops nested
+  // in it modulo the number of iterations in this loop (remove the values
+  // related to the outer loops):
+  //   iv_i = floordiv(iv_linear, product-of-loop-ranges-until-i) mod range_i.
+  // Compute these iteratively from the innermost loop by creating a "running
+  // quotient" of division by the range.
+  Value previous = outermost.getInductionVar();
+  for (unsigned i = 0, e = loops.size(); i < e; ++i) {
+    unsigned idx = loops.size() - i - 1;
+    // TODO
+    // if (i != 0)
+    //   previous = builder.create<SignedDivIOp>(loc, previous,
+    //                                           builder.create<ConstantOp>(loc, builder.getI32Type(), builder.getIntegerAttr(builder.getIntegerType(32, /*isSigned=*/false),loops[idx + 1].getConstantUpperBound())));
+
+    // Value iv = (i == e - 1) ? previous
+    //                         : builder.create<SignedRemIOp>(
+    //                               loc, previous, builder.create<ConstantOp>(loc, builder.getI32Type(), builder.getIntegerAttr(builder.getIntegerType(32, /*isSigned=*/false),loops[idx + 1].getConstantUpperBound())));
+    replaceAllUsesInRegionWith(loops[idx].getInductionVar(),
+                               loops[0].getInductionVar(),// iv,
+                               loops.back().region());
+  }
+
+  // 4. Move the operations from the innermost just above the second-outermost
+  // loop, delete the extra terminator and the second-outermost loop.
+  AffineForOp second = loops[1];
+  innermost.getBody()->back().erase();
+  outermost.getBody()->getOperations().splice(
+      Block::iterator(second.getOperation()),
+      innermost.getBody()->getOperations());
+  second.erase();
+}
+
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
 void HCLLoopTransformation::runFusing() {
@@ -346,51 +411,17 @@ void HCLLoopTransformation::runFusing() {
     }
     
     // 3) construct new loop
-    // 3.1) create a fused loop
-    Location loc = forOps[0].getLoc();
-    OpBuilder builder(forOps[0].getOperation()); // create before forOps[0]
-    AffineForOp fusedLoop = builder.create<AffineForOp>(loc, 0, 0);
-    // 3.2) set upper/lower bounds and step
-    // TODO: only support [0 to prod(factors) step 1] constant pattern now
-    // OperandRange newLbOperands = origLoops[i].getLowerBoundOperands();
-    // OperandRange newUbOperands = origLoops[i].getUpperBoundOperands();
-    // fusedLoop.setLowerBound(newLbOperands, origLoops[i].getLowerBoundMap());
-    // fusedLoop.setUpperBound(newUbOperands, origLoops[i].getUpperBoundMap());
-    fusedLoop.setConstantLowerBound(0);
-    unsigned int prod = 1;
-    for (auto forOp : forOps) {
-      prod *= forOp.getConstantUpperBound();
-    }
-    fusedLoop.setConstantUpperBound(prod);
-    fusedLoop.setStep(1);
-    Operation *topLoop = forOps[0].getOperation();
-    auto &fusedLoopBody = fusedLoop.getBody()->getOperations();
-    fusedLoopBody.splice(fusedLoop.getBody()->begin(),
-                         topLoop->getBlock()->getOperations(),
-                         topLoop);
-    // 3.3) Put original loop body into the fused loop
-    auto &forOpInnerMostBody = forOps[sizeOfFusedLoops - 1].getBody()->getOperations();
-    // put forOpInnerMostBody from forOpInnerMostBody.begin() to std::prev(forOpInnerMostBody.end()) before fusedLoopBody.begin()
-    forOpInnerMostBody.splice(fusedLoopBody.begin(), // fusedLoop.getBody()->begin()
-                              forOpInnerMostBody,
-                              forOpInnerMostBody.begin(),
-                              std::prev(forOpInnerMostBody.end()));
-    // 3.4) add name to the new loop
+    MutableArrayRef<AffineForOp> loops =
+        llvm::makeMutableArrayRef(forOps.data(), sizeOfFusedLoops);
+    coalesceLoops(loops);
+
+    // 4) add name to the new loop
     std::string new_name;
     for (auto forOp : forOps) {
       new_name += forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() + "_";
     }
     new_name += "fused";
-    fusedLoop->setAttr("loop_name", StringAttr::get(fusedLoop->getContext(), new_name));
-    
-    // 4) TODO: remove the original loop (bug)
-    for (int i = 0; i < forOps.size(); ++i){
-      auto blockArg = forOps[i].getInductionVar();
-      blockArg.replaceAllUsesWith(fusedLoop.getInductionVar());
-    }
-    forOps[0].erase();
-    llvm::raw_ostream &output = llvm::outs();
-    f.print(output);
+    loops[0]->setAttr("loop_name", StringAttr::get(loops[0]->getContext(), new_name));
   }
 }
 

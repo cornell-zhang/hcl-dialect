@@ -122,10 +122,6 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
   newNameArr.push_back(loop_name.str() + ".outer");
   newNameArr.push_back(loop_name.str() + ".inner");
   addNamesToLoops(tiledNest, newNameArr);
-  // 4) Remove the schedule operator
-  // TODO: Fix bug
-  // for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>())
-  //   splitOp.erase();
 }
 
 void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
@@ -170,10 +166,6 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
   newNameArr.push_back(y_loop.str() + ".outer");
   newNameArr.push_back(y_loop.str() + ".inner");
   addNamesToLoops(tiledNest, newNameArr);
-  // 4) Remove the schedule operator
-  // TODO: may have !NodePtr->isKnownSentinel() bug
-  // for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>())
-  //   tileOp.erase();
 }
 
 void HCLLoopTransformation::runReordering(FuncOp &f,
@@ -242,7 +234,6 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
     }
     break; // only the outer-most loop
   }
-  // 5) TODO: Remove the schedule operator
 }
 
 void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
@@ -452,26 +443,40 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
 
 void HCLLoopTransformation::runOnFunction() {
   FuncOp f = getFunction();
+  SmallVector<Operation *, 10> opToRemove;
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
   for (Operation &op : f.getOps()) {
     if (auto new_op = dyn_cast<hcl::SplitOp>(op)) {
       runSplitting(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::TileOp>(op)) {
       runTiling(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::ReorderOp>(op)) {
       runReordering(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::UnrollOp>(op)) {
       runUnrolling(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::PipelineOp>(op)) {
       runPipelining(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::ParallelOp>(op)) {
       runParallel(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::FuseOp>(op)) {
       runFusing(f, new_op);
+      opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::ComputeAtOp>(op)) {
       runComputeAt(f, new_op);
+      opToRemove.push_back(&op);
     }
+  }
+  // remove schedule operations (from back to front)
+  std::reverse(opToRemove.begin(), opToRemove.end());
+  for (Operation *op : opToRemove) {
+    op->erase();
   }
 }
 

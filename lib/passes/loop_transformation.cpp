@@ -357,17 +357,18 @@ void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
   // quotient" of division by the range.
   Value previous = outermost.getInductionVar();
   for (unsigned i = 0, e = loops.size(); i < e; ++i) {
-    unsigned idx = loops.size() - i - 1;
-    // TODO
-    // if (i != 0)
-    //   previous = builder.create<SignedDivIOp>(loc, previous,
-    //                                           builder.create<ConstantOp>(loc, builder.getI32Type(), builder.getIntegerAttr(builder.getIntegerType(32, /*isSigned=*/false),loops[idx + 1].getConstantUpperBound())));
+    unsigned idx = e - 1 - i; // from innermost
+    // TODO: inline op
+    if (i != 0) // not outermost
+      previous = builder.create<SignedDivIOp>(loc, previous,
+          builder.create<ConstantIndexOp>(loc, loops[idx+1].getConstantUpperBound()));
 
-    // Value iv = (i == e - 1) ? previous
-    //                         : builder.create<SignedRemIOp>(
-    //                               loc, previous, builder.create<ConstantOp>(loc, builder.getI32Type(), builder.getIntegerAttr(builder.getIntegerType(32, /*isSigned=*/false),loops[idx + 1].getConstantUpperBound())));
+    Value iv = (i == e - 1) ? previous
+                            : builder.create<SignedRemIOp>(
+                                  loc, previous,
+                                  builder.create<ConstantIndexOp>(loc, loops[idx].getConstantUpperBound()));
     replaceAllUsesInRegionWith(loops[idx].getInductionVar(),
-                               loops[0].getInductionVar(),// iv,
+                               iv,
                                loops.back().region());
   }
 

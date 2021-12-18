@@ -16,7 +16,9 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i" }
         // %l4 = hcl.fuse (%l1, %l2: !hcl.LoopHandle<"i">, !hcl.LoopHandle<"j">) -> !hcl.LoopHandle<"i_j_fused">
+        // (i,j)->(ij/1024,ij%1024)
         %l4 = hcl.fuse (%l1, %l2, %l3: !hcl.LoopHandle<"i">, !hcl.LoopHandle<"j">, !hcl.LoopHandle<"k">) -> !hcl.LoopHandle<"i_j_k_fused">
+        // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
         return %C : tensor<?x?xf32>
     }
 }

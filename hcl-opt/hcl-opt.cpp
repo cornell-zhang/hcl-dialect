@@ -10,9 +10,9 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Parser.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Support/MlirOptMain.h"
 #include "llvm/Support/CommandLine.h"
@@ -25,16 +25,13 @@
 
 #include <iostream>
 
-static llvm::cl::opt<std::string> inputFilename(
-    llvm::cl::Positional,
-    llvm::cl::desc("<input file>"),
-    llvm::cl::init("-"));
+static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
+                                                llvm::cl::desc("<input file>"),
+                                                llvm::cl::init("-"));
 
-static llvm::cl::opt<std::string> outputFilename(
-    "o",
-    llvm::cl::desc("Output filename"),
-    llvm::cl::value_desc("filename"),
-    llvm::cl::init("-"));
+static llvm::cl::opt<std::string>
+    outputFilename("o", llvm::cl::desc("Output filename"),
+                   llvm::cl::value_desc("filename"), llvm::cl::init("-"));
 
 static llvm::cl::opt<bool> splitInputFile(
     "split-input-file",
@@ -58,14 +55,14 @@ static llvm::cl::opt<bool> allowUnregisteredDialects(
     llvm::cl::desc("Allow operation with no registered dialects"),
     llvm::cl::init(false));
 
-static llvm::cl::opt<bool> preloadDialectsInContext(
-    "preload-dialects-in-context",
-    llvm::cl::desc("Preloads dialects in context"),
-    llvm::cl::init(false));
+static llvm::cl::opt<bool>
+    preloadDialectsInContext("preload-dialects-in-context",
+                             llvm::cl::desc("Preloads dialects in context"),
+                             llvm::cl::init(false));
 
-static llvm::cl::opt<bool> enableOpt(
-    "opt", llvm::cl::desc("Enable optimizations"),
-    llvm::cl::init(false));
+static llvm::cl::opt<bool> enableOpt("opt",
+                                     llvm::cl::desc("Enable optimizations"),
+                                     llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Set up the input and output file
@@ -118,7 +115,7 @@ int main(int argc, char **argv) {
   }
 
   // Run the pass pipeline
-  if (mlir::failed(pm.run(*module))){
+  if (mlir::failed(pm.run(*module))) {
     return 4;
   }
 

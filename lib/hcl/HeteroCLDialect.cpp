@@ -6,15 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/HeteroCLDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Transforms/InliningUtils.h"
-#include "hcl/HeteroCLOps.h"
-#include "hcl/HeteroCLTypes.h"
-#include "hcl/HeteroCLAttrs.h"
-#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/TypeSwitch.h"
+
+#include "hcl/HeteroCLDialect.h"
+#include "hcl/HeteroCLTypes.h"
+
+#include "hcl/HeteroCLAttrs.h"
+#include "hcl/HeteroCLOps.h"
 
 using namespace mlir;
 using namespace mlir::hcl;
@@ -53,7 +55,8 @@ void HeteroCLDialect::initialize() {
 // Type-related Dialect methods.
 //===----------------------------------------------------------------------===//
 
-mlir::Type mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser& parser) const {
+mlir::Type
+mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser &parser) const {
   StringRef keyword;
   if (parser.parseKeyword(&keyword))
     return Type();
@@ -68,12 +71,14 @@ mlir::Type mlir::hcl::HeteroCLDialect::parseType(mlir::DialectAsmParser& parser)
   return Type();
 }
 
-void mlir::hcl::HeteroCLDialect::printType(mlir::Type type, mlir::DialectAsmPrinter& printer) const {
-  if(failed(generatedTypePrinter(type, printer)))
+void mlir::hcl::HeteroCLDialect::printType(
+    mlir::Type type, mlir::DialectAsmPrinter &printer) const {
+  if (failed(generatedTypePrinter(type, printer)))
     llvm_unreachable("unknown 'hcl' type");
 }
 
-Attribute HeteroCLDialect::parseAttribute(DialectAsmParser &parser, Type type) const {
+Attribute HeteroCLDialect::parseAttribute(DialectAsmParser &parser,
+                                          Type type) const {
   StringRef attrTag;
   if (failed(parser.parseKeyword(&attrTag)))
     return Attribute();
@@ -88,7 +93,8 @@ Attribute HeteroCLDialect::parseAttribute(DialectAsmParser &parser, Type type) c
   return Attribute();
 }
 
-void HeteroCLDialect::printAttribute(Attribute attr, DialectAsmPrinter &printer) const {
+void HeteroCLDialect::printAttribute(Attribute attr,
+                                     DialectAsmPrinter &printer) const {
   if (succeeded(generatedAttributePrinter(attr, printer)))
     return;
 }

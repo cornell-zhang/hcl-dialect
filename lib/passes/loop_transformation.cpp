@@ -30,14 +30,14 @@ struct HCLLoopTransformation : public PassWrapper<HCLLoopTransformation, Functio
     return "Loop transformation in HeteroCL";
   }
 
-  void runSplitting();
-  void runTiling();
-  void runReordering();
-  void runUnrolling();
-  void runPipelining();
-  void runParallel();
-  void runFusing();
-  void runComputeAt();
+  void runSplitting(FuncOp& f, hcl::SplitOp& splitOp);
+  void runTiling(FuncOp& f, hcl::TileOp& tileOp);
+  void runReordering(FuncOp& f, hcl::ReorderOp& reorderOp);
+  void runUnrolling(FuncOp& f, hcl::UnrollOp& unrollOp);
+  void runPipelining(FuncOp& f, hcl::PipelineOp& pipelineOp);
+  void runParallel(FuncOp& f, hcl::ParallelOp& parallelOp);
+  void runFusing(FuncOp& f, hcl::FuseOp& fuseOp);
+  void runComputeAt(FuncOp& f, hcl::ComputeAtOp& computeAtOp);
   // utils
   bool findContiguousNestedLoops(
       const AffineForOp& rootAffineForOp,
@@ -95,10 +95,8 @@ bool HCLLoopTransformation::addNamesToLoops(
  *  3) Add names to new loops
  *  4) Remove the schedule operator
  */
-void HCLLoopTransformation::runSplitting() {
-  FuncOp f = getFunction();
+void HCLLoopTransformation::runSplitting(FuncOp& f, hcl::SplitOp& splitOp) {
   SmallVector<AffineForOp, 6> tiledNest;
-  for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>()) {
     // 1) get schedule
     unsigned int factor = splitOp.factor();
     const auto loop_name = splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
@@ -123,16 +121,13 @@ void HCLLoopTransformation::runSplitting() {
     newNameArr.push_back(loop_name.str() + ".outer");
     newNameArr.push_back(loop_name.str() + ".inner");
     addNamesToLoops(tiledNest,newNameArr);
-  }
   // 4) Remove the schedule operator
   // TODO: Fix bug
   // for (hcl::SplitOp splitOp : f.getOps<hcl::SplitOp>())
   //   splitOp.erase();
 }
 
-void HCLLoopTransformation::runTiling() {
-  FuncOp f = getFunction();
-  for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>()) {
+void HCLLoopTransformation::runTiling(FuncOp& f, hcl::TileOp& tileOp) {
     // 1) get schedule
     unsigned int x_factor = tileOp.x_factor();
     unsigned int y_factor = tileOp.y_factor();
@@ -172,16 +167,13 @@ void HCLLoopTransformation::runTiling() {
     newNameArr.push_back(y_loop.str() + ".outer");
     newNameArr.push_back(y_loop.str() + ".inner");
     addNamesToLoops(tiledNest,newNameArr);
-  }
   // 4) Remove the schedule operator
   // TODO: may have !NodePtr->isKnownSentinel() bug
   // for (hcl::TileOp tileOp : f.getOps<hcl::TileOp>())
   //   tileOp.erase();
 }
 
-void HCLLoopTransformation::runReordering() {
-  FuncOp f = getFunction();
-  for (hcl::ReorderOp reorderOp : f.getOps<hcl::ReorderOp>()) {
+void HCLLoopTransformation::runReordering(FuncOp& f, hcl::ReorderOp& reorderOp) {
     // 1) get schedule
     const auto loopsToBeReordered = reorderOp.loops(); // operand_range
 
@@ -242,13 +234,10 @@ void HCLLoopTransformation::runReordering() {
       }
       break; // only the outer-most loop
     }
-  }
   // 5) TODO: Remove the schedule operator
 }
 
-void HCLLoopTransformation::runUnrolling() {
-  FuncOp f = getFunction();
-  for (hcl::UnrollOp unrollOp : f.getOps<hcl::UnrollOp>()) {
+void HCLLoopTransformation::runUnrolling(FuncOp& f, hcl::UnrollOp& unrollOp) {
     // 1) get schedule
     unsigned int factor = unrollOp.factor();
     const auto loop_name = unrollOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
@@ -267,12 +256,9 @@ void HCLLoopTransformation::runUnrolling() {
                       );
       }
     });
-  }
 }
 
-void HCLLoopTransformation::runParallel() {
-  FuncOp f = getFunction();
-  for (hcl::ParallelOp parallelOp : f.getOps<hcl::ParallelOp>()) {
+void HCLLoopTransformation::runParallel(FuncOp& f, hcl::ParallelOp& parallelOp) {
     // 1) get schedule
     const auto loop_name = parallelOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
 
@@ -290,12 +276,9 @@ void HCLLoopTransformation::runParallel() {
                       );
       }
     });
-  }
 }
 
-void HCLLoopTransformation::runPipelining() {
-  FuncOp f = getFunction();
-  for (hcl::PipelineOp pipelineOp : f.getOps<hcl::PipelineOp>()) {
+void HCLLoopTransformation::runPipelining(FuncOp& f, hcl::PipelineOp& pipelineOp) {
     // 1) get schedule
     unsigned int ii = pipelineOp.ii();
     const auto loop_name = pipelineOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
@@ -314,7 +297,6 @@ void HCLLoopTransformation::runPipelining() {
                       );
       }
     });
-  }
 }
 
 // modified from lib/Transforms/Utils/LoopUtils.cpp
@@ -384,9 +366,7 @@ void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
 
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
-void HCLLoopTransformation::runFusing() {
-  FuncOp f = getFunction();
-  for (hcl::FuseOp fuseOp : f.getOps<hcl::FuseOp>()) {
+void HCLLoopTransformation::runFusing(FuncOp& f, hcl::FuseOp& fuseOp) {
     // 1) get schedule
     const auto loopsToBeFused = fuseOp.loops(); // operand_range
     unsigned int sizeOfFusedLoops = loopsToBeFused.size();
@@ -423,12 +403,9 @@ void HCLLoopTransformation::runFusing() {
     }
     new_name += "fused";
     loops[0]->setAttr("loop_name", StringAttr::get(loops[0]->getContext(), new_name));
-  }
 }
 
-void HCLLoopTransformation::runComputeAt() {
-  FuncOp f = getFunction();
-  for (hcl::ComputeAtOp computeAtOp : f.getOps<hcl::ComputeAtOp>()) {
+void HCLLoopTransformation::runComputeAt(FuncOp& f, hcl::ComputeAtOp& computeAtOp) {
     // 1) get schedule
     const auto loop1_name = computeAtOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName();
     const auto loop2_name = computeAtOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName();
@@ -454,19 +431,31 @@ void HCLLoopTransformation::runComputeAt() {
       } else
         std::cout << std::to_string(i) << " no" << std::endl;
     }
-  }
 }
 
-// https://github.com/llvm/llvm-project/blob/release/13.x/mlir/lib/Dialect/Affine/Transforms/LoopTiling.cpp
 void HCLLoopTransformation::runOnFunction()  {
-  runSplitting();
-  runTiling();
-  runReordering();
-  runUnrolling();
-  runPipelining();
-  runParallel();
-  runFusing();
-  runComputeAt();
+  FuncOp f = getFunction();
+  // schedule should preverse orders, thus traverse one by one
+  // the following shows the dispatching logic
+  for (Operation& op : f.getOps()) {
+    if (auto new_op = dyn_cast<hcl::SplitOp>(op)) {
+      runSplitting(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::TileOp>(op)) {
+      runTiling(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::ReorderOp>(op)) {
+      runReordering(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::UnrollOp>(op)) {
+      runUnrolling(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::PipelineOp>(op)) {
+      runPipelining(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::ParallelOp>(op)) {
+      runParallel(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::FuseOp>(op)) {
+      runFusing(f, new_op);
+    } else if (auto new_op = dyn_cast<hcl::ComputeAtOp>(op)) {
+      runComputeAt(f, new_op);
+    }
+  }
 }
 
 namespace mlir {

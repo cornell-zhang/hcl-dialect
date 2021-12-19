@@ -20,7 +20,9 @@ module {
         } { loop_name = "i" }
         %l4, %l5 = hcl.split (%l1: !hcl.LoopHandle<"i">, 8) -> (!hcl.LoopHandle<"i.outer">, !hcl.LoopHandle<"i.inner">)
         %l6, %l7, %l8, %l9 = hcl.tile (%l2: !hcl.LoopHandle<"j">, %l3: !hcl.LoopHandle<"k">, 2, 4) -> (!hcl.LoopHandle<"j.outer">, !hcl.LoopHandle<"j.inner">, !hcl.LoopHandle<"k.outer">, !hcl.LoopHandle<"k.inner">) // split & tile
-        %l10, %l11 = hcl.split (%l6: !hcl.LoopHandle<"j.outer">, 16) -> (!hcl.LoopHandle<"j.outer.outer">, !hcl.LoopHandle<"j.outer.inner">) 
+        %l10, %l11 = hcl.split (%l6: !hcl.LoopHandle<"j.outer">, 16) -> (!hcl.LoopHandle<"j.outer.outer">, !hcl.LoopHandle<"j.outer.inner">)
+        hcl.partition(%A: memref<?x?xf32>, "CyclicPartition", 0, 4)
+        hcl.partition(%B: memref<?x?xf32>, "BlockPartition", 0, 2)
         return %C : memref<?x?xf32>
     }
 }

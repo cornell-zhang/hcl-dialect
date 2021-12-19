@@ -39,6 +39,7 @@ struct HCLLoopTransformation
   void runParallel(FuncOp &f, hcl::ParallelOp &parallelOp);
   void runFusing(FuncOp &f, hcl::FuseOp &fuseOp);
   void runComputeAt(FuncOp &f, hcl::ComputeAtOp &computeAtOp);
+  void runPartition(FuncOp &f, hcl::PartitionOp &partitionOp);
   // utils
   bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                  const SmallVector<StringRef, 6> &nameArr,
@@ -441,6 +442,74 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
   }
 }
 
+// https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
+void HCLLoopTransformation::runPartition(FuncOp &f,
+                                         hcl::PartitionOp &partitionOp) {
+  auto memref = partitionOp.target(); // return a Value type
+  auto kind = partitionOp.partition_kind();
+  // TODO: Partition based on different dimensions
+  unsigned int dim = partitionOp.dim();
+  unsigned int factor = partitionOp.factor();
+
+  if (!memref.getDefiningOp()) { // in func args
+    for (auto arg : f.getArguments()) {
+      if (memref == arg) { // found the corresponding array
+        auto array = arg;
+        auto builder = Builder(array.getContext());
+        auto arrayType = array.getType().dyn_cast<MemRefType>();
+        // Walk through each dimension of the current memory
+        SmallVector<AffineExpr, 4> partitionIndices;
+        SmallVector<AffineExpr, 4> addressIndices;
+
+        for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
+          if (kind == hcl::PartitionKindEnum::CyclicPartition) {
+            partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+            addressIndices.push_back(
+                builder.getAffineDimExpr(dim).floorDiv(factor));
+
+          } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
+            auto blockFactor =
+                (arrayType.getShape()[dim] + factor - 1) / factor;
+            partitionIndices.push_back(
+                builder.getAffineDimExpr(dim).floorDiv(blockFactor));
+            addressIndices.push_back(builder.getAffineDimExpr(dim) %
+                                     blockFactor);
+
+          } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
+            partitionIndices.push_back(builder.getAffineConstantExpr(0));
+            addressIndices.push_back(builder.getAffineDimExpr(dim));
+          } else {
+            f.emitError("No this partition kind");
+          }
+        }
+
+        // Construct new layout map
+        partitionIndices.append(addressIndices.begin(), addressIndices.end());
+        auto layoutMap = AffineMap::get(arrayType.getRank(), 0,
+                                        partitionIndices, builder.getContext());
+
+        // Construct new array type
+        auto newType =
+            MemRefType::get(arrayType.getShape(), arrayType.getElementType(),
+                            layoutMap, arrayType.getMemorySpace());
+
+        // Set new type
+        array.setType(newType);
+
+        // update function signature
+        auto resultTypes = f.front().getTerminator()->getOperandTypes();
+        auto inputTypes = f.front().getArgumentTypes();
+        f.setType(builder.getFunctionType(inputTypes, resultTypes));
+        // llvm::raw_ostream &output = llvm::outs();
+        // f.print(output);
+      }
+    }
+  } else {
+    // TODO: not in func args
+    f.emitError("Has not implemented yet");
+  }
+}
+
 void HCLLoopTransformation::runOnFunction() {
   FuncOp f = getFunction();
   SmallVector<Operation *, 10> opToRemove;
@@ -470,6 +539,9 @@ void HCLLoopTransformation::runOnFunction() {
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::ComputeAtOp>(op)) {
       runComputeAt(f, new_op);
+      opToRemove.push_back(&op);
+    } else if (auto new_op = dyn_cast<hcl::PartitionOp>(op)) {
+      runPartition(f, new_op);
       opToRemove.push_back(&op);
     }
   }

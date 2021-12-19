@@ -33,6 +33,8 @@ using namespace mlir::hcl;
 #define GET_ATTRDEF_CLASSES
 #include "hcl/HeteroCLAttrs.cpp.inc"
 
+#include "hcl/HeteroCLEnums.cpp.inc"
+
 //===----------------------------------------------------------------------===//
 // Dialect initialize method.
 //===----------------------------------------------------------------------===//

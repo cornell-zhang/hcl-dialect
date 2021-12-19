@@ -11,6 +11,7 @@
 
 include "HeteroCLDialect.td"
 include "HeteroCLTypes.td"
+include "HeteroCLAttrs.td"
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -148,6 +149,33 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
     let results = (outs );
     let assemblyFormat = [{
         `(` $loop `:` type($loop) `)` attr-dict
+    }];
+}
+
+def HeteroCL_PartitionOp : HeteroCL_Op<"partition"> 
+{
+    let summary = "partition";
+    let description = [{
+        hcl. partition(target, partition_type=0, dim=0, factor=0)
+
+        Partition a Tensor into smaller Tensors or even registers
+
+        Users can specify the partition type, which includes Complete, Block, and Cyclic. The default type is Complete, which means we completely partition the specified dimension. If Block is specified, the tensor is partitioned into N blocks with equal size. The number N is specified by the factor. Otherwise, if Cyclic is specified, the elements of the tensor is partition in a cyclic manner. For example, if the factor is three, the 1st element will be assigned to the 1st partitioned tensor; the 2nd element will be assigned to the 2nd one; and so on. Finally, if Complete is specified, the factor will be ignored. If dim is set to 0, it means we partition all dimensions.
+
+        Parameters
+        target (Tensor) - The tensor to be partitioned
+
+        partition_type ({Complete, Block, Cyclic}, optional) - The partition type
+
+        dim (int, optional) - The dimension to be partitioned
+
+        factor (int, optional) - The partition factor
+    }];
+
+    let arguments = (ins AnyMemRef:$target, PartitionKindEnum:$partition_type, DefaultValuedAttr<UI32Attr, "0">:$dim, DefaultValuedAttr<UI32Attr, "0">:$factor);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $target `:` type($target) `,` $partition_type `,` $dim `,` $factor `)` attr-dict
     }];
 }
 

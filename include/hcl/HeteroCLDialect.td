@@ -24,12 +24,6 @@ def HeteroCL_Dialect : Dialect {
         working inside of the LLVM source tree.
     }];
     let cppNamespace = "::mlir::hcl";
-    let extraClassDeclaration = [{
-        Attribute parseAttribute(DialectAsmParser &parser,
-                                Type type) const override;
-        void printAttribute(Attribute attr,
-                                DialectAsmPrinter &printer) const override;
-        }];
 }
 
 //===----------------------------------------------------------------------===//

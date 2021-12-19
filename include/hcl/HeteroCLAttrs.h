@@ -12,6 +12,8 @@
 
 #include "mlir/IR/BuiltinAttributes.h"
 
+#include "hcl/HeteroCLEnums.h.inc"
+
 #define GET_ATTRDEF_CLASSES
 #include "hcl/HeteroCLAttrs.h.inc"
 

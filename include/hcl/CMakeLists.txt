@@ -16,5 +16,10 @@ mlir_tablegen(HeteroCLAttrs.h.inc -gen-attrdef-decls)
 mlir_tablegen(HeteroCLAttrs.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(MLIRHeteroCLAttrsIncGen)
 
+set(LLVM_TARGET_DEFINITIONS HeteroCLAttrs.td)
+mlir_tablegen(HeteroCLEnums.h.inc -gen-enum-decls)
+mlir_tablegen(HeteroCLEnums.cpp.inc -gen-enum-defs)
+add_public_tablegen_target(MLIRHeteroCLEnumsIncGen)
+
 add_mlir_doc(HeteroCLDialect HeteroCLDialect HeteroCL/ -gen-dialect-doc)
 add_mlir_doc(HeteroCLOps HeteroCLOps HeteroCL/ -gen-op-doc)

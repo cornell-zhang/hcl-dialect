@@ -20,6 +20,7 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "hcl/HeteroCLTypes.h"
+#include "hcl/HeteroCLAttrs.h"
 
 #define GET_OP_CLASSES
 #include "hcl/HeteroCLOps.h.inc"

@@ -179,4 +179,19 @@ def HeteroCL_PartitionOp : HeteroCL_Op<"partition">
     }];
 }
 
+def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at"> 
+{
+    let summary = "buffer_at";
+    let description = [{
+        buffer_at
+    }];
+
+    // TODO: Also need to add Stage
+    let arguments = (ins AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $target `:` type($target) `,` $axis `)` attr-dict
+    }];
+}
+
 #endif // HCL_OPS

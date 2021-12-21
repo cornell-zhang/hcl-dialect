@@ -40,10 +40,11 @@ struct HCLLoopTransformation
   void runFusing(FuncOp &f, hcl::FuseOp &fuseOp);
   void runComputeAt(FuncOp &f, hcl::ComputeAtOp &computeAtOp);
   void runPartition(FuncOp &f, hcl::PartitionOp &partitionOp);
+  void runBufferAt(FuncOp &f, hcl::BufferAtOp &bufferAtOp);
   // utils
   bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
-                                 const SmallVector<StringRef, 6> &nameArr,
-                                 SmallVector<AffineForOp, 6> &resForOps);
+                                 SmallVector<AffineForOp, 6> &resForOps,
+                                 SmallVector<StringRef, 6> &nameArr, int depth);
   bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
                        const SmallVector<std::string, 6> &nameArr);
 };
@@ -51,22 +52,30 @@ struct HCLLoopTransformation
 } // namespace
 
 bool HCLLoopTransformation::findContiguousNestedLoops(
-    const AffineForOp &rootAffineForOp,
-    const SmallVector<StringRef, 6> &nameArr,
-    SmallVector<AffineForOp, 6> &resForOps) {
+    const AffineForOp &rootAffineForOp, SmallVector<AffineForOp, 6> &resForOps,
+    SmallVector<StringRef, 6> &nameArr, int depth = -1) {
+  // depth = -1 means traverses all the inner loops
   AffineForOp forOp = rootAffineForOp;
-  unsigned int depth = nameArr.size();
+  Attribute attr = forOp->getAttr("loop_name");
+  const StringRef curr_loop = attr.cast<StringAttr>().getValue();
+  unsigned int sizeNameArr = nameArr.size();
+  if (sizeNameArr != 0)
+    depth = sizeNameArr;
+  else if (depth == -1)
+    depth = 0x3f3f3f3f;
   resForOps.clear();
-  for (unsigned i = 0; i < depth; ++i) {
+  for (int i = 0; i < depth; ++i) {
     if (!forOp)
       return false;
 
     Attribute attr = forOp->getAttr("loop_name");
     const StringRef curr_loop = attr.cast<StringAttr>().getValue();
-    if (curr_loop != nameArr[i])
+    if (sizeNameArr != 0 && curr_loop != nameArr[i])
       return false;
 
     resForOps.push_back(forOp);
+    if (sizeNameArr == 0)
+      nameArr.push_back(curr_loop);
     Block &body = forOp.region().front();
     // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
     //   break;
@@ -145,7 +154,7 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
   //    and do tiling
   bool isFound = false;
   f.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, nameArr, forOps))
+    if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
       isFound = true;
     return;
   });
@@ -429,7 +438,7 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   SmallVector<AffineForOp, 6> forOps;
   bool isFound = false;
   f.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, nameArr, forOps))
+    if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
       isFound = true;
     return;
   });
@@ -556,6 +565,42 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   }
 }
 
+void HCLLoopTransformation::runBufferAt(FuncOp &f,
+                                        hcl::BufferAtOp &bufferAtOp) {
+  // 1) get schedule
+  auto memref = bufferAtOp.target(); // return a Value type
+  int axis = bufferAtOp.axis();
+  // 2) Traverse all the nested loops and find the requested one
+  SmallVector<AffineForOp, 6> forOps;
+  SmallVector<StringRef, 6> nameArr;
+  bool isDone = false;
+  for (auto forOp : f.getOps<AffineForOp>()) {
+    if (isDone)
+      break;
+    findContiguousNestedLoops(forOp, forOps, nameArr, axis + 2);
+    // TODO: Add operations and update loop bounds
+    // a) initalization
+    OpBuilder builder(forOps[axis + 1]);
+    Location loc_front = forOps[axis + 1].getLoc();
+    AffineForOp initLoop = builder.create<AffineForOp>(loc_front, 0, 1);
+    // b) write back
+    Location loc_back =
+        std::prev(forOps[axis + 1].getBody()->getOperations().end())->getLoc();
+    AffineForOp writeBackLoop = builder.create<AffineForOp>(loc_back, 0, 1);
+    forOps[axis + 1]->moveBefore(writeBackLoop);
+    // Add names to loops
+    SmallVector<std::string, 6> newNameArr;
+    newNameArr.push_back(nameArr[axis + 1].str() + "_init");
+    newNameArr.push_back(nameArr[axis + 1].str());
+    newNameArr.push_back(nameArr[axis + 1].str() + "_back");
+    SmallVector<AffineForOp, 6> newLoops{initLoop, forOps[axis + 1],
+                                         writeBackLoop};
+    addNamesToLoops(newLoops, newNameArr);
+    isDone = true;
+    break;
+  }
+}
+
 void HCLLoopTransformation::runOnFunction() {
   FuncOp f = getFunction();
   SmallVector<Operation *, 10> opToRemove;
@@ -588,6 +633,9 @@ void HCLLoopTransformation::runOnFunction() {
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::PartitionOp>(op)) {
       runPartition(f, new_op);
+      opToRemove.push_back(&op);
+    } else if (auto new_op = dyn_cast<hcl::BufferAtOp>(op)) {
+      runBufferAt(f, new_op);
       opToRemove.push_back(&op);
     }
   }

@@ -88,7 +88,11 @@ int main(int argc, char **argv) {
 
   // Register dialects and passes in current context
   mlir::MLIRContext context;
+  auto registry = context.getDialectRegistry();
   mlir::registerAllDialects(context);
+  context.allowUnregisteredDialects(true);
+  context.printOpOnDiagnostic(true);
+  context.loadAllAvailableDialects();
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::registerAllPasses();
   mlir::hcl::registerHCLLoopTransformationPass();

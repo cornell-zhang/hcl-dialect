@@ -5,6 +5,7 @@
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Pass/Pass.h"
@@ -568,7 +569,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
 void HCLLoopTransformation::runBufferAt(FuncOp &f,
                                         hcl::BufferAtOp &bufferAtOp) {
   // 1) get schedule
-  auto memref = bufferAtOp.target(); // return a Value type
+  auto target = bufferAtOp.target(); // return a Value type
   int axis = bufferAtOp.axis();
   // 2) Traverse all the nested loops and find the requested one
   SmallVector<AffineForOp, 6> forOps;
@@ -578,15 +579,35 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
     if (isDone)
       break;
     findContiguousNestedLoops(forOp, forOps, nameArr, axis + 2);
-    // TODO: Add operations and update loop bounds
     // a) initalization
     OpBuilder builder(forOps[axis + 1]);
     Location loc_front = forOps[axis + 1].getLoc();
-    AffineForOp initLoop = builder.create<AffineForOp>(loc_front, 0, 1);
+    unsigned int ub = forOps[axis + 1].getConstantUpperBound();
+    // a.1) allocate buffer
+    mlir::Type elementType = builder.getF32Type();
+    // builder.create<memref::AllocOp>(loc_front, MemRefType::get(target.getType().cast<MemRefType>().getShape(), elementType));
+    auto buf = builder.create<memref::AllocOp>(loc_front, MemRefType::get({ub}, elementType));
+    // a.2) create initialization loop
+    auto zero = builder.create<ConstantOp>(loc_front, elementType, builder.getFloatAttr(elementType, 0.0));
+    AffineForOp initLoop = builder.create<AffineForOp>(loc_front, 0, ub);
+    // a.3) do the initialization
+    OpBuilder init_builder(&(*(initLoop.getBody()->getOperations().begin())));
+    SmallVector<Value, 4> memIndices;
+    memIndices.push_back(initLoop.getInductionVar());
+    init_builder.create<AffineStoreOp>(initLoop.getLoc(), zero, buf, memIndices);
     // b) write back
     Location loc_back =
         std::prev(forOps[axis + 1].getBody()->getOperations().end())->getLoc();
-    AffineForOp writeBackLoop = builder.create<AffineForOp>(loc_back, 0, 1);
+    AffineForOp writeBackLoop = builder.create<AffineForOp>(loc_back, 0, ub);
+    OpBuilder back_builder(&(*(writeBackLoop.getBody()->getOperations().begin())));
+    memIndices.clear();
+    memIndices.push_back(writeBackLoop.getInductionVar());
+    auto load = back_builder.create<AffineLoadOp>(writeBackLoop.getLoc(), buf, memIndices);
+    memIndices.clear();
+    memIndices.push_back(forOps[axis].getInductionVar());
+    memIndices.push_back(writeBackLoop.getInductionVar());
+    back_builder.create<AffineStoreOp>(writeBackLoop.getLoc(), load, target, memIndices);
+    // c) move the original loop between the two loops
     forOps[axis + 1]->moveBefore(writeBackLoop);
     // Add names to loops
     SmallVector<std::string, 6> newNameArr;

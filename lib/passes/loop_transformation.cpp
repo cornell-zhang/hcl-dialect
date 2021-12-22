@@ -574,11 +574,19 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
   // 2) Traverse all the nested loops and find the requested one
   SmallVector<AffineForOp, 6> forOps;
   SmallVector<StringRef, 6> nameArr;
+  // TODO: test if the requested loop has the target tensor
   bool isDone = false;
   for (auto forOp : f.getOps<AffineForOp>()) {
     if (isDone)
       break;
-    findContiguousNestedLoops(forOp, forOps, nameArr, axis + 2);
+    bool isFound = findContiguousNestedLoops(forOp, forOps, nameArr, axis + 2));
+    if (axis >= 0 && (int)forOps.size() == axis + 1) {
+      isDone = true;
+      break;
+    } else (!isFound) {
+      f.emitError("Cannot find nested loops for buffer_at");
+      return;
+    }
     // a) initalization
     OpBuilder builder(forOps[axis + 1]);
     Location loc_front = forOps[axis + 1].getLoc();

@@ -25,7 +25,7 @@ module {
         hcl.compute_at (%l1: !hcl.LoopHandle<"i">, %l3: !hcl.LoopHandle<"i1">)
         return
     }
-    func @matrix_multiply( %A: tensor<?x?xf32>, %B: tensor<?x?xf32>, %C: tensor<?x?xf32>) -> tensor<?x?xf32>
+    func @matrix_multiply( %A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
     {
         %l1 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i">
         %l2 = hcl.create_loop_handle {} : !hcl.LoopHandle<"j">
@@ -36,9 +36,9 @@ module {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<?x?xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<?x?xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<?x?xf32>
+                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
+                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
+                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
                 } { loop_name = "k" }
@@ -47,15 +47,15 @@ module {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<?x?xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<?x?xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<?x?xf32>
+                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
+                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
+                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
                     %prod = mulf %a, %b : f32
                     %sum  = addf %prod, %c: f32
                 } { loop_name = "k1" }
             } { loop_name = "j1" }
         } { loop_name = "i1" }
         hcl.compute_at (%l1: !hcl.LoopHandle<"i">, %l4: !hcl.LoopHandle<"i1">)
-        return %C : tensor<?x?xf32>
+        return %C : tensor<1024x1024xf32>
     }
 }

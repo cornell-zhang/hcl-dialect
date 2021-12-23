@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <type_traits>
 #include <vector>
 using namespace mlir;
 
@@ -48,6 +49,9 @@ struct HCLLoopTransformation
                                  SmallVector<StringRef, 6> &nameArr, int depth);
   bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
                        const SmallVector<std::string, 6> &nameArr);
+  bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
+                          const SmallVector<int, 6> &attr_arr,
+                          std::string attr_name);
 };
 
 } // namespace
@@ -82,6 +86,23 @@ bool HCLLoopTransformation::findContiguousNestedLoops(
     //   break;
 
     forOp = dyn_cast<AffineForOp>(&body.front());
+  }
+  return true;
+}
+
+bool HCLLoopTransformation::addIntAttrsToLoops(
+    SmallVector<AffineForOp, 6> &forOps, const SmallVector<int, 6> &attr_arr,
+    const std::string attr_name) {
+  assert(forOps.size() == attr_arr.size());
+  unsigned cnt_loop = 0;
+  for (AffineForOp newForOp : forOps) {
+    newForOp->setAttr(
+        attr_name,
+        IntegerAttr::get(
+            IntegerType::get(newForOp->getContext(), 32,
+                             IntegerType::SignednessSemantics::Signless),
+            attr_arr[cnt_loop]));
+    cnt_loop++;
   }
   return true;
 }
@@ -670,6 +691,10 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       SmallVector<AffineForOp, 6> newLoops{initLoop, forOps[axis + 1],
                                            writeBackLoop};
       addNamesToLoops(newLoops, newNameArr);
+      // automatic pipelining
+      SmallVector<AffineForOp, 6> twoLoops{initLoop, writeBackLoop};
+      SmallVector<int, 6> II{1, 1};
+      addIntAttrsToLoops(twoLoops, II, "pipeline_ii");
     }
     isDone = true;
     break;

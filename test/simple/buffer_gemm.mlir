@@ -15,7 +15,7 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
-                } { loop_name = "k" }
+                } { loop_name = "k", reduction = 1 : i32 }
             } { loop_name = "j" }
         } { loop_name = "i" }
         hcl.buffer_at(%C: memref<1024x1024xf32>, 1)
@@ -40,7 +40,7 @@ module {
     //                 %prod = mulf %a, %b : f32
     //                 %sum = addf %prod, %c: f32
     //                 affine.store %sum, %buf_C[%idx] : memref<1xf32>
-    //             } { loop_name = "k" }
+    //             } { loop_name = "k", reduction = 1 : i32 }
     //             %buf_C_fin = affine.load %buf_C[%idx] : memref<1xf32>
     //             affine.store %buf_C_fin, %C[%i, %j] : memref<1024x1024xf32>
     //         } { loop_name = "j" }
@@ -61,7 +61,7 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
-                } { loop_name = "k" }
+                } { loop_name = "k", reduction = 1 : i32 }
             } { loop_name = "j" }
         } { loop_name = "i" }
         hcl.buffer_at(%C: memref<1024x1024xf32>, 0)
@@ -82,7 +82,7 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
-                } { loop_name = "k" }
+                } { loop_name = "k", reduction = 1 : i32 }
             } { loop_name = "j" }
         } { loop_name = "i" }
         hcl.buffer_at(%C: memref<1024x1024xf32>, 2)

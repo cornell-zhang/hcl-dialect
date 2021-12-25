@@ -46,7 +46,7 @@ struct HCLLoopTransformation
   // utils
   bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                  SmallVector<AffineForOp, 6> &resForOps,
-                                 SmallVector<StringRef, 6> &nameArr, int depth);
+                                 SmallVector<StringRef, 6> &nameArr, int depth, bool countReductionLoops);
   bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
                        const SmallVector<std::string, 6> &nameArr);
   bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
@@ -58,7 +58,7 @@ struct HCLLoopTransformation
 
 bool HCLLoopTransformation::findContiguousNestedLoops(
     const AffineForOp &rootAffineForOp, SmallVector<AffineForOp, 6> &resForOps,
-    SmallVector<StringRef, 6> &nameArr, int depth = -1) {
+    SmallVector<StringRef, 6> &nameArr, int depth = -1, bool countReductionLoops = true) {
   // depth = -1 means traverses all the inner loops
   AffineForOp forOp = rootAffineForOp;
   Attribute attr = forOp->getAttr("loop_name");
@@ -70,17 +70,25 @@ bool HCLLoopTransformation::findContiguousNestedLoops(
     depth = 0x3f3f3f3f;
   resForOps.clear();
   for (int i = 0; i < depth; ++i) {
-    if (!forOp)
-      return false;
+    if (!forOp) {
+      if (depth != 0x3f3f3f3f)
+        return false;
+      else // reach the inner-most loop
+        return true;
+    }
 
     Attribute attr = forOp->getAttr("loop_name");
     const StringRef curr_loop = attr.cast<StringAttr>().getValue();
     if (sizeNameArr != 0 && curr_loop != nameArr[i])
       return false;
 
-    resForOps.push_back(forOp);
-    if (sizeNameArr == 0)
-      nameArr.push_back(curr_loop);
+    if (forOp->hasAttr("reduction") == 1 && !countReductionLoops) {
+      i--;
+    } else {
+      resForOps.push_back(forOp);
+      if (sizeNameArr == 0)
+        nameArr.push_back(curr_loop);
+    }
     Block &body = forOp.region().front();
     // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
     //   break;
@@ -597,27 +605,53 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
   SmallVector<StringRef, 6> nameArr;
   // TODO: test if the requested loop has the target tensor
   bool isDone = false;
-  for (auto forOp : f.getOps<AffineForOp>()) {
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
     if (isDone)
       break;
-    bool isFound = findContiguousNestedLoops(forOp, forOps, nameArr, axis + 2);
-    if (axis >= 0 && (int)forOps.size() == axis + 1) {
-      isDone = true;
-      break;
-    } else if (!isFound) {
+    bool isFound = findContiguousNestedLoops(rootForOp, forOps, nameArr);
+    if (!isFound) {
       f.emitError("Cannot find nested loops for buffer_at");
       return;
     }
-    // a) initalization
-    OpBuilder builder(forOps[axis + 1]);
-    Location loc_front = forOps[axis + 1].getLoc();
-    unsigned int ub = forOps[axis + 1].getConstantUpperBound();
-    // TODO: support more data types
-    mlir::Type elementType = builder.getF32Type();
-    SmallVector<Value, 4> memIndices;
-    if ((int)(target.getType().cast<MemRefType>().getShape().size()) ==
-        axis + 1) {
-      // a.1) allocate buffer
+    SmallVector<AffineForOp, 6> nonReductionForOps;
+    SmallVector<StringRef, 6> nonReductionNameArr;
+    int firstReductionIdx = -1;
+    for (std::size_t i = 0, e = forOps.size(); i != e; ++i) {
+      if (!forOps[i]->hasAttr("reduction")) {
+        nonReductionForOps.push_back(forOps[i]);
+        nonReductionNameArr.push_back(forOps[i]->getAttr("loop_name").cast<StringAttr>().getValue());
+      } else {
+        if (firstReductionIdx == -1)
+          firstReductionIdx = i;
+      }
+    }
+    if (firstReductionIdx == -1)
+      firstReductionIdx = forOps.size() - 1;
+    if (axis >= 0 && ((std::size_t)(axis + 1) >= forOps.size())) {
+      f.emitError("Cannot buffer at the inner-most loop: axis=") << std::to_string(axis)
+        << " inner-most axis= " << std::to_string(forOps.size() - 1);
+      return;
+    }
+    if (axis >= 0 && axis >= firstReductionIdx) {
+      f.emitError("Cannot buffer inside the reduction loops: axis=") << std::to_string(axis)
+        << " first reduction axis= " << std::to_string(firstReductionIdx);
+      return;
+    }
+    // without reordering: (0, 1, 2r)
+    //   buf_at 0: 1;(1,2r);1 insert at all[axis+1] but take non-red[axis+1] var
+    //   buf_at 1: c;2r;c inner-most non-red
+    //   buf_at 2: x cannot buffer at the inner-most
+    // with reordering: (0, 1r, 2)
+    //   buf_at 0: 2;(1r,2);2 non-red[axis+1]
+    //   buf_at 1: x cannot buffer inside reduction loop
+    //   buf_at 2: x
+    if (axis == firstReductionIdx - 1 && (std::size_t)firstReductionIdx == nonReductionForOps.size()) { // inner-most non-reduction loop && no non-reduction loops inside
+      OpBuilder builder(forOps[firstReductionIdx]);
+      Location loc_front = forOps[firstReductionIdx].getLoc();
+      // TODO: support more data types
+      mlir::Type elementType = builder.getF32Type();
+      SmallVector<Value, 4> memIndices;
+      // a) initialization
       // buffer only has one element
       auto buf = builder.create<memref::AllocOp>(
           loc_front, MemRefType::get({1}, elementType));
@@ -637,16 +671,22 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       auto load_from_buf =
           builder.create<AffineLoadOp>(loc_front, buf, memIndices);
       memIndices.clear();
-      for (int i = 0; i < axis + 1; ++i) {
+      for (int i = 0; i < firstReductionIdx; ++i) {
         memIndices.push_back(forOps[i].getInductionVar());
       }
       builder.create<AffineStoreOp>(loc_front, load_from_buf, target,
                                     memIndices);
 
       // d) move the original loop in the middle
-      forOps[axis + 1]->moveBefore(load_from_buf);
+      forOps[firstReductionIdx]->moveBefore(load_from_buf);
 
     } else { // not the inner-most non-reduction axis
+      OpBuilder builder(forOps[axis + 1]);
+      Location loc_front = forOps[axis + 1].getLoc();
+      unsigned int ub = nonReductionForOps[axis + 1].getConstantUpperBound();
+      // TODO: support more data types
+      mlir::Type elementType = builder.getF32Type();
+      SmallVector<Value, 4> memIndices;
       // a.1) allocate buffer
       auto buf = builder.create<memref::AllocOp>(
           loc_front, MemRefType::get({ub}, elementType));
@@ -676,20 +716,22 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       memIndices.push_back(writeBackLoop.getInductionVar());
       auto load_from_buf = back_builder.create<AffineLoadOp>(
           writeBackLoop.getLoc(), buf, memIndices);
+
       memIndices.clear();
-      memIndices.push_back(forOps[axis].getInductionVar());
+      for (int i = 0; i < axis + 1; ++i) {
+        memIndices.push_back(nonReductionForOps[i].getInductionVar());
+      }
       memIndices.push_back(writeBackLoop.getInductionVar());
       back_builder.create<AffineStoreOp>(writeBackLoop.getLoc(), load_from_buf,
                                          target, memIndices);
+
       // d) move the original loop between the two loops
       forOps[axis + 1]->moveBefore(writeBackLoop);
       // Add names to loops
       SmallVector<std::string, 6> newNameArr;
-      newNameArr.push_back(nameArr[axis + 1].str() + "_init");
-      newNameArr.push_back(nameArr[axis + 1].str());
-      newNameArr.push_back(nameArr[axis + 1].str() + "_back");
-      SmallVector<AffineForOp, 6> newLoops{initLoop, forOps[axis + 1],
-                                           writeBackLoop};
+      newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_init");
+      newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_back");
+      SmallVector<AffineForOp, 6> newLoops{initLoop, writeBackLoop};
       addNamesToLoops(newLoops, newNameArr);
       // automatic pipelining
       SmallVector<AffineForOp, 6> twoLoops{initLoop, writeBackLoop};

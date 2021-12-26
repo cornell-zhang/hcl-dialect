@@ -662,7 +662,36 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       memIndices.push_back(idx);
       builder.create<AffineStoreOp>(loc_front, zero, buf, memIndices);
 
-      // b) TODO: rewrite the original buffer
+      // b) rewrite the original buffer
+      SmallVector<Operation *, 10> opToRemove;
+      for (Operation &op : forOps[firstReductionIdx].getBody()->getOperations()) {
+        if (auto load = dyn_cast<AffineLoadOp>(op)) {
+          if (load.getOperand(0) != target) {
+            continue;
+          }
+          // TODO: support more dimensions
+          OpBuilder mid_builder(&op);
+          memIndices.clear();
+          memIndices.push_back(idx);
+          auto new_load = mid_builder.create<AffineLoadOp>(
+              op.getLoc(), buf, memIndices);
+          op.replaceAllUsesWith(new_load);
+          opToRemove.push_back(&op);
+        } else if (auto store = dyn_cast<AffineStoreOp>(op)) {
+          if (store.getOperand(1) != target) {
+            continue;
+          }
+          // TODO: support more dimensions
+          OpBuilder mid_builder(&op);
+          memIndices.clear();
+          memIndices.push_back(idx);
+          auto new_store = mid_builder.create<AffineStoreOp>(op.getLoc(), op.getOperand(0), buf, memIndices);
+          opToRemove.push_back(&op);
+        }
+      }
+      for (Operation *op : opToRemove) {
+        op->erase();
+      }
 
       // c) write back
       //    no need to create an explicit loop

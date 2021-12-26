@@ -46,7 +46,8 @@ struct HCLLoopTransformation
   // utils
   bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                  SmallVector<AffineForOp, 6> &resForOps,
-                                 SmallVector<StringRef, 6> &nameArr, int depth, bool countReductionLoops);
+                                 SmallVector<StringRef, 6> &nameArr, int depth,
+                                 bool countReductionLoops);
   bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
                        const SmallVector<std::string, 6> &nameArr);
   bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
@@ -58,7 +59,8 @@ struct HCLLoopTransformation
 
 bool HCLLoopTransformation::findContiguousNestedLoops(
     const AffineForOp &rootAffineForOp, SmallVector<AffineForOp, 6> &resForOps,
-    SmallVector<StringRef, 6> &nameArr, int depth = -1, bool countReductionLoops = true) {
+    SmallVector<StringRef, 6> &nameArr, int depth = -1,
+    bool countReductionLoops = true) {
   // depth = -1 means traverses all the inner loops
   AffineForOp forOp = rootAffineForOp;
   Attribute attr = forOp->getAttr("loop_name");
@@ -619,7 +621,8 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
     for (std::size_t i = 0, e = forOps.size(); i != e; ++i) {
       if (!forOps[i]->hasAttr("reduction")) {
         nonReductionForOps.push_back(forOps[i]);
-        nonReductionNameArr.push_back(forOps[i]->getAttr("loop_name").cast<StringAttr>().getValue());
+        nonReductionNameArr.push_back(
+            forOps[i]->getAttr("loop_name").cast<StringAttr>().getValue());
       } else {
         if (firstReductionIdx == -1)
           firstReductionIdx = i;
@@ -628,13 +631,15 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
     if (firstReductionIdx == -1)
       firstReductionIdx = forOps.size() - 1;
     if (axis >= 0 && ((std::size_t)(axis + 1) >= forOps.size())) {
-      f.emitError("Cannot buffer at the inner-most loop: axis=") << std::to_string(axis)
-        << " inner-most axis= " << std::to_string(forOps.size() - 1);
+      f.emitError("Cannot buffer at the inner-most loop: axis=")
+          << std::to_string(axis)
+          << " inner-most axis= " << std::to_string(forOps.size() - 1);
       return;
     }
     if (axis >= 0 && axis >= firstReductionIdx) {
-      f.emitError("Cannot buffer inside the reduction loops: axis=") << std::to_string(axis)
-        << " first reduction axis= " << std::to_string(firstReductionIdx);
+      f.emitError("Cannot buffer inside the reduction loops: axis=")
+          << std::to_string(axis)
+          << " first reduction axis= " << std::to_string(firstReductionIdx);
       return;
     }
     // without reordering: (0, 1, 2r)
@@ -645,7 +650,10 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
     //   buf_at 0: 2;(1r,2);2 non-red[axis+1]
     //   buf_at 1: x cannot buffer inside reduction loop
     //   buf_at 2: x
-    if (axis == firstReductionIdx - 1 && (std::size_t)firstReductionIdx == nonReductionForOps.size()) { // inner-most non-reduction loop && no non-reduction loops inside
+    if (axis == firstReductionIdx - 1 &&
+        (std::size_t)firstReductionIdx ==
+            nonReductionForOps.size()) { // inner-most non-reduction loop && no
+                                         // non-reduction loops inside
       OpBuilder builder(forOps[firstReductionIdx]);
       Location loc_front = forOps[firstReductionIdx].getLoc();
       // TODO: support more data types
@@ -663,8 +671,10 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       builder.create<AffineStoreOp>(loc_front, zero, buf, memIndices);
 
       // b) rewrite the original buffer
+      // TODO: possible bug: replace uses before an untraversed op
       SmallVector<Operation *, 10> opToRemove;
-      for (Operation &op : forOps[firstReductionIdx].getBody()->getOperations()) {
+      for (Operation &op :
+           forOps[firstReductionIdx].getBody()->getOperations()) {
         if (auto load = dyn_cast<AffineLoadOp>(op)) {
           if (load.getOperand(0) != target) {
             continue;
@@ -673,8 +683,8 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
           OpBuilder mid_builder(&op);
           memIndices.clear();
           memIndices.push_back(idx);
-          auto new_load = mid_builder.create<AffineLoadOp>(
-              op.getLoc(), buf, memIndices);
+          auto new_load =
+              mid_builder.create<AffineLoadOp>(op.getLoc(), buf, memIndices);
           op.replaceAllUsesWith(new_load);
           opToRemove.push_back(&op);
         } else if (auto store = dyn_cast<AffineStoreOp>(op)) {
@@ -685,7 +695,8 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
           OpBuilder mid_builder(&op);
           memIndices.clear();
           memIndices.push_back(idx);
-          auto new_store = mid_builder.create<AffineStoreOp>(op.getLoc(), op.getOperand(0), buf, memIndices);
+          mid_builder.create<AffineStoreOp>(op.getLoc(), op.getOperand(0), buf,
+                                            memIndices);
           opToRemove.push_back(&op);
         }
       }
@@ -732,7 +743,37 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       init_builder.create<AffineStoreOp>(initLoop.getLoc(), zero, buf,
                                          memIndices);
 
-      // b) TODO: rewrite the original buffer
+      // b) rewrite the original buffer
+      SmallVector<Operation *, 10> opToRemove;
+      forOps[axis + 1].walk([&](Operation *op) {
+        if (auto load = dyn_cast<AffineLoadOp>(op)) {
+          if (load.getOperand(0) != target) {
+            return;
+          }
+          // TODO: support more dimensions
+          OpBuilder mid_builder(op);
+          memIndices.clear();
+          memIndices.push_back(nonReductionForOps[axis + 1].getInductionVar());
+          auto new_load =
+              mid_builder.create<AffineLoadOp>(op->getLoc(), buf, memIndices);
+          op->replaceAllUsesWith(new_load);
+          opToRemove.push_back(op);
+        } else if (auto store = dyn_cast<AffineStoreOp>(op)) {
+          if (store.getOperand(1) != target) {
+            return;
+          }
+          // TODO: support more dimensions
+          OpBuilder mid_builder(op);
+          memIndices.clear();
+          memIndices.push_back(nonReductionForOps[axis + 1].getInductionVar());
+          mid_builder.create<AffineStoreOp>(op->getLoc(), op->getOperand(0),
+                                            buf, memIndices);
+          opToRemove.push_back(op);
+        }
+      });
+      for (Operation *op : opToRemove) {
+        op->erase();
+      }
 
       // c) write back
       Location loc_back =

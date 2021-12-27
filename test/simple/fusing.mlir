@@ -17,7 +17,7 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %l_fused = hcl.fuse (%s: !hcl.StageHandle, %li, %lj: !hcl.LoopHandle, !hcl.LoopHandle) -> !hcl.LoopHandle
+        %l_fused = hcl.fuse (%s, %li, %lj)
         // (i,j)->(ij/1024,ij%1024)
         return %C : memref<1024x1024xf32>
     }
@@ -39,7 +39,7 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %l_fused = hcl.fuse (%s: !hcl.StageHandle, %li, %lj, %lk: !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) -> !hcl.LoopHandle
+        %l_fused = hcl.fuse (%s, %li, %lj, %lk)
         // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
         return %C : memref<1024x1024xf32>
     }

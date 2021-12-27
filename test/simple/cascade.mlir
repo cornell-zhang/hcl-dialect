@@ -19,9 +19,9 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %l4, %l5 = hcl.split (%s: !hcl.StageHandle, %l1: !hcl.LoopHandle, 8) -> (!hcl.LoopHandle, !hcl.LoopHandle)
-        %l6, %l7, %l8, %l9 = hcl.tile (%s: !hcl.StageHandle, %l2: !hcl.LoopHandle, %l3: !hcl.LoopHandle, 2, 4) -> (!hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) // split & tile
-        %l10, %l11 = hcl.split (%s: !hcl.StageHandle, %l6: !hcl.LoopHandle, 16) -> (!hcl.LoopHandle, !hcl.LoopHandle)
+        %l4, %l5 = hcl.split (%s, %l1, 8)
+        %l6, %l7, %l8, %l9 = hcl.tile (%s, %l2, %l3, 2, 4) // split & tile
+        %l10, %l11 = hcl.split (%s, %l6, 16)
         hcl.partition(%A: memref<1024x1024xf32>, "CyclicPartition", 0, 4)
         hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 0, 2)
         return %C : memref<1024x1024xf32>

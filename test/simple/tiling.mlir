@@ -19,14 +19,14 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %li_outer, %li_inner = hcl.split (%s: !hcl.StageHandle, %li: !hcl.LoopHandle, 8) -> (!hcl.LoopHandle, !hcl.LoopHandle)
-        %li_in_out, %li_in_in = hcl.split (%s: !hcl.StageHandle, %li_inner: !hcl.LoopHandle, 16) -> (!hcl.LoopHandle, !hcl.LoopHandle) // nest with split
-        %li_out_out, %li_out_in = hcl.split (%s: !hcl.StageHandle, %li_outer: !hcl.LoopHandle, 2) -> (!hcl.LoopHandle, !hcl.LoopHandle) // multiple split
-        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%s: !hcl.StageHandle, %lj: !hcl.LoopHandle, %lk: !hcl.LoopHandle, 2, 4) -> (!hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) // split & tile
-        // %l14, %l15, %l16, %l17 = hcl.tile (%li_in_out: !hcl.LoopHandle, %li_in_in: !hcl.LoopHandle, 2, 2) -> (!hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) // nest with split (failed)
-        hcl.unroll (%s: !hcl.StageHandle, %lk_in: !hcl.LoopHandle, 16) // unroll
-        hcl.pipeline (%s: !hcl.StageHandle, %lk_out: !hcl.LoopHandle, 1) // pipeline
-        hcl.parallel (%s: !hcl.StageHandle, %lj_in: !hcl.LoopHandle) // parallel
+        %li_outer, %li_inner = hcl.split (%s, %li, 8)
+        %li_in_out, %li_in_in = hcl.split (%s, %li_inner, 16) // nest with split
+        %li_out_out, %li_out_in = hcl.split (%s, %li_outer, 2) // multiple split
+        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%s, %lj, %lk, 2, 4) // split & tile
+        // %l14, %l15, %l16, %l17 = hcl.tile (%li_in_out, %li_in_in, 2, 2) // nest with split (failed)
+        hcl.unroll (%s, %lk_in, 16) // unroll
+        hcl.pipeline (%s, %lk_out, 1) // pipeline
+        hcl.parallel (%s, %lj_in) // parallel
         return %C : memref<1024x1024xf32>
     }
 }

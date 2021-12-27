@@ -19,9 +19,9 @@ module {
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.reorder(%s: !hcl.StageHandle, %lk, %lj: !hcl.LoopHandle, !hcl.LoopHandle)
-        hcl.buffer_at(%s: !hcl.StageHandle, %C: memref<1024x1024xf32>, 0)
-        hcl.pipeline(%s: !hcl.StageHandle, %lj: !hcl.LoopHandle, 1)
+        hcl.reorder(%s, %lk, %lj)
+        hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0)
+        hcl.pipeline(%s, %lj, 1)
         return %C : memref<1024x1024xf32>
     }
     // func @tiled_gemm_interleaving_accu(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>

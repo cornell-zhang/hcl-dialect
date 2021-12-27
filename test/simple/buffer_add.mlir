@@ -15,7 +15,7 @@ module {
                 affine.store %sum, %B[%i, %j] : memref<1024x1024xf32>
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.buffer_at(%s: !hcl.StageHandle, %B: memref<1024x1024xf32>, 0)
+        hcl.buffer_at(%s, %B: memref<1024x1024xf32>, 0)
         return %C : memref<1024x1024xf32>
     }
     func @add_buffer_at_axis_1(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
@@ -32,7 +32,7 @@ module {
                 affine.store %sum, %B[%i, %j] : memref<1024x1024xf32>
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.buffer_at(%s: !hcl.StageHandle, %B: memref<1024x1024xf32>, 1)
+        hcl.buffer_at(%s, %B: memref<1024x1024xf32>, 1)
         return %C : memref<1024x1024xf32>
     }
 }

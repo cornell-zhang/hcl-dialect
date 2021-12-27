@@ -30,8 +30,8 @@ module {
                 } { loop_name = "k1" }
             } { loop_name = "j1" }
         } { loop_name = "i1", stage_name = "s2" }
-        %li_outer, %li_inner = hcl.split (%s2: !hcl.StageHandle, %li: !hcl.LoopHandle, 8) -> (!hcl.LoopHandle, !hcl.LoopHandle)
-        hcl.reorder (%s2: !hcl.StageHandle, %lk, %lj, %li_inner: !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle)
+        %li_outer, %li_inner = hcl.split (%s2, %li, 8)
+        hcl.reorder (%s2, %lk, %lj, %li_inner)
         return %C : memref<1024x1024xf32>
     }
 }

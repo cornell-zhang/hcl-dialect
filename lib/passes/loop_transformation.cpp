@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <set>
 #include <type_traits>
 #include <vector>
 using namespace mlir;
@@ -139,14 +140,18 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
   SmallVector<AffineForOp, 6> tiledNest;
   // 1) get schedule
   unsigned int factor = splitOp.factor();
-  const auto loop_name =
-      splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto loop_name = splitOp.loop()
+                             .getDefiningOp()
+                             ->getAttr("loop_name")
+                             .cast<StringAttr>()
+                             .getValue();
   const auto stage_name =
       splitOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Find the requested stage,
   //    traverse all the nested loops,
   //    and split the requested loop
+  SmallVector<std::string, 6> newNameArr;
   for (auto rootForOp : f.getOps<AffineForOp>()) {
     // 2.1) Find stage
     if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
@@ -177,7 +182,6 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
         return signalPassFailure();
 
       // 3) Add names to new loops
-      SmallVector<std::string, 6> newNameArr;
       newNameArr.push_back(loop_name.str() + ".outer");
       newNameArr.push_back(loop_name.str() + ".inner");
       addNamesToLoops(tiledNest, newNameArr);
@@ -187,21 +191,40 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
       break;
     }
   }
+  auto firstOp = *(f.getOps<AffineForOp>().begin());
+  OpBuilder builder(firstOp);
+  auto outer = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  auto inner = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  outer->setAttr("loop_name",
+                 StringAttr::get(outer->getContext(), newNameArr[0]));
+  inner->setAttr("loop_name",
+                 StringAttr::get(inner->getContext(), newNameArr[1]));
+  splitOp.getResult(0).replaceAllUsesWith(outer);
+  splitOp.getResult(1).replaceAllUsesWith(inner);
 }
 
 void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
   // 1) get schedule
   unsigned int x_factor = tileOp.x_factor();
   unsigned int y_factor = tileOp.y_factor();
-  const StringRef x_loop =
-      tileOp.x_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
-  const StringRef y_loop =
-      tileOp.y_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const StringRef x_loop = tileOp.x_loop()
+                               .getDefiningOp()
+                               ->getAttr("loop_name")
+                               .cast<StringAttr>()
+                               .getValue();
+  const StringRef y_loop = tileOp.y_loop()
+                               .getDefiningOp()
+                               ->getAttr("loop_name")
+                               .cast<StringAttr>()
+                               .getValue();
   const auto stage_name = tileOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Find the requested stage,
   //    traverse all the nested loops,
   //    and tile the requested loops
+  SmallVector<std::string, 6> newNameArr;
   for (auto rootForOp : f.getOps<AffineForOp>()) {
     // 2.1) Find stage
     if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
@@ -234,7 +257,6 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
         return signalPassFailure();
 
       // 3) Add names to new loops
-      SmallVector<std::string, 6> newNameArr;
       newNameArr.push_back(x_loop.str() + ".outer");
       newNameArr.push_back(x_loop.str() + ".inner");
       newNameArr.push_back(y_loop.str() + ".outer");
@@ -246,6 +268,28 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
       break;
     }
   }
+  auto firstOp = *(f.getOps<AffineForOp>().begin());
+  OpBuilder builder(firstOp);
+  auto x_outer = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  auto x_inner = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  auto y_outer = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  auto y_inner = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  x_outer->setAttr("loop_name",
+                   StringAttr::get(x_outer->getContext(), newNameArr[0]));
+  x_inner->setAttr("loop_name",
+                   StringAttr::get(x_inner->getContext(), newNameArr[1]));
+  y_outer->setAttr("loop_name",
+                   StringAttr::get(y_outer->getContext(), newNameArr[0]));
+  y_inner->setAttr("loop_name",
+                   StringAttr::get(y_inner->getContext(), newNameArr[1]));
+  tileOp.getResult(0).replaceAllUsesWith(x_outer);
+  tileOp.getResult(1).replaceAllUsesWith(x_inner);
+  tileOp.getResult(2).replaceAllUsesWith(y_outer);
+  tileOp.getResult(3).replaceAllUsesWith(y_inner);
 }
 
 void HCLLoopTransformation::runReordering(FuncOp &f,
@@ -285,8 +329,11 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       // 3.1) map input arguments to the corresponding loop names
       std::vector<std::string> toBeReorderedNameVec;
       for (auto loop : loopsToBeReordered) {
-        toBeReorderedNameVec.push_back(
-            loop.getType().cast<hcl::LoopHandleType>().getLoopName().str());
+        toBeReorderedNameVec.push_back(loop.getDefiningOp()
+                                           ->getAttr("loop_name")
+                                           .cast<StringAttr>()
+                                           .getValue()
+                                           .str());
       }
       // 3.2) traverse the original loop nests and create a new order for the
       // loops
@@ -325,8 +372,11 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
 void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
   // 1) get schedule
   unsigned int factor = unrollOp.factor();
-  const auto loop_name =
-      unrollOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto loop_name = unrollOp.loop()
+                             .getDefiningOp()
+                             ->getAttr("loop_name")
+                             .cast<StringAttr>()
+                             .getValue();
   const auto stage_name =
       unrollOp.stage().getDefiningOp()->getAttr("stage_name");
 
@@ -352,8 +402,11 @@ void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
 void HCLLoopTransformation::runParallel(FuncOp &f,
                                         hcl::ParallelOp &parallelOp) {
   // 1) get schedule
-  const auto loop_name =
-      parallelOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto loop_name = parallelOp.loop()
+                             .getDefiningOp()
+                             ->getAttr("loop_name")
+                             .cast<StringAttr>()
+                             .getValue();
   const auto stage_name =
       parallelOp.stage().getDefiningOp()->getAttr("stage_name");
 
@@ -381,8 +434,11 @@ void HCLLoopTransformation::runPipelining(FuncOp &f,
                                           hcl::PipelineOp &pipelineOp) {
   // 1) get schedule
   unsigned int ii = pipelineOp.ii();
-  const auto loop_name =
-      pipelineOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto loop_name = pipelineOp.loop()
+                             .getDefiningOp()
+                             ->getAttr("loop_name")
+                             .cast<StringAttr>()
+                             .getValue();
   const auto stage_name =
       pipelineOp.stage().getDefiningOp()->getAttr("stage_name");
 
@@ -528,10 +584,14 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   const auto stage_name = fuseOp.stage().getDefiningOp()->getAttr("stage_name");
   SmallVector<StringRef, 6> nameArr;
   for (auto loop : loopsToBeFused) {
-    nameArr.push_back(loop.getType().cast<hcl::LoopHandleType>().getLoopName());
+    nameArr.push_back(loop.getDefiningOp()
+                          ->getAttr("loop_name")
+                          .cast<StringAttr>()
+                          .getValue());
   }
 
   // 2) Traverse all the nested loops and find the requested ones
+  std::string new_name;
   for (auto rootForOp : f.getOps<AffineForOp>()) {
     if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
       AffineForOp loopToBeDestroyed;
@@ -558,7 +618,6 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
       coalesceLoops(loops);
 
       // 4) add name to the new loop
-      std::string new_name;
       for (auto forOp : forOps) {
         new_name +=
             forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() +
@@ -573,15 +632,27 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
       break;
     }
   }
+  auto firstOp = *(f.getOps<AffineForOp>().begin());
+  OpBuilder builder(firstOp);
+  auto fused = builder.create<hcl::CreateLoopHandleOp>(
+      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()));
+  fused->setAttr("loop_name", StringAttr::get(fused->getContext(), new_name));
+  fuseOp.getResult().replaceAllUsesWith(fused);
 }
 
 void HCLLoopTransformation::runComputeAt(FuncOp &f,
                                          hcl::ComputeAtOp &computeAtOp) {
   // 1) get schedule
-  const auto loop1_name =
-      computeAtOp.loop1().getType().cast<hcl::LoopHandleType>().getLoopName();
-  const auto loop2_name =
-      computeAtOp.loop2().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto loop1_name = computeAtOp.loop1()
+                              .getDefiningOp()
+                              ->getAttr("loop_name")
+                              .cast<StringAttr>()
+                              .getValue();
+  const auto loop2_name = computeAtOp.loop2()
+                              .getDefiningOp()
+                              ->getAttr("loop_name")
+                              .cast<StringAttr>()
+                              .getValue();
 
   // 2) Traverse all the outer-most loops and find the requested one
   SmallVector<AffineForOp, 6> forOps;
@@ -940,7 +1011,21 @@ void HCLLoopTransformation::runOnFunction() {
   }
   // remove schedule operations (from back to front)
   std::reverse(opToRemove.begin(), opToRemove.end());
+  std::set<Operation *> handleToRemove;
   for (Operation *op : opToRemove) {
+    if (auto new_op = dyn_cast<hcl::SplitOp>(op)) {
+      handleToRemove.insert(new_op.loop().getDefiningOp());
+    } else if (auto new_op = dyn_cast<hcl::TileOp>(op)) {
+      handleToRemove.insert(new_op.x_loop().getDefiningOp());
+      handleToRemove.insert(new_op.y_loop().getDefiningOp());
+    } else if (auto new_op = dyn_cast<hcl::FuseOp>(op)) {
+      for (auto loop : new_op.loops()) {
+        handleToRemove.insert(loop.getDefiningOp());
+      }
+    }
+    op->erase();
+  }
+  for (Operation *op : handleToRemove) {
     op->erase();
   }
 }

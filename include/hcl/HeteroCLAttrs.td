@@ -28,18 +28,10 @@ def LoopAttr : HeteroCL_Attr<"LoopAttr"> {
   let mnemonic = "LoopAttr";
   let parameters = (ins "hcl::LoopHandleType":$loopName);
   let printer = [{
-    StringRef loopName = getImpl()->loopName.getLoopName();
-    $_printer << "Loop <" << loopName.str() << ">";
+    $_printer << "LoopAttr";
   }];
   let parser = [{
-    if (parser.parseLess())
-      return Attribute();
-    StringRef loopName;
-    if ($_parser.parseOptionalString(&loopName))
-      return Attribute();
-    if ($_parser.parseGreater())
-      return Attribute();
-    return get($_ctxt, hcl::LoopHandleType::get($_ctxt, loopName));
+    return get($_ctxt, hcl::LoopHandleType::get($_ctxt));
   }];
 }
 

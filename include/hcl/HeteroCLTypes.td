@@ -16,22 +16,6 @@ include "HeteroCLDialect.td"
 def LoopHandle : HeteroCL_Type<"LoopHandle"> {
   let summary = "loop handle";
   let mnemonic = "LoopHandle";
-  let parameters = (ins StringRefParameter<"loopName">:$loopName);
-  let printer = [{
-        StringRef loopName = getImpl()->loopName;
-        $_printer << "Loop <" << loopName.str() << ">";
-    }];
-  // llvm::printEscapedString(getImpl()->loopName, $_printer.getStream());
-  let parser = [{
-    if (parser.parseLess())
-      return Type();
-    StringRef loopName;
-    if ($_parser.parseOptionalString(&loopName))
-      return Type();
-    if ($_parser.parseGreater())
-      return Type();
-    return get($_ctxt, loopName);
-  }];
 }
 
 def StageHandle : HeteroCL_Type<"StageHandle"> {

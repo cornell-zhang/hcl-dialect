@@ -143,27 +143,52 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
   unsigned int factor = splitOp.factor();
   const auto loop_name =
       splitOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto stage_name =
+      splitOp.stage().getDefiningOp()->getAttr("stage_name");
 
-  // 2) Traverse all the nested loops and find the requested one
-  //    and split the loop
-  f.walk([&](AffineForOp forOp) {
-    // mlir/IR/Operation.h
-    Attribute attr = forOp->getAttr("loop_name");
-    if (loop_name == attr.cast<StringAttr>().getValue()) {
+  // 2) Find the requested stage,
+  //    traverse all the nested loops,
+  //    and split the requested loop
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    // 2.1) Find stage
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      bool isOuterMost = false;
+      bool isFound = false;
       SmallVector<AffineForOp, 6> forOps;
-      forOps.push_back(forOp);
       SmallVector<unsigned, 6> tileSizes;
-      tileSizes.push_back(factor);
+      // 2.2) Find loop
+      rootForOp.walk([&](AffineForOp forOp) {
+        if (!isFound &&
+            loop_name ==
+                forOp->getAttr("loop_name").cast<StringAttr>().getValue()) {
+          isFound = true;
+          forOps.push_back(forOp);
+          tileSizes.push_back(factor);
+          if (forOp->hasAttr("stage_name"))
+            isOuterMost = true;
+        }
+      });
+      // handle exception
+      if (!isFound) {
+        f.emitError("Cannot find the requested loop in Stage ")
+            << stage_name.cast<StringAttr>().getValue().str();
+        return signalPassFailure();
+      }
+      // 2.3) Split the loop
       if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
         return signalPassFailure();
-    }
-  });
 
-  // 3) Add names to new loops
-  SmallVector<std::string, 6> newNameArr;
-  newNameArr.push_back(loop_name.str() + ".outer");
-  newNameArr.push_back(loop_name.str() + ".inner");
-  addNamesToLoops(tiledNest, newNameArr);
+      // 3) Add names to new loops
+      SmallVector<std::string, 6> newNameArr;
+      newNameArr.push_back(loop_name.str() + ".outer");
+      newNameArr.push_back(loop_name.str() + ".inner");
+      addNamesToLoops(tiledNest, newNameArr);
+      if (isOuterMost) {
+        tiledNest[0]->setAttr("stage_name", stage_name);
+      }
+      break;
+    }
+  }
 }
 
 void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {

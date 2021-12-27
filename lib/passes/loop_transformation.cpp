@@ -199,13 +199,6 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
       tileOp.x_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
   const StringRef y_loop =
       tileOp.y_loop().getType().cast<hcl::LoopHandleType>().getLoopName();
-  SmallVector<AffineForOp, 6> forOps;
-  SmallVector<unsigned, 6> tileSizes;
-  tileSizes.push_back(x_factor);
-  tileSizes.push_back(y_factor);
-  SmallVector<StringRef, 6> nameArr;
-  nameArr.push_back(x_loop);
-  nameArr.push_back(y_loop);
   const auto stage_name = tileOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Find the requested stage,
@@ -216,6 +209,13 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
     if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
       bool isOuterMost = false;
       bool isFound = false;
+      SmallVector<AffineForOp, 6> forOps;
+      SmallVector<unsigned, 6> tileSizes;
+      tileSizes.push_back(x_factor);
+      tileSizes.push_back(y_factor);
+      SmallVector<StringRef, 6> nameArr;
+      nameArr.push_back(x_loop);
+      nameArr.push_back(y_loop);
       // 2.2) Find loops
       rootForOp.walk([&](AffineForOp forOp) {
         if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
@@ -253,68 +253,74 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
 void HCLLoopTransformation::runReordering(FuncOp &f,
                                           hcl::ReorderOp &reorderOp) {
   // 1) get schedule
+  const auto stage_name =
+      reorderOp.stage().getDefiningOp()->getAttr("stage_name");
   const auto loopsToBeReordered = reorderOp.loops(); // operand_range
 
   // 2) get all the loop names and id mapping
-  SmallVector<AffineForOp, 6> forOps;
-  SmallVector<unsigned, 6> permMap;
-  std::map<std::string, unsigned> name2id;
-  std::vector<std::string> origNameVec;
-  unsigned int curr_depth = 0;
-  f.walk([&](AffineForOp rootAffineForOp) { // from the inner most!
-    std::string curr_loop_name = rootAffineForOp->getAttr("loop_name")
-                                     .cast<StringAttr>()
-                                     .getValue()
-                                     .str();
-    name2id[curr_loop_name] = curr_depth;
-    origNameVec.push_back(curr_loop_name);
-    curr_depth++;
-  });
-  std::reverse(origNameVec.begin(), origNameVec.end());
-  for (auto name : origNameVec) { // need to reverse
-    name2id[name] = curr_depth - 1 - name2id[name];
-  }
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    // 2.1) Find stage
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      SmallVector<AffineForOp, 6> forOps;
+      SmallVector<unsigned, 6> permMap;
+      std::map<std::string, unsigned> name2id;
+      std::vector<std::string> origNameVec;
+      unsigned int curr_depth = 0;
+      rootForOp.walk([&](AffineForOp rootAffineForOp) { // from the inner most!
+        std::string curr_loop_name = rootAffineForOp->getAttr("loop_name")
+                                         .cast<StringAttr>()
+                                         .getValue()
+                                         .str();
+        name2id[curr_loop_name] = curr_depth;
+        origNameVec.push_back(curr_loop_name);
+        curr_depth++;
+      });
+      std::reverse(origNameVec.begin(), origNameVec.end());
+      for (auto name : origNameVec) { // need to reverse
+        name2id[name] = curr_depth - 1 - name2id[name];
+      }
 
-  // 3) traverse all the input arguments that need to be reordered and construct
-  // permMap possible inputs: a) # arguments = # loops: (i,j,k)->(k,j,i) b) #
-  // arguments != # loops:
-  //    input (k,i), but should be the same as a)
-  // 3.1) map input arguments to the corresponding loop names
-  std::vector<std::string> toBeReorderedNameVec;
-  for (auto loop : loopsToBeReordered) {
-    toBeReorderedNameVec.push_back(
-        loop.getType().cast<hcl::LoopHandleType>().getLoopName().str());
-  }
-  // 3.2) traverse the original loop nests and create a new order for the loops
-  //     since the input arguments may not cover all the loops
-  //     so this step is needed for creating permMap
-  unsigned int cntInArgs = 0;
-  for (auto name : origNameVec) {
-    auto iter = std::find(toBeReorderedNameVec.begin(),
-                          toBeReorderedNameVec.end(), name);
-    if (iter != toBeReorderedNameVec.end()) { // name in the arguments
-      permMap.push_back(name2id[toBeReorderedNameVec[cntInArgs++]]);
-    } else { // not in
-      permMap.push_back(name2id[name]);
-    }
-  }
+      // 3) traverse all the input arguments that need to be reordered and
+      // construct permMap possible inputs: a) # arguments = # loops:
+      // (i,j,k)->(k,j,i) b) # arguments != # loops:
+      //    input (k,i), but should be the same as a)
+      // 3.1) map input arguments to the corresponding loop names
+      std::vector<std::string> toBeReorderedNameVec;
+      for (auto loop : loopsToBeReordered) {
+        toBeReorderedNameVec.push_back(
+            loop.getType().cast<hcl::LoopHandleType>().getLoopName().str());
+      }
+      // 3.2) traverse the original loop nests and create a new order for the
+      // loops
+      //     since the input arguments may not cover all the loops
+      //     so this step is needed for creating permMap
+      unsigned int cntInArgs = 0;
+      for (auto name : origNameVec) {
+        auto iter = std::find(toBeReorderedNameVec.begin(),
+                              toBeReorderedNameVec.end(), name);
+        if (iter != toBeReorderedNameVec.end()) { // name in the arguments
+          permMap.push_back(name2id[toBeReorderedNameVec[cntInArgs++]]);
+        } else { // not in
+          permMap.push_back(name2id[name]);
+        }
+      }
 
-  // 4) permute the loops
-  // TODO: a) multiple stages
-  //       b) bug: cannot permute the outer-most loop
-  //       c) imperfect loops
-  SmallVector<AffineForOp, 6> nest;
-  for (auto forOp : f.getOps<AffineForOp>()) {
-    // Get the maximal perfect nest
-    getPerfectlyNestedLoops(nest, forOp);
-    // Permute if the nest's size is consistent with the specified permutation
-    if (nest.size() >= 2 && nest.size() == permMap.size()) {
-      permuteLoops(nest, permMap);
-    } else {
-      f.emitError("Cannot permute the loops");
-      return signalPassFailure();
+      // 4) permute the loops
+      // TODO: a) bug: cannot permute the outer-most loop
+      //       b) imperfect loops
+      SmallVector<AffineForOp, 6> nest;
+      // Get the maximal perfect nest
+      getPerfectlyNestedLoops(nest, rootForOp);
+      // Permute if the nest's size is consistent with the specified
+      // permutation
+      if (nest.size() >= 2 && nest.size() == permMap.size()) {
+        permuteLoops(nest, permMap);
+      } else {
+        f.emitError("Cannot permute the loops");
+        return signalPassFailure();
+      }
+      break;
     }
-    break; // only the outer-most loop
   }
 }
 

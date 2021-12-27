@@ -333,18 +333,27 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       //     since the input arguments may not cover all the loops
       //     so this step is needed for creating permMap
       unsigned int cntInArgs = 0;
-      for (auto name : origNameVec) {
+      unsigned int outerMostIdx = 0;
+      for (unsigned int i = 0, e = origNameVec.size(); i < e; ++i) {
+        auto name = origNameVec[i];
         auto iter = std::find(toBeReorderedNameVec.begin(),
                               toBeReorderedNameVec.end(), name);
+        unsigned int idx;
         if (iter != toBeReorderedNameVec.end()) { // name in the arguments
-          permMap.push_back(name2id[toBeReorderedNameVec[cntInArgs++]]);
+          idx = name2id[toBeReorderedNameVec[cntInArgs++]];
+          permMap.push_back(idx);
         } else { // not in
-          permMap.push_back(name2id[name]);
+          idx = name2id[name];
+          permMap.push_back(idx);
+        }
+        if (idx == 0) {
+          outerMostIdx = i;
         }
       }
 
       // 4) permute the loops
-      // TODO: a) bug: cannot permute the outer-most loop
+      // TODO: a) bug: Reorder with a splitted loop may lead to problems of
+      // operand dominance
       //       b) imperfect loops
       SmallVector<AffineForOp, 6> nest;
       // Get the maximal perfect nest
@@ -352,10 +361,18 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       // Permute if the nest's size is consistent with the specified
       // permutation
       if (nest.size() >= 2 && nest.size() == permMap.size()) {
+        if (outerMostIdx != 0)
+          nest[0]->removeAttr("stage_name");
         permuteLoops(nest, permMap);
       } else {
         f.emitError("Cannot permute the loops");
         return signalPassFailure();
+      }
+
+      // 5) rename stage
+      if (outerMostIdx != 0) {
+        nest[outerMostIdx]->setAttr("stage_name",
+                         StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
       }
       break;
     }

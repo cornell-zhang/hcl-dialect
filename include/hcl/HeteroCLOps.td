@@ -57,7 +57,7 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
     // https://mlir.llvm.org/docs/OpDefinitions/#optional-groups
     // TODO: should at least have one input
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` ($loops^ `:` type($loops))? `)` attr-dict
+        `(` $stage `,` ($loops^)? `)` attr-dict
     }];
 }
 
@@ -71,7 +71,7 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, UI32Attr:$factor);
     let results = (outs LoopHandle:$outer, LoopHandle:$inner);
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `,` $factor `)` attr-dict `->` `(` type($outer) `,` type($inner) `)`
+        `(` $stage `,` $loop `,` $factor `)` attr-dict
     }];
     // https://mlir.llvm.org/docs/OpDefinitions/#custom-builder-methods
     // let builders = [];
@@ -87,7 +87,7 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
     let arguments = (ins StageHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
     let results = (outs LoopHandle:$x_outer, LoopHandle:$x_inner, LoopHandle:$y_outer, LoopHandle:$y_inner);
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $x_loop `:` type($x_loop) `,` $y_loop `:` type($y_loop) `,` $x_factor `,` $y_factor `)` attr-dict `->` `(` type($x_outer) `,` type($x_inner) `,` type($y_outer) `,` type($y_inner) `)`
+        `(` $stage `,` $x_loop `,` $y_loop `,` $x_factor `,` $y_factor `)` attr-dict
     }];
 }
 
@@ -101,7 +101,7 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
     let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
     let results = (outs LoopHandle:$fused_loop);
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` ($loops^ `:` type($loops))? `)` attr-dict `->` type($fused_loop)
+        `(` $stage `,` ($loops^)? `)` attr-dict
     }];
 }
 
@@ -115,7 +115,7 @@ def HeteroCL_ComputeAtOp : HeteroCL_Op<"compute_at">
     let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop1 `:` type($loop1) `,` $loop2 `:` type($loop2) `)` attr-dict
+        `(` $loop1 `,` $loop2 `)` attr-dict
     }];
 }
 
@@ -130,7 +130,7 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr,"0">:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `,` $factor `)` attr-dict
+        `(` $stage `,` $loop `,` $factor `)` attr-dict
     }];
 }
 
@@ -144,7 +144,7 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr, "1">:$ii);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `,` $ii `)` attr-dict
+        `(` $stage `,` $loop `,` $ii `)` attr-dict
     }];
     let builders = [
         OpBuilder<(ins "hcl::LoopHandleType":$loop,
@@ -162,7 +162,7 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `)` attr-dict
+        `(` $stage `,` $loop `)` attr-dict
     }];
 }
 
@@ -204,7 +204,7 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     let arguments = (ins StageHandle:$stage, AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `:` type($stage) `,` $target `:` type($target) `,` $axis `)` attr-dict
+        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict
     }];
 }
 

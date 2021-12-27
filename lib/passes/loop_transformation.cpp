@@ -206,33 +206,48 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
   SmallVector<StringRef, 6> nameArr;
   nameArr.push_back(x_loop);
   nameArr.push_back(y_loop);
+  const auto stage_name = tileOp.stage().getDefiningOp()->getAttr("stage_name");
 
-  // 2) Traverse all the nested loops and find the requested one
-  //    and do tiling
-  bool isFound = false;
-  f.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
-      isFound = true;
-    return;
-  });
-  // handle exception
-  if (!isFound) {
-    f.emitError("Cannot find contiguous nested loops starting from Loop ")
-        << nameArr[0].str();
-    return signalPassFailure();
+  // 2) Find the requested stage,
+  //    traverse all the nested loops,
+  //    and tile the requested loops
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    // 2.1) Find stage
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      bool isOuterMost = false;
+      bool isFound = false;
+      // 2.2) Find loops
+      rootForOp.walk([&](AffineForOp forOp) {
+        if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
+          isFound = true;
+        return;
+      });
+      // handle exception
+      if (!isFound) {
+        f.emitError("Cannot find contiguous nested loops starting from Loop ")
+            << nameArr[0].str();
+        return signalPassFailure();
+      }
+      if (forOps[0]->hasAttr("stage_name"))
+        isOuterMost = true;
+      // 2.3) Tile the loops
+      SmallVector<AffineForOp, 6> tiledNest;
+      if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
+        return signalPassFailure();
+
+      // 3) Add names to new loops
+      SmallVector<std::string, 6> newNameArr;
+      newNameArr.push_back(x_loop.str() + ".outer");
+      newNameArr.push_back(x_loop.str() + ".inner");
+      newNameArr.push_back(y_loop.str() + ".outer");
+      newNameArr.push_back(y_loop.str() + ".inner");
+      addNamesToLoops(tiledNest, newNameArr);
+      if (isOuterMost) {
+        tiledNest[0]->setAttr("stage_name", stage_name);
+      }
+      break;
+    }
   }
-  // try tiling
-  SmallVector<AffineForOp, 6> tiledNest;
-  if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
-    return signalPassFailure();
-
-  // 3) Add names to new loops
-  SmallVector<std::string, 6> newNameArr;
-  newNameArr.push_back(x_loop.str() + ".outer");
-  newNameArr.push_back(x_loop.str() + ".inner");
-  newNameArr.push_back(y_loop.str() + ".outer");
-  newNameArr.push_back(y_loop.str() + ".inner");
-  addNamesToLoops(tiledNest, newNameArr);
 }
 
 void HCLLoopTransformation::runReordering(FuncOp &f,

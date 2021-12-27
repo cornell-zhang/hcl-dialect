@@ -84,10 +84,10 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
         tile
     }];
 
-    let arguments = (ins LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
     let results = (outs LoopHandle:$x_outer, LoopHandle:$x_inner, LoopHandle:$y_outer, LoopHandle:$y_inner);
     let assemblyFormat = [{
-        `(` $x_loop `:` type($x_loop) `,` $y_loop `:` type($y_loop) `,` $x_factor `,` $y_factor `)` attr-dict `->` `(` type($x_outer) `,` type($x_inner) `,` type($y_outer) `,` type($y_inner) `)`
+        `(` $stage `:` type($stage) `,` $x_loop `:` type($x_loop) `,` $y_loop `:` type($y_loop) `,` $x_factor `,` $y_factor `)` attr-dict `->` `(` type($x_outer) `,` type($x_inner) `,` type($y_outer) `,` type($y_inner) `)`
     }];
 }
 

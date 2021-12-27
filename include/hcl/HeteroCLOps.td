@@ -22,10 +22,10 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
         loop handle
     }];
 
-    let arguments = (ins );
+    let arguments = (ins StrAttr:$loop_name);
     let results = (outs LoopHandle:$result);
     let assemblyFormat = [{
-       attr-dict `:` type($result)
+       $loop_name attr-dict `:` type($result)
     }];
 }
 
@@ -36,10 +36,10 @@ def HeteroCL_CreateStageHandleOp : HeteroCL_Op<"create_stage_handle">
         stage handle
     }];
 
-    let arguments = (ins );
+    let arguments = (ins StrAttr:$stage_name);
     let results = (outs StageHandle:$result);
     let assemblyFormat = [{
-       attr-dict `:` type($result)
+       $stage_name attr-dict `:` type($result)
     }];
 }
 

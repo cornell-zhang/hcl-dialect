@@ -34,4 +34,9 @@ def LoopHandle : HeteroCL_Type<"LoopHandle"> {
   }];
 }
 
+def StageHandle : HeteroCL_Type<"StageHandle"> {
+  let summary = "stage handle";
+  let mnemonic = "StageHandle";
+}
+
 #endif // HCL_TYPES

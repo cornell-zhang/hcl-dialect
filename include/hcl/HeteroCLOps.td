@@ -29,6 +29,20 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
     }];
 }
 
+def HeteroCL_CreateStageHandleOp : HeteroCL_Op<"create_stage_handle"> 
+{
+    let summary = "stage handle";
+    let description = [{
+        stage handle
+    }];
+
+    let arguments = (ins );
+    let results = (outs StageHandle:$result);
+    let assemblyFormat = [{
+       attr-dict `:` type($result)
+    }];
+}
+
 def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 {
     let summary = "reorder";

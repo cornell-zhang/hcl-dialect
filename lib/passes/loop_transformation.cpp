@@ -525,41 +525,54 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   // 1) get schedule
   const auto loopsToBeFused = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToBeFused.size();
+  const auto stage_name = fuseOp.stage().getDefiningOp()->getAttr("stage_name");
   SmallVector<StringRef, 6> nameArr;
   for (auto loop : loopsToBeFused) {
     nameArr.push_back(loop.getType().cast<hcl::LoopHandleType>().getLoopName());
   }
 
   // 2) Traverse all the nested loops and find the requested ones
-  AffineForOp loopToBeDestroyed;
-  SmallVector<AffineForOp, 6> forOps;
-  bool isFound = false;
-  f.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
-      isFound = true;
-    return;
-  });
-  // handle exception
-  if (!isFound) {
-    f.emitError("Cannot find contiguous nested loops starting from Loop ")
-        << nameArr[0].str();
-    return signalPassFailure();
-  }
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      AffineForOp loopToBeDestroyed;
+      SmallVector<AffineForOp, 6> forOps;
+      bool isOuterMost = false;
+      bool isFound = false;
+      rootForOp.walk([&](AffineForOp forOp) {
+        if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
+          isFound = true;
+        return;
+      });
+      // handle exception
+      if (!isFound) {
+        f.emitError("Cannot find contiguous nested loops starting from Loop ")
+            << nameArr[0].str();
+        return signalPassFailure();
+      }
+      if (forOps[0]->hasAttr("stage_name"))
+        isOuterMost = true;
 
-  // 3) construct new loop
-  MutableArrayRef<AffineForOp> loops =
-      llvm::makeMutableArrayRef(forOps.data(), sizeOfFusedLoops);
-  coalesceLoops(loops);
+      // 3) construct new loop
+      MutableArrayRef<AffineForOp> loops =
+          llvm::makeMutableArrayRef(forOps.data(), sizeOfFusedLoops);
+      coalesceLoops(loops);
 
-  // 4) add name to the new loop
-  std::string new_name;
-  for (auto forOp : forOps) {
-    new_name +=
-        forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() + "_";
+      // 4) add name to the new loop
+      std::string new_name;
+      for (auto forOp : forOps) {
+        new_name +=
+            forOp->getAttr("loop_name").cast<StringAttr>().getValue().str() +
+            "_";
+      }
+      new_name += "fused";
+      loops[0]->setAttr("loop_name",
+                        StringAttr::get(loops[0]->getContext(), new_name));
+      if (isOuterMost) {
+        loops[0]->setAttr("stage_name", stage_name);
+      }
+      break;
+    }
   }
-  new_name += "fused";
-  loops[0]->setAttr("loop_name",
-                    StringAttr::get(loops[0]->getContext(), new_name));
 }
 
 void HCLLoopTransformation::runComputeAt(FuncOp &f,

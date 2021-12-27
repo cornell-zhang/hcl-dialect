@@ -98,10 +98,10 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
         fuse
     }];
 
-    let arguments = (ins Variadic<LoopHandle>:$loops);
+    let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
     let results = (outs LoopHandle:$fused_loop);
     let assemblyFormat = [{
-        `(` ($loops^ `:` type($loops))? `)` attr-dict `->` type($fused_loop)
+        `(` $stage `:` type($stage) `,` ($loops^ `:` type($loops))? `)` attr-dict `->` type($fused_loop)
     }];
 }
 

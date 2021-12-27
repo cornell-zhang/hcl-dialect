@@ -127,10 +127,10 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
     }];
 
     // factor=0 means fully unroll the loop
-    let arguments = (ins LoopHandle:$loop, DefaultValuedAttr<UI32Attr,"0">:$factor);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr,"0">:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop `:` type($loop) `,` $factor `)` attr-dict
+        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `,` $factor `)` attr-dict
     }];
 }
 
@@ -141,10 +141,10 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
         pipeline
     }];
 
-    let arguments = (ins LoopHandle:$loop, DefaultValuedAttr<UI32Attr, "1">:$ii);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr, "1">:$ii);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop `:` type($loop) `,` $ii `)` attr-dict
+        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `,` $ii `)` attr-dict
     }];
     let builders = [
         OpBuilder<(ins "hcl::LoopHandleType":$loop,
@@ -159,10 +159,10 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
         parallel
     }];
 
-    let arguments = (ins LoopHandle:$loop);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop `:` type($loop) `)` attr-dict
+        `(` $stage `:` type($stage) `,` $loop `:` type($loop) `)` attr-dict
     }];
 }
 

@@ -63,8 +63,6 @@ bool HCLLoopTransformation::findContiguousNestedLoops(
     bool countReductionLoops = true) {
   // depth = -1 means traverses all the inner loops
   AffineForOp forOp = rootAffineForOp;
-  Attribute attr = forOp->getAttr("loop_name");
-  const StringRef curr_loop = attr.cast<StringAttr>().getValue();
   unsigned int sizeNameArr = nameArr.size();
   if (sizeNameArr != 0)
     depth = sizeNameArr;
@@ -329,19 +327,26 @@ void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
   unsigned int factor = unrollOp.factor();
   const auto loop_name =
       unrollOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto stage_name =
+      unrollOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Traverse all the nested loops and find the requested one
-  f.walk([&](AffineForOp forOp) {
-    Attribute attr = forOp->getAttr("loop_name");
-    if (loop_name == attr.cast<StringAttr>().getValue()) {
-      forOp->setAttr(
-          "unroll",
-          IntegerAttr::get(
-              IntegerType::get(forOp->getContext(), 32,
-                               IntegerType::SignednessSemantics::Signless),
-              factor));
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      rootForOp.walk([&](AffineForOp forOp) {
+        Attribute attr = forOp->getAttr("loop_name");
+        if (loop_name == attr.cast<StringAttr>().getValue()) {
+          forOp->setAttr(
+              "unroll",
+              IntegerAttr::get(
+                  IntegerType::get(forOp->getContext(), 32,
+                                   IntegerType::SignednessSemantics::Signless),
+                  factor));
+        }
+      });
+      break;
     }
-  });
+  }
 }
 
 void HCLLoopTransformation::runParallel(FuncOp &f,
@@ -349,20 +354,27 @@ void HCLLoopTransformation::runParallel(FuncOp &f,
   // 1) get schedule
   const auto loop_name =
       parallelOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto stage_name =
+      parallelOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Traverse all the nested loops and find the requested one
-  f.walk([&](AffineForOp forOp) {
-    Attribute attr = forOp->getAttr("loop_name");
-    if (loop_name == attr.cast<StringAttr>().getValue()) {
-      forOp->setAttr(
-          "parallel",
-          IntegerAttr::get(
-              IntegerType::get(forOp->getContext(), 32,
-                               IntegerType::SignednessSemantics::Signless),
-              1) // true
-      );
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      rootForOp.walk([&](AffineForOp forOp) {
+        Attribute attr = forOp->getAttr("loop_name");
+        if (loop_name == attr.cast<StringAttr>().getValue()) {
+          forOp->setAttr(
+              "parallel",
+              IntegerAttr::get(
+                  IntegerType::get(forOp->getContext(), 32,
+                                   IntegerType::SignednessSemantics::Signless),
+                  1) // true
+          );
+        }
+      });
+      break;
     }
-  });
+  }
 }
 
 void HCLLoopTransformation::runPipelining(FuncOp &f,
@@ -371,19 +383,26 @@ void HCLLoopTransformation::runPipelining(FuncOp &f,
   unsigned int ii = pipelineOp.ii();
   const auto loop_name =
       pipelineOp.loop().getType().cast<hcl::LoopHandleType>().getLoopName();
+  const auto stage_name =
+      pipelineOp.stage().getDefiningOp()->getAttr("stage_name");
 
   // 2) Traverse all the nested loops and find the requested one
-  f.walk([&](AffineForOp forOp) {
-    Attribute attr = forOp->getAttr("loop_name");
-    if (loop_name == attr.cast<StringAttr>().getValue()) {
-      forOp->setAttr(
-          "pipeline_ii",
-          IntegerAttr::get(
-              IntegerType::get(forOp->getContext(), 32,
-                               IntegerType::SignednessSemantics::Signless),
-              ii));
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    if (stage_name == rootForOp->getAttr("stage_name").cast<StringAttr>()) {
+      rootForOp.walk([&](AffineForOp forOp) {
+        Attribute attr = forOp->getAttr("loop_name");
+        if (loop_name == attr.cast<StringAttr>().getValue()) {
+          forOp->setAttr(
+              "pipeline_ii",
+              IntegerAttr::get(
+                  IntegerType::get(forOp->getContext(), 32,
+                                   IntegerType::SignednessSemantics::Signless),
+                  ii));
+        }
+      });
+      break;
     }
-  });
+  }
 }
 
 // modified from lib/Transforms/Utils/LoopUtils.cpp

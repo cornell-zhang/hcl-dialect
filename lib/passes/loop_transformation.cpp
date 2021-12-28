@@ -371,8 +371,9 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
 
       // 5) rename stage
       if (outerMostIdx != 0) {
-        nest[outerMostIdx]->setAttr("stage_name",
-                         StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
+        nest[outerMostIdx]->setAttr(
+            "stage_name",
+            StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
       }
       break;
     }
@@ -694,7 +695,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
   // TODO: Partition based on different dimensions
-  unsigned int dim = partitionOp.dim();
+  unsigned int target_dim = partitionOp.dim();
   unsigned int factor = partitionOp.factor();
 
   if (!memref.getDefiningOp()) { // in func args
@@ -707,25 +708,34 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
         SmallVector<AffineExpr, 4> partitionIndices;
         SmallVector<AffineExpr, 4> addressIndices;
 
+        // first N: partition index
+        // last N : physical index
         for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
-          if (kind == hcl::PartitionKindEnum::CyclicPartition) {
-            partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
-            addressIndices.push_back(
-                builder.getAffineDimExpr(dim).floorDiv(factor));
-
-          } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
-            auto blockFactor =
-                (arrayType.getShape()[dim] + factor - 1) / factor;
-            partitionIndices.push_back(
-                builder.getAffineDimExpr(dim).floorDiv(blockFactor));
-            addressIndices.push_back(builder.getAffineDimExpr(dim) %
-                                     blockFactor);
-
-          } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
+          if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
+            if (kind == hcl::PartitionKindEnum::CyclicPartition) {
+              // original index:  0, 1, 2, 3
+              // bank (factor 2): 0, 1, 0, 1
+              partitionIndices.push_back(builder.getAffineDimExpr(dim) %
+                                         factor);
+              addressIndices.push_back(
+                  builder.getAffineDimExpr(dim).floorDiv(factor));
+            } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
+              // original index:  0, 1, 2, 3
+              // bank (factor 2): 0, 0, 1, 1
+              partitionIndices.push_back(
+                  builder.getAffineDimExpr(dim).floorDiv(factor));
+              addressIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+            } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
+              // original index:  0, 1, 2, 3
+              // bank (factor 2): 0, 1, 2, 3
+              partitionIndices.push_back(builder.getAffineDimExpr(dim));
+              addressIndices.push_back(builder.getAffineConstantExpr(0));
+            } else {
+              f.emitError("No this partition kind");
+            }
+          } else {
             partitionIndices.push_back(builder.getAffineConstantExpr(0));
             addressIndices.push_back(builder.getAffineDimExpr(dim));
-          } else {
-            f.emitError("No this partition kind");
           }
         }
 
@@ -746,8 +756,6 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
         auto resultTypes = f.front().getTerminator()->getOperandTypes();
         auto inputTypes = f.front().getArgumentTypes();
         f.setType(builder.getFunctionType(inputTypes, resultTypes));
-        // llvm::raw_ostream &output = llvm::outs();
-        // f.print(output);
       }
     }
   } else {

@@ -20,7 +20,8 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         hcl.partition(%A: memref<1024x1024xf32>, "CyclicPartition", 0, 4)
-        hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 0, 2)
+        hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 2, 2)
+        hcl.partition(%C: memref<1024x1024xf32>, "CompletePartition", 1)
         return %C : memref<1024x1024xf32>
     }
 }

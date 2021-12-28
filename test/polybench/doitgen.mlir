@@ -1,7 +1,7 @@
 module {
   func @doitgen( %A: tensor<?x?x?xf32>, %x: tensor<?x?xf32>) -> tensor<?x?x?xf32>
     {
-      // G = P x T = (A.B) . (C.D) 
+      // A(r, q, p) = \sum_{s = 0}^{S - 1}A(r, q, s) . x(p, s) 
 
       // Algorithm
       %l1 = hcl.create_loop_handle "r" : !hcl.LoopHandle
@@ -40,7 +40,7 @@ module {
             %2 = tensor.insert %sum___ into %A[%r, %q, %p1] : tensor<?x?x?xf32>
           } { loop_name = "p1" }
         } { loop_name = "q" }
-      } { loop_name = "r" }
+      } { loop_name = "r", stage_name = "s1" }
 
       // Terminator
       return %A : tensor<?x?x?xf32>

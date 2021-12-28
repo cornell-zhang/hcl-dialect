@@ -678,35 +678,68 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
 void HCLLoopTransformation::runComputeAt(FuncOp &f,
                                          hcl::ComputeAtOp &computeAtOp) {
   // 1) get schedule
-  const auto loop1_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(computeAtOp.loop1().getDefiningOp())
+  const auto loop_name =
+      dyn_cast<hcl::CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
           .loop_name();
-  const auto loop2_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(computeAtOp.loop2().getDefiningOp())
-          .loop_name();
+  const auto producer_name =
+      dyn_cast<hcl::CreateStageHandleOp>(computeAtOp.producer().getDefiningOp())
+          .stage_name();
+  const auto consumer_name =
+      dyn_cast<hcl::CreateStageHandleOp>(computeAtOp.consumer().getDefiningOp())
+          .stage_name();
 
   // 2) Traverse all the outer-most loops and find the requested one
-  SmallVector<AffineForOp, 6> forOps;
-  for (auto rootAffineForOp : f.getOps<AffineForOp>()) {
-    Attribute attr = rootAffineForOp->getAttr("loop_name");
-    if (loop1_name == attr.cast<StringAttr>().getValue() ||
-        loop2_name == attr.cast<StringAttr>().getValue()) {
-      forOps.push_back(rootAffineForOp);
-      std::cout << "found" << std::endl;
+  AffineForOp producerFor;
+  AffineForOp consumerFor;
+  std::pair<bool, bool> isFound{false, false};
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    auto curr_name =
+        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue();
+    if (producer_name == curr_name) {
+      producerFor = rootForOp;
+      isFound.first = true;
+    } else if (consumer_name == curr_name) {
+      consumerFor = rootForOp;
+      isFound.second = true;
     }
   }
-  ComputationSliceState sliceUnion;
-  for (int i = 3; i >= 1; --i) { // TODO: Change depth
-    FusionResult result =
-        canFuseLoops(forOps[0], forOps[1], i /*depth*/, &sliceUnion);
-    if (result.value == FusionResult::Success) {
-      fuseLoops(forOps[0], forOps[1], sliceUnion);
-      forOps[0].erase();
-      std::cout << std::to_string(i) << " yes" << std::endl;
-      return;
-    } else
-      std::cout << std::to_string(i) << " no" << std::endl;
+  if (!isFound.first || !isFound.second) {
+    f.emitError("Cannot find corresponding producer and consumer");
+    return signalPassFailure();
   }
+  int cnt_depth = 0;
+  int requested_depth = 0;
+  consumerFor.walk([&](AffineForOp forOp) {
+    cnt_depth++;
+    Attribute attr = forOp->getAttr("loop_name");
+    if (loop_name == attr.cast<StringAttr>().getValue()) {
+      requested_depth = cnt_depth;
+    }
+  });
+  requested_depth = cnt_depth - requested_depth + 1;
+  // TODO: bug: 1) cannot support tensor type
+  //            2) gemm merge result seems incorrect
+  ComputationSliceState sliceUnion;
+  FusionResult result =
+      canFuseLoops(producerFor, consumerFor, requested_depth, &sliceUnion);
+  std::string err_msg;
+  if (result.value == FusionResult::Success) {
+    fuseLoops(producerFor, consumerFor, sliceUnion);
+    producerFor.erase();
+    return;
+  } else if (result.value == FusionResult::FailPrecondition) {
+    err_msg = "failed precondition for fusion (e.g. same block)";
+  } else if (result.value == FusionResult::FailBlockDependence) {
+    err_msg = "fusion would violate another dependence in block";
+  } else if (result.value == FusionResult::FailFusionDependence) {
+    err_msg = "fusion would reverse dependences between loops";
+  } else if (result.value == FusionResult::FailComputationSlice) {
+    err_msg = "unable to compute src loop computation slice";
+  } else if (result.value == FusionResult::FailIncorrectSlice) {
+    err_msg = "slice is computed, but it is incorrect";
+  }
+  f.emitError("Cannot merge these two loops because ") << err_msg;
+  // return signalPassFailure();
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp

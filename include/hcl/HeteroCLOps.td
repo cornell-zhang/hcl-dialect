@@ -112,10 +112,10 @@ def HeteroCL_ComputeAtOp : HeteroCL_Op<"compute_at">
         compute_at
     }];
 
-    let arguments = (ins LoopHandle:$loop1, LoopHandle:$loop2);
+    let arguments = (ins StageHandle:$producer, StageHandle:$consumer, LoopHandle:$axis);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $loop1 `,` $loop2 `)` attr-dict
+        `(` $producer `,` $consumer `,` $axis `)` attr-dict
     }];
 }
 

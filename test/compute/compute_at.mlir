@@ -2,10 +2,12 @@ module {
     func @sibling_fusion(%arg0: memref<10x10xf32>, %arg1: memref<10x10xf32>,
                      %arg2: memref<10x10xf32>, %arg3: memref<10x10xf32>,
                      %arg4: memref<10x10xf32>) {
-        %l1 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i">
-        %l2 = hcl.create_loop_handle {} : !hcl.LoopHandle<"k">
-        %l3 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i1">
-        %l4 = hcl.create_loop_handle {} : !hcl.LoopHandle<"k1">
+        %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
+        %l2 = hcl.create_loop_handle "k" : !hcl.LoopHandle
+        %l3 = hcl.create_loop_handle "i1" : !hcl.LoopHandle
+        %l4 = hcl.create_loop_handle "k1" : !hcl.LoopHandle
+        %s1 = hcl.create_stage_handle "s1" : !hcl.StageHandle
+        %s2 = hcl.create_stage_handle "s2" : !hcl.StageHandle
         affine.for %arg5 = 0 to 3 {
             affine.for %arg6 = 0 to 3 {
             %0 = affine.load %arg0[%arg5, %arg6] : memref<10x10xf32>
@@ -13,7 +15,7 @@ module {
             %2 = mulf %0, %1 : f32
             affine.store %2, %arg3[%arg5, %arg6] : memref<10x10xf32>
             } {loop_name = "k"}
-        } {loop_name = "i"}
+        } {loop_name = "i", stage_name = "s1"}
         affine.for %arg5 = 0 to 3 {
             affine.for %arg6 = 0 to 3 {
             %0 = affine.load %arg0[%arg5, %arg6] : memref<10x10xf32>
@@ -21,41 +23,47 @@ module {
             %2 = addf %0, %1 : f32
             affine.store %2, %arg4[%arg5, %arg6] : memref<10x10xf32>
             } {loop_name = "k1"}
-        } {loop_name = "i1"}
-        hcl.compute_at (%l1: !hcl.LoopHandle<"i">, %l3: !hcl.LoopHandle<"i1">)
+        } {loop_name = "i1", stage_name = "s2"}
+        hcl.compute_at (%s1, %s2, %l4)
         return
     }
-    func @matrix_multiply( %A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @matrix_multiply( %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>, %D: memref<1024x1024xf32>) -> memref<1024x1024xf32>
     {
-        %l1 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i">
-        %l2 = hcl.create_loop_handle {} : !hcl.LoopHandle<"j">
-        %l3 = hcl.create_loop_handle {} : !hcl.LoopHandle<"k">
-        %l4 = hcl.create_loop_handle {} : !hcl.LoopHandle<"i1">
-        %l5 = hcl.create_loop_handle {} : !hcl.LoopHandle<"j1">
-        %l6 = hcl.create_loop_handle {} : !hcl.LoopHandle<"k1">
+        %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
+        %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
+        %l3 = hcl.create_loop_handle "k" : !hcl.LoopHandle
+        %l4 = hcl.create_loop_handle "i1" : !hcl.LoopHandle
+        %l5 = hcl.create_loop_handle "j1" : !hcl.LoopHandle
+        %l6 = hcl.create_loop_handle "k1" : !hcl.LoopHandle
+        %s1 = hcl.create_stage_handle "s1" : !hcl.StageHandle
+        %s2 = hcl.create_stage_handle "s2" : !hcl.StageHandle
+        // C=A*B
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
+                    %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
+                    %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
+                    %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
                     %prod = mulf %a, %b : f32
-                    %sum  = addf %prod, %c: f32
+                    %sum = addf %prod, %c: f32
+                    affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k" }
             } { loop_name = "j" }
-        } { loop_name = "i" }
+        } { loop_name = "i", stage_name = "s1" }
+        // D=C*A
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
-                    %prod = mulf %a, %b : f32
-                    %sum  = addf %prod, %c: f32
+                    %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
+                    %c = affine.load %C[%k, %j] : memref<1024x1024xf32>
+                    %d = affine.load %D[%i, %j] : memref<1024x1024xf32>
+                    %prod = mulf %a, %c : f32
+                    %sum = addf %prod, %d: f32
+                    affine.store %sum, %D[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k1" }
             } { loop_name = "j1" }
-        } { loop_name = "i1" }
-        hcl.compute_at (%l1: !hcl.LoopHandle<"i">, %l4: !hcl.LoopHandle<"i1">)
-        return %C : tensor<1024x1024xf32>
+        } { loop_name = "i1", stage_name = "s2" }
+        hcl.compute_at (%s1, %s2, %l6)
+        return %C : memref<1024x1024xf32>
     }
 }

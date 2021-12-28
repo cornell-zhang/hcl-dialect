@@ -382,7 +382,13 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
 
 void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
   // 1) get schedule
-  unsigned int factor = unrollOp.factor();
+  auto optional_factor = unrollOp.factor();
+  unsigned int factor;
+  if (optional_factor.hasValue()) {
+    factor = optional_factor.getValue();
+  } else {
+    factor = 0; // fully unroll
+  }
   const auto loop_name =
       dyn_cast<hcl::CreateLoopHandleOp>(unrollOp.loop().getDefiningOp())
           .loop_name();
@@ -444,7 +450,13 @@ void HCLLoopTransformation::runParallel(FuncOp &f,
 void HCLLoopTransformation::runPipelining(FuncOp &f,
                                           hcl::PipelineOp &pipelineOp) {
   // 1) get schedule
-  unsigned int ii = pipelineOp.ii();
+  auto optional_ii = pipelineOp.ii();
+  unsigned int ii;
+  if (optional_ii.hasValue()) {
+    ii = optional_ii.getValue();
+  } else {
+    ii = 1;
+  }
   const auto loop_name =
       dyn_cast<hcl::CreateLoopHandleOp>(pipelineOp.loop().getDefiningOp())
           .loop_name();

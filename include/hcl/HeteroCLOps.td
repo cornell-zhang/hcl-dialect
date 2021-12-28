@@ -127,10 +127,10 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
     }];
 
     // factor=0 means fully unroll the loop
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr,"0">:$factor);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop `,` $factor `)` attr-dict
+        `(` $stage `,` $loop (`,` $factor^)? `)` attr-dict
     }];
 }
 
@@ -141,10 +141,10 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
         pipeline
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, DefaultValuedAttr<UI32Attr, "1">:$ii);
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop `,` $ii `)` attr-dict
+        `(` $stage `,` $loop (`,` $ii^)? `)` attr-dict
     }];
     let builders = [
         OpBuilder<(ins "hcl::LoopHandleType":$loop,
@@ -186,7 +186,10 @@ def HeteroCL_PartitionOp : HeteroCL_Op<"partition">
         factor (int, optional) - The partition factor
     }];
 
-    let arguments = (ins AnyMemRef:$target, PartitionKindEnum:$partition_kind, DefaultValuedAttr<UI32Attr, "0">:$dim, OptionalAttr<DefaultValuedAttr<UI32Attr, "0">>:$factor);
+    let arguments = (ins AnyMemRef:$target,
+                     DefaultValuedAttr<PartitionKindEnum, "PartitionKindEnum::CompletePartition">:$partition_kind,
+                     DefaultValuedAttr<UI32Attr, "0">:$dim,
+                     OptionalAttr<DefaultValuedAttr<UI32Attr, "0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $target `:` type($target) `,` $partition_kind `,` $dim (`,` $factor^)? `)` attr-dict

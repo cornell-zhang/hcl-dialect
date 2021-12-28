@@ -290,6 +290,10 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       dyn_cast<hcl::CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
           .stage_name();
   const auto loopsToBeReordered = reorderOp.loops(); // operand_range
+  if (loopsToBeReordered.size() < 2) {
+    f.emitError("Should at least input 2 loops to be reordered");
+    return signalPassFailure();
+  }
 
   // 2) get all the loop names and id mapping
   for (auto rootForOp : f.getOps<AffineForOp>()) {
@@ -604,6 +608,10 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   // 1) get schedule
   const auto loopsToBeFused = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToBeFused.size();
+  if (sizeOfFusedLoops < 2) {
+    f.emitError("Should at least input 2 loops to be fused");
+    return signalPassFailure();
+  }
   const auto stage_name =
       dyn_cast<hcl::CreateStageHandleOp>(fuseOp.stage().getDefiningOp())
           .stage_name();

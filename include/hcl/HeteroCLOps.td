@@ -186,10 +186,10 @@ def HeteroCL_PartitionOp : HeteroCL_Op<"partition">
         factor (int, optional) - The partition factor
     }];
 
-    let arguments = (ins AnyMemRef:$target, PartitionKindEnum:$partition_kind, DefaultValuedAttr<UI32Attr, "0">:$dim, DefaultValuedAttr<UI32Attr, "0">:$factor);
+    let arguments = (ins AnyMemRef:$target, PartitionKindEnum:$partition_kind, DefaultValuedAttr<UI32Attr, "0">:$dim, OptionalAttr<DefaultValuedAttr<UI32Attr, "0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $target `:` type($target) `,` $partition_kind `,` $dim `,` $factor `)` attr-dict
+        `(` $target `:` type($target) `,` $partition_kind `,` $dim (`,` $factor^)? `)` attr-dict
     }];
 }
 

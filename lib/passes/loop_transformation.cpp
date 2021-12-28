@@ -696,7 +696,17 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   auto kind = partitionOp.partition_kind();
   // TODO: Partition based on different dimensions
   unsigned int target_dim = partitionOp.dim();
-  unsigned int factor = partitionOp.factor();
+  auto optional_factor = partitionOp.factor();
+  int factor = 0;
+  if (optional_factor.hasValue()) {
+    factor = optional_factor.getValue();
+  } else {
+    factor = -1;
+    if (kind != hcl::PartitionKindEnum::CompletePartition) {
+      f.emitError("Should pass in `factor' for array partition");
+      return signalPassFailure();
+    }
+  }
 
   if (!memref.getDefiningOp()) { // in func args
     for (auto arg : f.getArguments()) {
@@ -732,6 +742,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
               addressIndices.push_back(builder.getAffineConstantExpr(0));
             } else {
               f.emitError("No this partition kind");
+              return signalPassFailure();
             }
           } else {
             partitionIndices.push_back(builder.getAffineConstantExpr(0));

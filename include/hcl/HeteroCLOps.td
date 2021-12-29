@@ -196,6 +196,20 @@ def HeteroCL_PartitionOp : HeteroCL_Op<"partition">
     }];
 }
 
+def HeteroCL_ReuseAtOp : HeteroCL_Op<"reuse_at"> 
+{
+    let summary = "reuse_at";
+    let description = [{
+        reuse_at
+    }];
+
+    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, UI32Attr:$axis);
+    let results = (outs AnyMemRef:$result);
+    let assemblyFormat = [{
+        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
+    }];
+}
+
 def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at"> 
 {
     let summary = "buffer_at";
@@ -203,7 +217,6 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
         buffer_at
     }];
 
-    // TODO: Also need to add Stage
     let arguments = (ins StageHandle:$stage, AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);
     let results = (outs );
     let assemblyFormat = [{

@@ -8,6 +8,7 @@
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopFusionUtils.h"
 #include "mlir/Transforms/LoopUtils.h"
@@ -43,6 +44,7 @@ struct HCLLoopTransformation
   void runFusing(FuncOp &f, hcl::FuseOp &fuseOp);
   void runComputeAt(FuncOp &f, hcl::ComputeAtOp &computeAtOp);
   void runPartition(FuncOp &f, hcl::PartitionOp &partitionOp);
+  void runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp);
   void runBufferAt(FuncOp &f, hcl::BufferAtOp &bufferAtOp);
   // utils
   bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
@@ -828,6 +830,178 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   }
 }
 
+void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
+  // 1) get schedule
+  auto target = reuseAtOp.target(); // return a Value type
+  unsigned int axis = reuseAtOp.axis();
+  const auto stage_name =
+      dyn_cast<hcl::CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
+          .stage_name();
+
+  // 2) Traverse all the nested loops and find the requested one
+  for (auto rootForOp : f.getOps<AffineForOp>()) {
+    if (stage_name ==
+        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
+      SmallVector<AffineMap, 6> loadMap;
+      SmallVector<AffineExpr> requestedVars;
+      // TODO: eliminate order in inputs
+      f.emitWarning("Need to guarantee the loads have orders");
+      rootForOp.walk([&](AffineLoadOp loadOp) {
+        if (loadOp.getOperand(0) == target) {
+          auto map = loadOp.getAffineMap();
+          loadMap.push_back(map);
+          requestedVars.push_back(map.getResult(axis));
+        }
+      });
+      SmallVector<AffineForOp> forOps;
+      rootForOp.walk([&](AffineForOp forOp) {
+        if (!forOp->hasAttr("reduction"))
+          forOps.push_back(forOp);
+      });
+      std::reverse(forOps.begin(), forOps.end());
+      AffineForOp innerMostForOp = forOps[forOps.size() - 1];
+
+      // 3) Try to find reuse pattern
+      //    TODO: support more reuse patterns
+      bool canReuse = false;
+      auto baseVar = *(requestedVars.begin());
+      SmallVector<int> strides;
+      for (auto var : requestedVars) {
+        if (std::find(requestedVars.begin(), requestedVars.end(), var + 1) !=
+            requestedVars.end()) {
+          canReuse = true;
+        }
+        auto diff = var - baseVar;
+        if (auto cst = diff.cast<AffineConstantExpr>()) {
+          strides.push_back(cst.getValue());
+        } else {
+          f.emitError("Cannot support non-constant stride");
+        }
+      }
+      if (!canReuse) {
+        f.emitError("Only support stride 1 reuse pattern now");
+      }
+
+      // 4) create buffer
+      unsigned int numLoad = loadMap.size();
+      int distance = *(std::prev(strides.end()));
+      OpBuilder out_builder(rootForOp); // outside the stage
+      mlir::Type elementType = out_builder.getF32Type();
+      auto buf = out_builder.create<memref::AllocOp>(
+          rootForOp.getLoc(), MemRefType::get({distance + 1}, elementType));
+      reuseAtOp.getResult().replaceAllUsesWith(buf);
+
+      // 5) Update loop bound & store index
+      //    since some load/store will be created later, this step is done in
+      //    advance
+      SmallVector<AffineExpr> memAffineIndices;
+      SmallVector<Operation *> opToRemove;
+      // TODO: support non-constant bound
+      forOps[axis].setConstantUpperBound(
+          target.getType().dyn_cast<MemRefType>().getShape()[axis]);
+      innerMostForOp.walk([&](AffineStoreOp op) {
+        OpBuilder rewriter(op);
+        memAffineIndices.clear();
+        auto oldAffineMap = op.getAffineMap();
+        for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e;
+             ++i) {
+          AffineExpr idx;
+          if (i == axis)
+            idx = oldAffineMap.getResult(i) - distance;
+          else
+            idx = oldAffineMap.getResult(i);
+          memAffineIndices.push_back(idx);
+        }
+        auto affineMap = AffineMap::get(
+            target.getType().dyn_cast<MemRefType>().getRank() /*rank*/, 0,
+            memAffineIndices, rewriter.getContext());
+        rewriter.create<AffineStoreOp>(
+            op->getLoc(), op.getOperand(0) /*valueToStore*/,
+            op.getOperand(1) /*memref*/, affineMap, op.indices());
+        opToRemove.push_back(op);
+      });
+
+      // 6) rewrite original memref
+      innerMostForOp.walk([&](AffineLoadOp op) {
+        OpBuilder rewriter(op);
+        memAffineIndices.clear();
+        auto idx = op.getAffineMap().getResult(axis) - baseVar;
+        memAffineIndices.push_back(idx);
+        auto affineMap = AffineMap::get(1 /*rank*/, 0, memAffineIndices,
+                                        rewriter.getContext());
+        ValueRange operands{innerMostForOp.getInductionVar()};
+        auto new_load = rewriter.create<AffineLoadOp>(op->getLoc(), buf,
+                                                      affineMap, operands);
+        op->replaceAllUsesWith(new_load);
+        opToRemove.push_back(op);
+      });
+
+      // 7) create if structure
+      OpBuilder builder(
+          &(*(innerMostForOp.getBody()->getOperations().begin())));
+      auto loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
+      // e.g. #set = affine_set<(d0, d1)[s0]: (d0 - 10 >= 0, s0 - d0 - 9 >= 0,
+      //                                d1 - 10 >= 0, s0 - d1 - 9 >= 0)>
+      SmallVector<Value, 4> setOperands;
+      SmallVector<AffineExpr> constraints;
+      SmallVector<bool> eqFlags;
+      AffineExpr cond = builder.getAffineDimExpr(0) - distance;
+      constraints.push_back(cond);
+      eqFlags.push_back(false);
+      auto ifCondSet = IntegerSet::get(
+          1 /*dimCount*/, 0 /*symbolCount*/,
+          constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
+      setOperands.push_back(innerMostForOp.getInductionVar());
+      auto ifOp = builder.create<AffineIfOp>(loc, ifCondSet, setOperands,
+                                             /*withElseRegion=*/false);
+      // op.moveBefore(&(ifOp.getThenBlock()->front()));
+      auto &innerMostBody = innerMostForOp.getBody()->getOperations();
+      auto &ifThenBody = ifOp.getThenBlock()->getOperations();
+      ifThenBody.splice(ifThenBody.begin(), innerMostBody,
+                        std::next(innerMostBody.begin()),
+                        std::prev(innerMostBody.end()));
+
+      // 8) shift buffer & load from memory to buffer
+      loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
+      for (std::size_t i = 0; i < numLoad; ++i) {
+        // %tmp affine.load %buf[1]
+        // affine.store %tmp, %buf[0]
+        memAffineIndices.clear();
+        AffineLoadOp load;
+        if (i < numLoad - 1) { // load from buffer
+          memAffineIndices.push_back(
+              builder.getAffineConstantExpr(strides[i + 1]));
+          auto affineMap = AffineMap::get(1 /*rank*/, 0, memAffineIndices,
+                                          builder.getContext());
+          ValueRange operands{innerMostForOp.getInductionVar()};
+          load = builder.create<AffineLoadOp>(loc, buf, affineMap, operands);
+          load->moveBefore(ifOp);
+        } else { // load from memory
+          SmallVector<Value> memIndices;
+          for (auto forOp : forOps)
+            memIndices.push_back(forOp.getInductionVar());
+          load = builder.create<AffineLoadOp>(loc, target, memIndices);
+          load->moveBefore(ifOp);
+        }
+        memAffineIndices.clear();
+        memAffineIndices.push_back(builder.getAffineConstantExpr(strides[i]));
+        auto affineMap = AffineMap::get(1 /*rank*/, 0, memAffineIndices,
+                                        builder.getContext());
+        ValueRange operands{innerMostForOp.getInductionVar()};
+        auto store =
+            builder.create<AffineStoreOp>(loc, load, buf, affineMap, operands);
+        store->moveBefore(ifOp);
+      }
+
+      // 9) Remove all the useless operations
+      for (Operation *op : opToRemove) {
+        op->erase();
+      }
+      break;
+    }
+  }
+}
+
 void HCLLoopTransformation::runBufferAt(FuncOp &f,
                                         hcl::BufferAtOp &bufferAtOp) {
   // 1) get schedule
@@ -1087,6 +1261,9 @@ void HCLLoopTransformation::runOnFunction() {
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::PartitionOp>(op)) {
       runPartition(f, new_op);
+      opToRemove.push_back(&op);
+    } else if (auto new_op = dyn_cast<hcl::ReuseAtOp>(op)) {
+      runReuseAt(f, new_op);
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<hcl::BufferAtOp>(op)) {
       runBufferAt(f, new_op);

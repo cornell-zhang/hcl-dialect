@@ -322,9 +322,9 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       }
 
       // 3) traverse all the input arguments that need to be reordered and
-      // construct permMap possible inputs: a) # arguments = # loops:
-      // (i,j,k)->(k,j,i) b) # arguments != # loops:
-      //    input (k,i), but should be the same as a)
+      // construct permMap possible inputs:
+      // a) # arguments = # loops: (i,j,k)->(k,j,i)
+      // b) # arguments != # loops: input (k,i), but should be the same as a)
       // 3.1) map input arguments to the corresponding loop names
       std::vector<std::string> toBeReorderedNameVec;
       for (auto loop : loopsToBeReordered) {
@@ -340,18 +340,23 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       //     so this step is needed for creating permMap
       unsigned int cntInArgs = 0;
       unsigned int outerMostIdx = 0;
+      std::vector<std::string> allNameVec;
+      // first fill in the missing loops for case b)
       for (unsigned int i = 0, e = origNameVec.size(); i < e; ++i) {
         auto name = origNameVec[i];
-        auto iter = std::find(toBeReorderedNameVec.begin(),
-                              toBeReorderedNameVec.end(), name);
-        unsigned int idx;
-        if (iter != toBeReorderedNameVec.end()) { // name in the arguments
-          idx = name2id[toBeReorderedNameVec[cntInArgs++]];
-          permMap.push_back(idx);
+        auto iterator = std::find(toBeReorderedNameVec.begin(),
+                                  toBeReorderedNameVec.end(), name);
+        if (iterator != toBeReorderedNameVec.end()) { // name in the arguments
+          allNameVec.push_back(toBeReorderedNameVec[cntInArgs++]);
         } else { // not in
-          idx = name2id[name];
-          permMap.push_back(idx);
+          allNameVec.push_back(name);
         }
+      }
+      for (unsigned int i = 0, e = origNameVec.size(); i < e; ++i) {
+        auto name = origNameVec[i];
+        auto iterator = std::find(allNameVec.begin(), allNameVec.end(), name);
+        unsigned int idx = iterator - allNameVec.begin();
+        permMap.push_back(idx);
         if (idx == 0) {
           outerMostIdx = i;
         }

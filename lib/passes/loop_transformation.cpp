@@ -1145,26 +1145,45 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       } else { // not the inner-most non-reduction axis
         OpBuilder builder(forOps[axis + 1]);
         Location loc_front = forOps[axis + 1].getLoc();
-        unsigned int ub = nonReductionForOps[axis + 1].getConstantUpperBound();
+        SmallVector<int64_t> ubs;
+        for (unsigned int i = axis + 1, e = nonReductionForOps.size(); i < e;
+             ++i) {
+          ubs.push_back(nonReductionForOps[axis + 1].getConstantUpperBound());
+        }
         // TODO: support more data types
         mlir::Type elementType = builder.getF32Type();
         SmallVector<Value, 4> memIndices;
         // a.1) allocate buffer
         auto buf = builder.create<memref::AllocOp>(
-            loc_front, MemRefType::get({ub}, elementType));
+            loc_front, MemRefType::get(ubs, elementType));
         auto zero = builder.create<ConstantOp>(
             loc_front, elementType, builder.getFloatAttr(elementType, 0.0));
 
         // a.2) create initialization loop
         //      need to create an explicit loop
-        AffineForOp initLoop = builder.create<AffineForOp>(loc_front, 0, ub);
+        SmallVector<AffineForOp> initLoops;
+        initLoops.push_back(builder.create<AffineForOp>(loc_front, 0, ubs[0]));
+        AffineForOp forOp = initLoops[0];
+        for (unsigned int i = axis + 2, e = nonReductionForOps.size(); i < e;
+             ++i) {
+          OpBuilder init_builder(
+              &(*(forOp.getBody()->getOperations().begin())));
+          forOp = init_builder.create<AffineForOp>(
+              forOp.getBody()->getOperations().begin()->getLoc(), 0,
+              ubs[i - axis - 1]);
+          initLoops.push_back(forOp);
+        }
 
         // a.3) do the initialization
-        OpBuilder init_builder(
-            &(*(initLoop.getBody()->getOperations().begin())));
-        memIndices.push_back(initLoop.getInductionVar());
-        init_builder.create<AffineStoreOp>(initLoop.getLoc(), zero, buf,
-                                           memIndices);
+        OpBuilder init_builder(&(*(initLoops[initLoops.size() - 1]
+                                       .getBody()
+                                       ->getOperations()
+                                       .begin())));
+        for (auto forOp : initLoops) {
+          memIndices.push_back(forOp.getInductionVar());
+        }
+        init_builder.create<AffineStoreOp>(
+            initLoops[initLoops.size() - 1].getLoc(), zero, buf, memIndices);
 
         // b) rewrite the original buffer
         SmallVector<Operation *, 10> opToRemove;
@@ -1173,11 +1192,12 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
             if (load.getOperand(0) != target) {
               return;
             }
-            // TODO: support more dimensions
             OpBuilder mid_builder(op);
             memIndices.clear();
-            memIndices.push_back(
-                nonReductionForOps[axis + 1].getInductionVar());
+            for (unsigned int i = axis + 1, e = nonReductionForOps.size();
+                 i < e; ++i) {
+              memIndices.push_back(nonReductionForOps[i].getInductionVar());
+            }
             auto new_load =
                 mid_builder.create<AffineLoadOp>(op->getLoc(), buf, memIndices);
             op->replaceAllUsesWith(new_load);
@@ -1186,11 +1206,12 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
             if (store.getOperand(1) != target) {
               return;
             }
-            // TODO: support more dimensions
             OpBuilder mid_builder(op);
             memIndices.clear();
-            memIndices.push_back(
-                nonReductionForOps[axis + 1].getInductionVar());
+            for (unsigned int i = axis + 1, e = nonReductionForOps.size();
+                 i < e; ++i) {
+              memIndices.push_back(nonReductionForOps[i].getInductionVar());
+            }
             mid_builder.create<AffineStoreOp>(op->getLoc(), op->getOperand(0),
                                               buf, memIndices);
             opToRemove.push_back(op);
@@ -1204,33 +1225,55 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
         Location loc_back =
             std::prev(forOps[axis + 1].getBody()->getOperations().end())
                 ->getLoc();
-        AffineForOp writeBackLoop =
-            builder.create<AffineForOp>(loc_back, 0, ub);
-        OpBuilder back_builder(
-            &(*(writeBackLoop.getBody()->getOperations().begin())));
+        SmallVector<AffineForOp> writeBackLoops;
+        writeBackLoops.push_back(
+            builder.create<AffineForOp>(loc_back, 0, ubs[0]));
+        forOp = writeBackLoops[0];
+        for (unsigned int i = axis + 2, e = nonReductionForOps.size(); i < e;
+             ++i) {
+          OpBuilder back_builder(
+              &(*(forOp.getBody()->getOperations().begin())));
+          forOp = back_builder.create<AffineForOp>(
+              forOp.getBody()->getOperations().begin()->getLoc(), 0,
+              ubs[i - axis - 1]);
+          writeBackLoops.push_back(forOp);
+        }
+
+        OpBuilder back_builder(&(*(writeBackLoops[writeBackLoops.size() - 1]
+                                       .getBody()
+                                       ->getOperations()
+                                       .begin())));
         memIndices.clear();
-        memIndices.push_back(writeBackLoop.getInductionVar());
+        for (auto forOp : writeBackLoops) {
+          memIndices.push_back(forOp.getInductionVar());
+        }
         auto load_from_buf = back_builder.create<AffineLoadOp>(
-            writeBackLoop.getLoc(), buf, memIndices);
+            writeBackLoops[writeBackLoops.size() - 1].getLoc(), buf,
+            memIndices);
 
         memIndices.clear();
         for (int i = 0; i < axis + 1; ++i) {
           memIndices.push_back(nonReductionForOps[i].getInductionVar());
         }
-        memIndices.push_back(writeBackLoop.getInductionVar());
-        back_builder.create<AffineStoreOp>(writeBackLoop.getLoc(),
-                                           load_from_buf, target, memIndices);
+        for (auto forOp : writeBackLoops) {
+          memIndices.push_back(forOp.getInductionVar());
+        }
+        back_builder.create<AffineStoreOp>(
+            writeBackLoops[writeBackLoops.size() - 1].getLoc(), load_from_buf,
+            target, memIndices);
 
         // d) move the original loop between the two loops
-        forOps[axis + 1]->moveBefore(writeBackLoop);
+        forOps[axis + 1]->moveBefore(writeBackLoops[0]);
         // Add names to loops
         SmallVector<std::string, 6> newNameArr;
         newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_init");
         newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_back");
-        SmallVector<AffineForOp, 6> newLoops{initLoop, writeBackLoop};
+        SmallVector<AffineForOp, 6> newLoops{initLoops[0], writeBackLoops[0]};
         addNamesToLoops(newLoops, newNameArr);
         // automatic pipelining
-        SmallVector<AffineForOp, 6> twoLoops{initLoop, writeBackLoop};
+        SmallVector<AffineForOp, 6> twoLoops{
+            initLoops[initLoops.size() - 1],
+            writeBackLoops[writeBackLoops.size() - 1]};
         SmallVector<int, 6> II{1, 1};
         addIntAttrsToLoops(twoLoops, II, "pipeline_ii");
       }

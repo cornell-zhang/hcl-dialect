@@ -876,10 +876,14 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
           strides.push_back(cst.getValue());
         } else {
           f.emitError("Cannot support non-constant stride");
+          return signalPassFailure();
         }
       }
       if (!canReuse) {
-        f.emitError("Only support stride 1 reuse pattern now");
+        f.emitError("Cannot find reuse pattern on axis ")
+            << std::to_string(axis)
+            << ". Only support stride 1 reuse pattern now";
+        return signalPassFailure();
       }
 
       // 4) create buffer
@@ -889,9 +893,11 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
       mlir::Type elementType = out_builder.getF32Type();
       auto buf = out_builder.create<memref::AllocOp>(
           rootForOp.getLoc(), MemRefType::get({distance + 1}, elementType));
+
+      // 5) link the result SSA with the buffer
       reuseAtOp.getResult().replaceAllUsesWith(buf);
 
-      // 5) Update loop bound & store index
+      // 6) Update loop bound & store index
       //    since some load/store will be created later, this step is done in
       //    advance
       SmallVector<AffineExpr> memAffineIndices;
@@ -921,7 +927,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         opToRemove.push_back(op);
       });
 
-      // 6) rewrite original memref
+      // 7) rewrite original memref
       innerMostForOp.walk([&](AffineLoadOp op) {
         OpBuilder rewriter(op);
         memAffineIndices.clear();
@@ -936,7 +942,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         opToRemove.push_back(op);
       });
 
-      // 7) create if structure
+      // 8) create if structure
       OpBuilder builder(
           &(*(innerMostForOp.getBody()->getOperations().begin())));
       auto loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
@@ -961,7 +967,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
                         std::next(innerMostBody.begin()),
                         std::prev(innerMostBody.end()));
 
-      // 8) shift buffer & load from memory to buffer
+      // 9) shift buffer & load from memory to buffer
       loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
       for (std::size_t i = 0; i < numLoad; ++i) {
         // %tmp affine.load %buf[1]
@@ -993,7 +999,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         store->moveBefore(ifOp);
       }
 
-      // 9) Remove all the useless operations
+      // 10) Remove all the useless operations
       for (Operation *op : opToRemove) {
         op->erase();
       }

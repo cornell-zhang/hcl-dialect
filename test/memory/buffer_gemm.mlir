@@ -19,7 +19,7 @@ module {
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0)
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0) -> memref<1024xf32>
         return %C : memref<1024x1024xf32>
     }
     func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
@@ -40,7 +40,7 @@ module {
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 1)
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 1) -> memref<1xf32>
         return %C : memref<1024x1024xf32>
     }
     // storing at reduction axis is prohibited
@@ -62,7 +62,7 @@ module {
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 2)
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 2) -> memref<1xf32>
         return %C : memref<1024x1024xf32>
     }
 }

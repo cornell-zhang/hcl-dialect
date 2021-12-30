@@ -23,7 +23,7 @@ module {
       } { loop_name = "j" }
     } { loop_name = "i", stage_name = "s" }
     hcl.reorder(%s, %lry, %lrx, %lj)
-    hcl.buffer_at(%s, %Output: memref<30x30xf32>, 0)
+    %buf = hcl.buffer_at(%s, %Output: memref<30x30xf32>, 0) -> memref<30xf32>
     return %Output : memref<30x30xf32>
   }
   func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
@@ -54,7 +54,7 @@ module {
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %lj)
-    hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 1)
+    %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 1) -> memref<30xf32>
     return %Output : memref<6x30x30xf32>
   }
   func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
@@ -84,7 +84,7 @@ module {
         } { loop_name = "j" }
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
-    hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 2)
+    %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 2) -> memref<1xf32>
     return %Output : memref<6x30x30xf32>
   }
   func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
@@ -114,7 +114,7 @@ module {
         } { loop_name = "j" }
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
-    hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0)
+    %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0) -> memref<30x30xf32>
     return %Output : memref<6x30x30xf32>
   }
   func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
@@ -145,7 +145,7 @@ module {
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %li, %lj)
-    hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0)
+    %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0) -> memref<30x30xf32>
     return %Output : memref<6x30x30xf32>
   }
 }

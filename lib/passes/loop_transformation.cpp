@@ -1092,6 +1092,9 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
         memIndices.push_back(idx);
         builder.create<AffineStoreOp>(loc_front, zero, buf, memIndices);
 
+        // link the result SSA with the buffer
+        bufferAtOp.getResult().replaceAllUsesWith(buf);
+
         // b) rewrite the original buffer
         // TODO: possible bug: replace uses before an untraversed op
         SmallVector<Operation *, 10> opToRemove;
@@ -1101,7 +1104,6 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
             if (load.getOperand(0) != target) {
               continue;
             }
-            // TODO: support more dimensions
             OpBuilder mid_builder(&op);
             memIndices.clear();
             memIndices.push_back(idx);
@@ -1113,7 +1115,6 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
             if (store.getOperand(1) != target) {
               continue;
             }
-            // TODO: support more dimensions
             OpBuilder mid_builder(&op);
             memIndices.clear();
             memIndices.push_back(idx);

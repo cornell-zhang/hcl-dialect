@@ -218,9 +218,9 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     }];
 
     let arguments = (ins StageHandle:$stage, AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);
-    let results = (outs );
+    let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
-        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict
+        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
     }];
 }
 

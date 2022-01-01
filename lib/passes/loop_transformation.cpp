@@ -771,7 +771,6 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
                                          hcl::PartitionOp &partitionOp) {
   auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
-  // TODO: Partition based on different dimensions
   unsigned int target_dim = partitionOp.dim();
   auto optional_factor = partitionOp.factor();
   int factor = 0;
@@ -785,71 +784,73 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
     }
   }
 
+  Value array;
   if (!memref.getDefiningOp()) { // in func args
     for (auto arg : f.getArguments()) {
       if (memref == arg) { // found the corresponding array
-        auto array = arg;
-        auto builder = Builder(array.getContext());
-        auto arrayType = array.getType().dyn_cast<MemRefType>();
-        // Walk through each dimension of the current memory
-        SmallVector<AffineExpr, 4> partitionIndices;
-        SmallVector<AffineExpr, 4> addressIndices;
-
-        // first N: partition index
-        // last N : physical index
-        for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
-          if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
-            if (kind == hcl::PartitionKindEnum::CyclicPartition) {
-              // original index:  0, 1, 2, 3
-              // bank (factor 2): 0, 1, 0, 1
-              partitionIndices.push_back(builder.getAffineDimExpr(dim) %
-                                         factor);
-              addressIndices.push_back(
-                  builder.getAffineDimExpr(dim).floorDiv(factor));
-            } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
-              // original index:  0, 1, 2, 3
-              // bank (factor 2): 0, 0, 1, 1
-              partitionIndices.push_back(
-                  builder.getAffineDimExpr(dim).floorDiv(factor));
-              addressIndices.push_back(builder.getAffineDimExpr(dim) % factor);
-            } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
-              // original index:  0, 1, 2, 3
-              // bank (factor 2): 0, 1, 2, 3
-              partitionIndices.push_back(builder.getAffineDimExpr(dim));
-              addressIndices.push_back(builder.getAffineConstantExpr(0));
-            } else {
-              f.emitError("No this partition kind");
-              return signalPassFailure();
-            }
-          } else {
-            partitionIndices.push_back(builder.getAffineConstantExpr(0));
-            addressIndices.push_back(builder.getAffineDimExpr(dim));
-          }
-        }
-
-        // Construct new layout map
-        partitionIndices.append(addressIndices.begin(), addressIndices.end());
-        auto layoutMap = AffineMap::get(arrayType.getRank(), 0,
-                                        partitionIndices, builder.getContext());
-
-        // Construct new array type
-        auto newType =
-            MemRefType::get(arrayType.getShape(), arrayType.getElementType(),
-                            layoutMap, arrayType.getMemorySpace());
-
-        // Set new type
-        array.setType(newType);
-
-        // update function signature
-        auto resultTypes = f.front().getTerminator()->getOperandTypes();
-        auto inputTypes = f.front().getArgumentTypes();
-        f.setType(builder.getFunctionType(inputTypes, resultTypes));
+        array = arg;
       }
     }
+    f.emitError("Cannot find the requested array to be partitioned");
+    return signalPassFailure();
   } else {
-    // TODO: not in func args
-    f.emitError("Has not implemented yet");
+    array = memref;
   }
+
+  auto builder = Builder(array.getContext());
+  auto arrayType = array.getType().dyn_cast<MemRefType>();
+  // Walk through each dimension of the current memory
+  SmallVector<AffineExpr, 4> partitionIndices;
+  SmallVector<AffineExpr, 4> addressIndices;
+
+  // first N: partition index
+  // last N : physical index
+  for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
+    if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
+      if (kind == hcl::PartitionKindEnum::CyclicPartition) {
+        // original index:  0, 1, 2, 3
+        // bank (factor 2): 0, 1, 0, 1
+        partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+        addressIndices.push_back(
+            builder.getAffineDimExpr(dim).floorDiv(factor));
+      } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
+        // original index:  0, 1, 2, 3
+        // bank (factor 2): 0, 0, 1, 1
+        partitionIndices.push_back(
+            builder.getAffineDimExpr(dim).floorDiv(factor));
+        addressIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+      } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
+        // original index:  0, 1, 2, 3
+        // bank (factor 2): 0, 1, 2, 3
+        partitionIndices.push_back(builder.getAffineDimExpr(dim));
+        addressIndices.push_back(builder.getAffineConstantExpr(0));
+      } else {
+        f.emitError("No this partition kind");
+        return signalPassFailure();
+      }
+    } else {
+      partitionIndices.push_back(builder.getAffineConstantExpr(0));
+      addressIndices.push_back(builder.getAffineDimExpr(dim));
+    }
+  }
+
+  // Construct new layout map
+  partitionIndices.append(addressIndices.begin(), addressIndices.end());
+  auto layoutMap = AffineMap::get(arrayType.getRank(), 0, partitionIndices,
+                                  builder.getContext());
+
+  // Construct new array type
+  auto newType =
+      MemRefType::get(arrayType.getShape(), arrayType.getElementType(),
+                      layoutMap, arrayType.getMemorySpace());
+
+  // Set new type
+  array.setType(newType);
+
+  // update function signature
+  auto resultTypes = f.front().getTerminator()->getOperandTypes();
+  auto inputTypes = f.front().getArgumentTypes();
+  f.setType(builder.getFunctionType(inputTypes, resultTypes));
 }
 
 void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
@@ -913,7 +914,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
             f.emitError("Cannot support non-constant stride");
             return signalPassFailure();
           }
-          for (unsigned int i = axis+1; i < rank; ++i) {
+          for (unsigned int i = axis + 1; i < rank; ++i) {
             singleLoadAffineExpr.push_back(loadOp.getAffineMap().getResult(i));
           }
           allLoadAffineExpr.push_back(singleLoadAffineExpr);
@@ -922,7 +923,9 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
 
       // 4) create buffer
       unsigned int numLoad = loadMap.size();
-      int distance = (*(std::prev(allLoadAffineExpr.end())))[0].dyn_cast<AffineConstantExpr>().getValue();
+      int distance = (*(std::prev(allLoadAffineExpr.end())))[0]
+                         .dyn_cast<AffineConstantExpr>()
+                         .getValue();
       OpBuilder out_builder(rootForOp); // outside the stage
       mlir::Type elementType = out_builder.getF32Type();
       SmallVector<int64_t> shape;
@@ -1034,8 +1037,8 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
           load = builder.create<AffineLoadOp>(loc, target, memIndices);
         }
         load->moveBefore(ifOp);
-        auto affineMap = AffineMap::get(buf_rank /*rank*/, 0, allLoadAffineExpr[i],
-                                        builder.getContext());
+        auto affineMap = AffineMap::get(
+            buf_rank /*rank*/, 0, allLoadAffineExpr[i], builder.getContext());
         // ValueRange operands{innerMostForOp.getInductionVar()};
         SmallVector<Value> operands;
         unsigned int size = forOps.size();

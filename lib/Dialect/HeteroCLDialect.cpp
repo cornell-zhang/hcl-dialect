@@ -12,28 +12,28 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 
-#include "hcl/HeteroCLDialect.h"
-#include "hcl/HeteroCLTypes.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Dialect/HeteroCLTypes.h"
 
-#include "hcl/HeteroCLAttrs.h"
-#include "hcl/HeteroCLOps.h"
+#include "hcl/Dialect/HeteroCLAttrs.h"
+#include "hcl/Dialect/HeteroCLOps.h"
 
 using namespace mlir;
 using namespace mlir::hcl;
 
-#include "hcl/HeteroCLDialect.cpp.inc"
+#include "hcl/Dialect/HeteroCLDialect.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Tablegen Type Definitions
 //===----------------------------------------------------------------------===//
 
 #define GET_TYPEDEF_CLASSES
-#include "hcl/HeteroCLTypes.cpp.inc"
+#include "hcl/Dialect/HeteroCLTypes.cpp.inc"
 
 #define GET_ATTRDEF_CLASSES
-#include "hcl/HeteroCLAttrs.cpp.inc"
+#include "hcl/Dialect/HeteroCLAttrs.cpp.inc"
 
-#include "hcl/HeteroCLEnums.cpp.inc"
+#include "hcl/Dialect/HeteroCLEnums.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // Dialect initialize method.
@@ -41,15 +41,15 @@ using namespace mlir::hcl;
 void HeteroCLDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "hcl/HeteroCLOps.cpp.inc"
+#include "hcl/Dialect/HeteroCLOps.cpp.inc"
       >();
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "hcl/HeteroCLTypes.cpp.inc"
+#include "hcl/Dialect/HeteroCLTypes.cpp.inc"
       >();
   addAttributes< // test/lib/Dialect/Test/TestAttributes.cpp
 #define GET_ATTRDEF_LIST
-#include "hcl/HeteroCLAttrs.cpp.inc"
+#include "hcl/Dialect/HeteroCLAttrs.cpp.inc"
       >();
 }
 

@@ -6,11 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/HeteroCLOps.h"
+#include "hcl/Dialect/HeteroCLOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/TypeUtilities.h"
 
 #define GET_OP_CLASSES
-#include "hcl/HeteroCLOps.cpp.inc"
+#include "hcl/Dialect/HeteroCLOps.cpp.inc"

@@ -19,10 +19,10 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-#include "hcl/HeteroCLTypes.h"
-#include "hcl/HeteroCLAttrs.h"
+#include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Dialect/HeteroCLAttrs.h"
 
 #define GET_OP_CLASSES
-#include "hcl/HeteroCLOps.h.inc"
+#include "hcl/Dialect/HeteroCLOps.h.inc"
 
 #endif // HETEROCL_OPS_H

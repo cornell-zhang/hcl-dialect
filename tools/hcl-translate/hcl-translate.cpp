@@ -14,14 +14,14 @@
 #include "mlir/InitAllTranslations.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Translation.h"
+// #include "hcl/Translation/EmitHLSCpp.h"
 
-#include "hcl/HeteroCLDialect.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllTranslations();
-
-  // TODO: Register hcl translations here.
+  // mlir::hcl::registerEmitHLSCppTranslation();
 
   return failed(
-      mlir::mlirTranslateMain(argc, argv, "MLIR Translation Testing Tool"));
+      mlir::mlirTranslateMain(argc, argv, "HeteroCL MLIR Dialect Translation Tool"));
 }

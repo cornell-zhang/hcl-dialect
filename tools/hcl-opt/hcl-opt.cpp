@@ -20,8 +20,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 
-#include "hcl/HeteroCLDialect.h"
-#include "hcl/HeteroCLPasses.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Transforms/HeteroCLPasses.h"
 
 #include <iostream>
 

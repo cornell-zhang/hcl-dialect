@@ -7,12 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HCLTYPES_H
-#define HCLTYPES_H
+#ifndef HCLATTRS_H
+#define HCLATTRS_H
 
-#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/BuiltinAttributes.h"
 
-#define GET_TYPEDEF_CLASSES
-#include "hcl/HeteroCLTypes.h.inc"
+#include "hcl/Dialect/HeteroCLEnums.h.inc"
 
-#endif // HCLTYPES_H
+#define GET_ATTRDEF_CLASSES
+#include "hcl/Dialect/HeteroCLAttrs.h.inc"
+
+#endif // HCLATTRS_H

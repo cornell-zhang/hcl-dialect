@@ -11,6 +11,6 @@
 
 #include "mlir/IR/Dialect.h"
 
-#include "hcl/HeteroCLDialect.h.inc"
+#include "hcl/Dialect/HeteroCLDialect.h.inc"
 
 #endif // HETEROCL_DIALECT_H

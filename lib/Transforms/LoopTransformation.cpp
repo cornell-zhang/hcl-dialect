@@ -1,6 +1,6 @@
-#include "hcl/HeteroCLDialect.h"
-#include "hcl/HeteroCLOps.h"
-#include "hcl/HeteroCLPasses.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Dialect/HeteroCLOps.h"
+#include "hcl/Transforms/HeteroCLPasses.h"
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -1410,12 +1410,12 @@ void HCLLoopTransformation::runOnFunction() {
 
 namespace mlir {
 namespace hcl {
-// Register Loop Tiling Pass
+// Register Loop Transformation Pass
 void registerHCLLoopTransformationPass() {
   PassRegistration<HCLLoopTransformation>();
 }
 
-// Create A Loop Tiling Pass
+// Create A Loop Transformation Pass
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }

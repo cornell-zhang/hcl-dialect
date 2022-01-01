@@ -4,7 +4,7 @@
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 
-#include "hcl/HeteroCLOps.h"
+#include "hcl/Dialect/HeteroCLOps.h"
 
 namespace mlir {
 namespace hcl {

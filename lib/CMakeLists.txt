@@ -1,2 +1,2 @@
-add_subdirectory(hcl)
-add_subdirectory(passes)
+add_subdirectory(Dialect)
+add_subdirectory(Transforms)

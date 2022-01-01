@@ -786,19 +786,26 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
 
   Value array;
   if (!memref.getDefiningOp()) { // in func args
+    bool isFound = false;
     for (auto arg : f.getArguments()) {
       if (memref == arg) { // found the corresponding array
         array = arg;
+        isFound = true;
+        break;
       }
     }
-    f.emitError("Cannot find the requested array to be partitioned");
-    return signalPassFailure();
+    if (!isFound) {
+      f.emitError("Cannot find the requested array to be partitioned");
+      return signalPassFailure();
+    }
   } else {
     array = memref;
   }
 
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
+  auto layouts = arrayType.getAffineMaps();
+
   // Walk through each dimension of the current memory
   SmallVector<AffineExpr, 4> partitionIndices;
   SmallVector<AffineExpr, 4> addressIndices;
@@ -807,6 +814,11 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   // last N : physical index
   for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
+      if (layouts.size() != 0) {
+        // TODO: not sure why warning does not work (no output)
+        // partitionOp.emitWarning("Partition on the same axis. The original layout map will be rewritten!");
+        partitionOp.emitError("Partition on the same axis. The original layout map will be rewritten!");
+      }
       if (kind == hcl::PartitionKindEnum::CyclicPartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 0, 1
@@ -829,8 +841,13 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
         return signalPassFailure();
       }
     } else {
-      partitionIndices.push_back(builder.getAffineConstantExpr(0));
-      addressIndices.push_back(builder.getAffineDimExpr(dim));
+      if (layouts.size() == 0) {
+        partitionIndices.push_back(builder.getAffineConstantExpr(0));
+        addressIndices.push_back(builder.getAffineDimExpr(dim));
+      } else {
+        partitionIndices.push_back(layouts[0].getResult(dim));
+        addressIndices.push_back(layouts[0].getResult(dim));
+      }
     }
   }
 

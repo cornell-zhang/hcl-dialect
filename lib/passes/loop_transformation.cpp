@@ -192,7 +192,7 @@ void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
       });
       // handle exception
       if (!isFound) {
-        f.emitError("Cannot find the requested loop in Stage ")
+        splitOp.emitError("Cannot find the requested loop in Stage ")
             << stage_name.str();
         return signalPassFailure();
       }
@@ -265,7 +265,7 @@ void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
       });
       // handle exception
       if (!isFound) {
-        f.emitError("Cannot find contiguous nested loops starting from Loop ")
+        tileOp.emitError("Cannot find contiguous nested loops starting from Loop ")
             << nameArr[0].str();
         return signalPassFailure();
       }
@@ -310,7 +310,7 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
           .stage_name();
   const auto loopsToBeReordered = reorderOp.loops(); // operand_range
   if (loopsToBeReordered.size() < 2) {
-    f.emitError("Should at least input 2 loops to be reordered");
+    reorderOp.emitError("Should at least input 2 loops to be reordered");
     return signalPassFailure();
   }
 
@@ -393,7 +393,7 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
           nest[0]->removeAttr("stage_name");
         permuteLoops(nest, permMap);
       } else {
-        f.emitError("Cannot permute the loops");
+        reorderOp.emitError("Cannot permute the loops");
         return signalPassFailure();
       }
 
@@ -633,7 +633,7 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   const auto loopsToBeFused = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToBeFused.size();
   if (sizeOfFusedLoops < 2) {
-    f.emitError("Should at least input 2 loops to be fused");
+    fuseOp.emitError("Should at least input 2 loops to be fused");
     return signalPassFailure();
   }
   const auto stage_name =
@@ -661,7 +661,7 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
       });
       // handle exception
       if (!isFound) {
-        f.emitError("Cannot find contiguous nested loops starting from Loop ")
+        fuseOp.emitError("Cannot find contiguous nested loops starting from Loop ")
             << nameArr[0].str();
         return signalPassFailure();
       }
@@ -728,7 +728,7 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
     }
   }
   if (!isFound.first || !isFound.second) {
-    f.emitError("Cannot find corresponding producer and consumer");
+    computeAtOp.emitError("Cannot find corresponding producer and consumer");
     return signalPassFailure();
   }
   int cnt_depth = 0;
@@ -762,7 +762,7 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
   } else if (result.value == FusionResult::FailIncorrectSlice) {
     err_msg = "slice is computed, but it is incorrect";
   }
-  f.emitError("Cannot merge these two loops because ") << err_msg;
+  computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
   // return signalPassFailure();
 }
 
@@ -779,7 +779,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   } else {
     factor = -1;
     if (kind != hcl::PartitionKindEnum::CompletePartition) {
-      f.emitError("Should pass in `factor' for array partition");
+      partitionOp.emitError("Should pass in `factor' for array partition");
       return signalPassFailure();
     }
   }
@@ -795,7 +795,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
       }
     }
     if (!isFound) {
-      f.emitError("Cannot find the requested array to be partitioned");
+      partitionOp.emitError("Cannot find the requested array to be partitioned");
       return signalPassFailure();
     }
   } else {
@@ -837,7 +837,7 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
         partitionIndices.push_back(builder.getAffineDimExpr(dim));
         addressIndices.push_back(builder.getAffineConstantExpr(0));
       } else {
-        f.emitError("No this partition kind");
+        partitionOp.emitError("No this partition kind");
         return signalPassFailure();
       }
     } else {
@@ -887,7 +887,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
       SmallVector<AffineMap, 6> loadMap;
       std::set<AffineExpr, ExprCompare> requestedVars;
       // TODO: eliminate order in inputs
-      f.emitWarning("Need to guarantee the loads have orders");
+      reuseAtOp.emitWarning("Need to guarantee the loads have orders");
       rootForOp.walk([&](AffineLoadOp loadOp) {
         if (loadOp.getOperand(0) == target) {
           auto map = loadOp.getAffineMap();
@@ -914,7 +914,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         }
       }
       if (!canReuse) {
-        f.emitError("Cannot find reuse pattern on axis ")
+        reuseAtOp.emitError("Cannot find reuse pattern on axis ")
             << std::to_string(axis)
             << ". Only support stride 1 reuse pattern now";
         return signalPassFailure();
@@ -928,7 +928,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
           if (diff.isa<AffineConstantExpr>()) {
             singleLoadAffineExpr.push_back(diff);
           } else {
-            f.emitError("Cannot support non-constant stride");
+            reuseAtOp.emitError("Cannot support non-constant stride");
             return signalPassFailure();
           }
           for (unsigned int i = axis + 1; i < rank; ++i) {
@@ -1096,7 +1096,7 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
         break;
       bool isFound = findContiguousNestedLoops(rootForOp, forOps, nameArr);
       if (!isFound) {
-        f.emitError("Cannot find nested loops for buffer_at");
+        bufferAtOp.emitError("Cannot find nested loops for buffer_at");
         return;
       }
       SmallVector<AffineForOp, 6> nonReductionForOps;
@@ -1115,13 +1115,13 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       if (firstReductionIdx == -1)
         firstReductionIdx = forOps.size() - 1;
       if (axis >= 0 && ((std::size_t)(axis + 1) >= forOps.size())) {
-        f.emitError("Cannot buffer at the inner-most loop: axis=")
+        bufferAtOp.emitError("Cannot buffer at the inner-most loop: axis=")
             << std::to_string(axis)
             << " inner-most axis=" << std::to_string(forOps.size() - 1);
         return;
       }
       if (axis >= 0 && axis >= firstReductionIdx) {
-        f.emitError("Cannot buffer inside the reduction loops: axis=")
+        bufferAtOp.emitError("Cannot buffer inside the reduction loops: axis=")
             << std::to_string(axis)
             << ", first reduction axis=" << std::to_string(firstReductionIdx);
         return;

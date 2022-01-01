@@ -43,5 +43,14 @@ make -j
 
 ## Run HeteroCL Dialect
 ```sh
-./bin/hcl-opt --opt ../test/simple/tiling.mlir
+# perform loop transformation passes
+./bin/hcl-opt --opt ../test/compute/cascade.mlir
+
+# generate C++ HLS code
+./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_add.mlir
 ```
+
+
+## References
+* [ScaleHLS](https://github.com/hanchenye/scalehls)
+* [Torch-MLIR](https://github.com/llvm/torch-mlir)

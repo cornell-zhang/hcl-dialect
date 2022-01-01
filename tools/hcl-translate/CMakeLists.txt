@@ -19,6 +19,7 @@ target_link_libraries(hcl-translate
   MLIRSPIRV
   MLIRTranslation
   MLIRSupport
+  MLIRHCLEmitHLSCpp
   )
 
 mlir_check_link_libraries(hcl-translate)

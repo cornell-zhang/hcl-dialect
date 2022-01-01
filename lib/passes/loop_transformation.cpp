@@ -859,6 +859,8 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
   const auto stage_name =
       dyn_cast<hcl::CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
           .stage_name();
+  auto arrayType = target.getType().dyn_cast<MemRefType>();
+  unsigned int rank = arrayType.getRank();
 
   // 2) Traverse all the nested loops and find the requested one
   for (auto rootForOp : f.getOps<AffineForOp>()) {
@@ -887,18 +889,10 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
       //    TODO: support more reuse patterns
       bool canReuse = false;
       auto baseVar = *(requestedVars.begin());
-      SmallVector<int> strides;
       for (auto var : requestedVars) {
         if (std::find(requestedVars.begin(), requestedVars.end(), var + 1) !=
             requestedVars.end()) {
           canReuse = true;
-        }
-        auto diff = var - baseVar;
-        if (auto cst = diff.dyn_cast<AffineConstantExpr>()) {
-          strides.push_back(cst.getValue());
-        } else {
-          f.emitError("Cannot support non-constant stride");
-          return signalPassFailure();
         }
       }
       if (!canReuse) {
@@ -907,16 +901,32 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
             << ". Only support stride 1 reuse pattern now";
         return signalPassFailure();
       }
+      SmallVector<SmallVector<AffineExpr>> allLoadAffineExpr;
+      rootForOp.walk([&](AffineLoadOp loadOp) {
+        if (loadOp.getOperand(0) == target) {
+          auto var = loadOp.getAffineMap().getResult(axis);
+          auto diff = var - baseVar;
+          SmallVector<AffineExpr> singleLoadAffineExpr;
+          if (diff.isa<AffineConstantExpr>()) {
+            singleLoadAffineExpr.push_back(diff);
+          } else {
+            f.emitError("Cannot support non-constant stride");
+            return signalPassFailure();
+          }
+          for (unsigned int i = axis+1; i < rank; ++i) {
+            singleLoadAffineExpr.push_back(loadOp.getAffineMap().getResult(i));
+          }
+          allLoadAffineExpr.push_back(singleLoadAffineExpr);
+        }
+      });
 
       // 4) create buffer
       unsigned int numLoad = loadMap.size();
-      int distance = *(std::prev(strides.end()));
+      int distance = (*(std::prev(allLoadAffineExpr.end())))[0].dyn_cast<AffineConstantExpr>().getValue();
       OpBuilder out_builder(rootForOp); // outside the stage
       mlir::Type elementType = out_builder.getF32Type();
       SmallVector<int64_t> shape;
       shape.push_back(distance + 1);
-      auto arrayType = target.getType().dyn_cast<MemRefType>();
-      unsigned int rank = arrayType.getRank();
       for (unsigned int i = axis + 1; i < rank; ++i)
         shape.push_back(arrayType.getShape()[i]);
       auto buf = out_builder.create<memref::AllocOp>(
@@ -1007,34 +1017,24 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
       for (std::size_t i = 0; i < numLoad; ++i) {
         // %tmp affine.load %buf[1]
         // affine.store %tmp, %buf[0]
-        memAffineIndices.clear();
         AffineLoadOp load;
         if (i < numLoad - 1) { // load from buffer
-          memAffineIndices.push_back(
-              builder.getAffineConstantExpr(strides[i + 1]));
-          for (unsigned int j = axis + 1; j < rank; ++j)
-            memAffineIndices.push_back(builder.getAffineDimExpr(j - axis));
           auto affineMap = AffineMap::get(
-              buf_rank /*rank*/, 0, memAffineIndices, builder.getContext());
+              buf_rank /*rank*/, 0, allLoadAffineExpr[i], builder.getContext());
           // ValueRange operands{innerMostForOp.getInductionVar()};
           SmallVector<Value> operands;
           unsigned int size = forOps.size();
           for (unsigned int j = size - buf_rank; j < size; ++j)
             operands.push_back(forOps[j].getInductionVar());
           load = builder.create<AffineLoadOp>(loc, buf, affineMap, operands);
-          load->moveBefore(ifOp);
         } else { // load from memory
           SmallVector<Value> memIndices;
           for (auto forOp : forOps)
             memIndices.push_back(forOp.getInductionVar());
           load = builder.create<AffineLoadOp>(loc, target, memIndices);
-          load->moveBefore(ifOp);
         }
-        memAffineIndices.clear();
-        memAffineIndices.push_back(builder.getAffineConstantExpr(strides[i]));
-        for (unsigned int j = axis + 1; j < rank; ++j)
-          memAffineIndices.push_back(builder.getAffineDimExpr(j - axis));
-        auto affineMap = AffineMap::get(buf_rank /*rank*/, 0, memAffineIndices,
+        load->moveBefore(ifOp);
+        auto affineMap = AffineMap::get(buf_rank /*rank*/, 0, allLoadAffineExpr[i],
                                         builder.getContext());
         // ValueRange operands{innerMostForOp.getInductionVar()};
         SmallVector<Value> operands;

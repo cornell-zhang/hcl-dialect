@@ -1,6 +1,6 @@
 # HeteroCL Dialect Prototype
 
-This is an example of an out-of-tree [MLIR](https://mlir.llvm.org/) dialect along with an  `opt`-like tool to operate on that dialect.
+This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](https://github.com/cornell-zhang/heterocl).
 
 ## Building
 
@@ -31,7 +31,7 @@ make -j
 ### Build HeteroCL Dialect
 This setup assumes that you have built LLVM and MLIR in `$BUILD_DIR` and installed them to `$PREFIX`. To build and launch the tests, run
 ```sh
-git clone https://github.com/zzzDavid/hcl-dialect-prototype.git
+git clone https://github.com/cornell-zhang/hcl-dialect-prototype.git
 cd hcl-dialect-prototype
 mkdir build && cd build
 cmake -G "Unix Makefiles" .. \
@@ -50,7 +50,7 @@ make -j
 ./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_conv.mlir
 ```
 
-Otherwise, you can use our provided script to generate C++ HLS code from MLIR.
+Or you can use our provided script to directly generate C++ HLS code from MLIR.
 
 ```sh
 cd ../examples

@@ -20,6 +20,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 
+#include "mlir/Dialect/Affine/Passes.h"
+
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/HeteroCLPasses.h"
 
@@ -61,8 +63,13 @@ static llvm::cl::opt<bool>
                              llvm::cl::init(false));
 
 static llvm::cl::opt<bool> enableOpt("opt",
-                                     llvm::cl::desc("Enable optimizations"),
+                                     llvm::cl::desc("Enable HCL schedules"),
                                      llvm::cl::init(false));
+
+static llvm::cl::opt<bool>
+    enableNormalize("normalize",
+                    llvm::cl::desc("Enable other common optimizations"),
+                    llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Set up the input and output file
@@ -107,14 +114,27 @@ int main(int argc, char **argv) {
 
   // Initialize a pass manager
   // https://mlir.llvm.org/docs/PassManagement/
+  // Operation agnostic passes
   mlir::PassManager pm(&context);
+  // Operation specific passes
+  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt) {
-    // Add operation agnostic passes here
-    // pm.addPass(mlir::createCanonicalizerPass());
-
-    // Add operation specific passes here
-    mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
     optPM.addPass(mlir::hcl::createHCLLoopTransformationPass());
+  }
+
+  if (enableNormalize) {
+    // To make all loop steps to 1.
+    optPM.addPass(mlir::createAffineLoopNormalizePass());
+
+    // To factor out the redundant AffineApply/AffineIf operations.
+    // optPM.addPass(mlir::createCanonicalizerPass());
+    // optPM.addPass(mlir::createSimplifyAffineStructuresPass());
+
+    // To simplify the memory accessing.
+    pm.addPass(mlir::createNormalizeMemRefsPass());
+
+    // Generic common sub expression elimination.
+    // pm.addPass(mlir::createCSEPass());
   }
 
   // Run the pass pipeline

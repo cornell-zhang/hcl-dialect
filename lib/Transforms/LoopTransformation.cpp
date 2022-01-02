@@ -1040,7 +1040,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         AffineLoadOp load;
         if (i < numLoad - 1) { // load from buffer
           auto affineMap = AffineMap::get(
-              buf_rank /*rank*/, 0, allLoadAffineExpr[i], builder.getContext());
+              buf_rank /*rank*/, 0, allLoadAffineExpr[i + 1], builder.getContext());
           // ValueRange operands{innerMostForOp.getInductionVar()};
           SmallVector<Value> operands;
           unsigned int size = forOps.size();

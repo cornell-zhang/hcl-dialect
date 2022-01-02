@@ -7,9 +7,9 @@
 #ifndef HCL_ANALYSIS_UTILS_H
 #define HCL_ANALYSIS_UTILS_H
 
+#include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "hcl/Dialect/HeteroCLDialect.h"
 
 namespace mlir {
 namespace hcl {

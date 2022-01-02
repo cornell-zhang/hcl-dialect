@@ -9,10 +9,10 @@
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
@@ -43,26 +43,16 @@ public:
             memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
             SplatOp, memref::DimOp, RankOp,
             // Unary expressions.
-            // math::AbsOp, math::CeilOp, math::CosOp, math::SinOp, math::TanhOp,
-            // math::SqrtOp, math::RsqrtOp, math::ExpOp, math::Exp2Op, math::LogOp,
-            // math::Log2Op, math::Log10Op, NegFOp,
+            math::CosOp, math::SinOp, math::TanhOp, math::SqrtOp, math::RsqrtOp,
+            math::ExpOp, math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
+            NegFOp,
             // Float binary expressions.
-            CmpFOp, AddFOp, SubFOp, MulFOp,
-            DivFOp, RemFOp,
-            // // Integer binary expressions.
-            // CmpIOp, AddIOp, SubIOp, MulIOp,
-            // DivSIOp, RemSIOp, DivUIOp, RemUIOp,
-            // XOrIOp, AndIOp, OrIOp, ShLIOp,
-            // ShRSIOp, ShRUIOp,
-            // // Special operations.
-            ReturnOp
-            // CallOp, ReturnOp, SelectOp, ConstantOp, ConstantOp,
-            // TruncIOp, TruncFOp, ExtUIOp, ExtSIOp,
-            // IndexCastOp, UIToFPOp, SIToFPOp,
-            // FPToSIOp, FPToUIOp,
-            // // HLSCpp operations.
-            // AssignOp, CastOp, MulOp, AddOp
-            >([&](auto opNode) -> ResultType {
+            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
+            // Integer binary expressions.
+            CmpIOp, AddIOp, SubIOp, MulIOp,
+            // Special operations.
+            CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
+            SIToFPOp, FPToSIOp, FPToUIOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -133,19 +123,17 @@ public:
   HANDLE(RankOp);
 
   // Unary expressions.
-  // HANDLE(math::AbsOp);
-  // HANDLE(math::CeilOp);
-  // HANDLE(math::CosOp);
-  // HANDLE(math::SinOp);
-  // HANDLE(math::TanhOp);
-  // HANDLE(math::SqrtOp);
-  // HANDLE(math::RsqrtOp);
-  // HANDLE(math::ExpOp);
-  // HANDLE(math::Exp2Op);
-  // HANDLE(math::LogOp);
-  // HANDLE(math::Log2Op);
-  // HANDLE(math::Log10Op);
-  // HANDLE(NegFOp);
+  HANDLE(math::CosOp);
+  HANDLE(math::SinOp);
+  HANDLE(math::TanhOp);
+  HANDLE(math::SqrtOp);
+  HANDLE(math::RsqrtOp);
+  HANDLE(math::ExpOp);
+  HANDLE(math::Exp2Op);
+  HANDLE(math::LogOp);
+  HANDLE(math::Log2Op);
+  HANDLE(math::Log10Op);
+  HANDLE(NegFOp);
 
   // Float binary expressions.
   HANDLE(CmpFOp);
@@ -155,44 +143,23 @@ public:
   HANDLE(DivFOp);
   HANDLE(RemFOp);
 
-  // // Integer binary expressions.
-  // HANDLE(CmpIOp);
-  // HANDLE(AddIOp);
-  // HANDLE(SubIOp);
-  // HANDLE(MulIOp);
-  // HANDLE(DivSIOp);
-  // HANDLE(RemSIOp);
-  // HANDLE(DivUIOp);
-  // HANDLE(RemUIOp);
-  // HANDLE(XOrIOp);
-  // HANDLE(AndIOp);
-  // HANDLE(OrIOp);
-  // HANDLE(ShLIOp);
-  // HANDLE(ShRSIOp);
-  // HANDLE(ShRUIOp);
+  // Integer binary expressions.
+  HANDLE(CmpIOp);
+  HANDLE(AddIOp);
+  HANDLE(SubIOp);
+  HANDLE(MulIOp);
 
   // // Special operations.
-  // HANDLE(CallOp);
+  HANDLE(CallOp);
   HANDLE(ReturnOp);
-  // HANDLE(SelectOp);
-  // HANDLE(ConstantOp);
-  // HANDLE(ConstantOp);
-  // HANDLE(TruncIOp);
-  // HANDLE(TruncFOp);
-  // HANDLE(ExtUIOp);
-  // HANDLE(ExtSIOp);
-  // HANDLE(ExtFOp);
-  // HANDLE(IndexCastOp);
-  // HANDLE(UIToFPOp);
-  // HANDLE(SIToFPOp);
-  // HANDLE(FPToUIOp);
-  // HANDLE(FPToSIOp);
+  HANDLE(SelectOp);
+  HANDLE(ConstantOp);
+  HANDLE(IndexCastOp);
+  HANDLE(UIToFPOp);
+  HANDLE(SIToFPOp);
+  HANDLE(FPToUIOp);
+  HANDLE(FPToSIOp);
 
-  // // HLSCpp operations.
-  // HANDLE(AssignOp);
-  // HANDLE(CastOp);
-  // HANDLE(AddOp);
-  // HANDLE(MulOp);
 #undef HANDLE
 };
 } // namespace hcl

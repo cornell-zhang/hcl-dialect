@@ -19,7 +19,7 @@ using namespace hcl;
 
 /// Parse other attributes.
 SmallVector<int64_t, 8> hcl::getIntArrayAttrValue(Operation *op,
-                                                       StringRef name) {
+                                                  StringRef name) {
   SmallVector<int64_t, 8> array;
   if (auto arrayAttr = op->getAttrOfType<ArrayAttr>(name)) {
     for (auto attr : arrayAttr)
@@ -93,7 +93,7 @@ hcl::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
 /// Returns the number of surrounding loops common to 'loopsA' and 'loopsB',
 /// where each lists loops from outer-most to inner-most in loop nest.
 unsigned hcl::getCommonSurroundingLoops(Operation *A, Operation *B,
-                                             AffineLoopBand *band) {
+                                        AffineLoopBand *band) {
   SmallVector<AffineForOp, 4> loopsA, loopsB;
   getLoopIVs(*A, &loopsA);
   getLoopIVs(*B, &loopsB);
@@ -201,7 +201,7 @@ bool hcl::isFullyPartitioned(MemRefType memrefType) {
 // them in "factors". Meanwhile, the overall partition number is calculated and
 // returned as well.
 int64_t hcl::getPartitionFactors(MemRefType memrefType,
-                                      SmallVector<int64_t, 8> *factors) {
+                                 SmallVector<int64_t, 8> *factors) {
   auto shape = memrefType.getShape();
   auto layoutMap = getLayoutMap(memrefType);
   int64_t accumFactor = 1;
@@ -267,7 +267,7 @@ static void getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band) {
 /// Get the whole loop band given the outermost loop and return it in "band".
 /// Meanwhile, the return value is the innermost loop of this loop band.
 AffineForOp hcl::getLoopBandFromOutermost(AffineForOp forOp,
-                                               AffineLoopBand &band) {
+                                          AffineLoopBand &band) {
   band.clear();
   auto currentLoop = forOp;
   while (true) {
@@ -286,7 +286,7 @@ AffineForOp hcl::getLoopBandFromOutermost(AffineForOp forOp,
 /// bands are also collected. Otherwise, only loop bands that contains no child
 /// loops are collected.
 void hcl::getLoopBands(Block &block, AffineLoopBands &bands,
-                            bool allowHavingChilds) {
+                       bool allowHavingChilds) {
   bands.clear();
   block.walk([&](AffineForOp loop) {
     auto childNum = getChildLoopNum(loop);
@@ -300,7 +300,7 @@ void hcl::getLoopBands(Block &block, AffineLoopBands &bands,
 }
 
 void hcl::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
-                         bool allowArguments) {
+                    bool allowArguments) {
   // Collect argument arrays.
   if (allowArguments)
     for (auto arg : block.getArguments()) {
@@ -339,25 +339,25 @@ Optional<unsigned> hcl::getAverageTripCount(AffineForOp forOp) {
 bool hcl::checkDependence(Operation *A, Operation *B) {
   return true;
   // TODO: Fix the following
-//   AffineLoopBand commonLoops;
-//   unsigned numCommonLoops = getCommonSurroundingLoops(A, B, &commonLoops);
+  //   AffineLoopBand commonLoops;
+  //   unsigned numCommonLoops = getCommonSurroundingLoops(A, B, &commonLoops);
 
-//   // Traverse each loop level to find dependencies.
-//   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
-//     // Skip all parallel loop level.
-//     if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
-//       if (loopAttr.getParallel())
-//         continue;
+  //   // Traverse each loop level to find dependencies.
+  //   for (unsigned depth = numCommonLoops; depth > 0; depth--) {
+  //     // Skip all parallel loop level.
+  //     if (auto loopAttr = getLoopDirective(commonLoops[depth - 1]))
+  //       if (loopAttr.getParallel())
+  //         continue;
 
-//     FlatAffineValueConstraints depConstrs;
-//     DependenceResult result = checkMemrefAccessDependence(
-//         MemRefAccess(A), MemRefAccess(B), depth, &depConstrs,
-//         /*dependenceComponents=*/nullptr);
-//     if (hasDependence(result))
-//       return true;
-//   }
+  //     FlatAffineValueConstraints depConstrs;
+  //     DependenceResult result = checkMemrefAccessDependence(
+  //         MemRefAccess(A), MemRefAccess(B), depth, &depConstrs,
+  //         /*dependenceComponents=*/nullptr);
+  //     if (hasDependence(result))
+  //       return true;
+  //   }
 
-//   return false;
+  //   return false;
 }
 
 //===----------------------------------------------------------------------===//

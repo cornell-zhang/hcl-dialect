@@ -618,6 +618,11 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
 /// Affine statement emitters.
 void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent();
+  if (op->hasAttr("loop_name")) { // loop label
+    auto loop_name =
+        op->getAttr("loop_name").cast<StringAttr>().getValue().str();
+    os << "l_" << loop_name << ": ";
+  }
   os << "for (";
   auto iterVar = op.getInductionVar();
 
@@ -1353,21 +1358,30 @@ void ModuleEmitter::emitBlock(Block &block) {
 
 void ModuleEmitter::emitLoopDirectives(Operation *op) {
   if (auto ii = getLoopDirective(op, "pipeline_ii")) {
+    reduceIndent();
+    indent();
     os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue()
        << "\n";
+    addIndent();
   }
 
   if (auto factor = getLoopDirective(op, "unroll")) {
+    reduceIndent();
+    indent();
     auto val = factor.cast<IntegerAttr>().getValue();
     if (val == 0)
       os << "#pragma HLS unroll"
          << "\n";
     else
       os << "#pragma HLS unroll factor=" << val << "\n";
+    addIndent();
   }
 
   if (auto dataflow = getLoopDirective(op, "dataflow")) {
+    reduceIndent();
+    indent();
     os << "#pragma HLS dataflow\n";
+    addIndent();
   }
 }
 

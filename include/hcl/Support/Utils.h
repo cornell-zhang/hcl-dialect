@@ -18,6 +18,9 @@ namespace hcl {
 // HLSCpp attribute parsing utils
 //===----------------------------------------------------------------------===//
 
+/// Parse loop directives.
+Attribute getLoopDirective(Operation *op, std::string name);
+
 /// Parse other attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 

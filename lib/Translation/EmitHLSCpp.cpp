@@ -17,6 +17,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Dialect/HeteroCLOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -458,6 +459,10 @@ public:
   bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
   bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
   bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
+
+  /// HCL operations.
+  bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
+  bool visitOp(hcl::CreateStageHandleOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1347,18 +1352,21 @@ void ModuleEmitter::emitBlock(Block &block) {
 }
 
 void ModuleEmitter::emitLoopDirectives(Operation *op) {
-  // auto loopDirect = getLoopDirective(op);
-  // if (!loopDirect)
-  //   return;
+  if (auto ii = getLoopDirective(op, "pipeline_ii")) {
+    os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue() << "\n";
+  }
+  
+  if (auto factor = getLoopDirective(op, "unroll")) {
+    auto val = factor.cast<IntegerAttr>().getValue();
+    if (val == 0)
+      os << "#pragma HLS unroll" << "\n";
+    else
+      os << "#pragma HLS unroll factor=" << val << "\n";
+  }
 
-  // if (loopDirect.getPipeline()) {
-  //   indent();
-  //   os << "#pragma HLS pipeline II=" << loopDirect.getTargetII() << "\n";
-
-  // } else if (loopDirect.getDataflow()) {
-  //   indent();
-  //   os << "#pragma HLS dataflow\n";
-  // }
+  if (auto dataflow = getLoopDirective(op, "dataflow")) {
+    os << "#pragma HLS dataflow\n";
+  }
 }
 
 void ModuleEmitter::emitArrayDirectives(Value memref) {

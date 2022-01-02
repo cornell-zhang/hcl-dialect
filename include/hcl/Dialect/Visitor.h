@@ -4,16 +4,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SCALEHLS_DIALECT_HLSCPP_VISITOR_H
-#define SCALEHLS_DIALECT_HLSCPP_VISITOR_H
+#ifndef HCL_DIALECT_HLSCPP_VISITOR_H
+#define HCL_DIALECT_HLSCPP_VISITOR_H
 
-#include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "llvm/ADT/TypeSwitch.h"
+
+#include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Dialect/HeteroCLOps.h"
 
 namespace mlir {
 namespace hcl {
@@ -53,7 +55,10 @@ public:
             CmpIOp, AddIOp, SubIOp, MulIOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
-            SIToFPOp, FPToSIOp, FPToUIOp>([&](auto opNode) -> ResultType {
+            SIToFPOp, FPToSIOp, FPToUIOp,
+            // HCL operations.
+            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp
+            >([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -152,7 +157,7 @@ public:
   HANDLE(SubIOp);
   HANDLE(MulIOp);
 
-  // // Special operations.
+  // Special operations.
   HANDLE(CallOp);
   HANDLE(ReturnOp);
   HANDLE(SelectOp);
@@ -163,9 +168,13 @@ public:
   HANDLE(FPToUIOp);
   HANDLE(FPToSIOp);
 
+  // HCL operations
+  HANDLE(hcl::CreateLoopHandleOp);
+  HANDLE(hcl::CreateStageHandleOp);
+
 #undef HANDLE
 };
 } // namespace hcl
 } // namespace mlir
 
-#endif // SCALEHLS_DIALECT_HLSCPP_VISITOR_H
+#endif // HCL_DIALECT_HLSCPP_VISITOR_H

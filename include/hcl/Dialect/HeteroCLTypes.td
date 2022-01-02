@@ -23,4 +23,52 @@ def StageHandle : HeteroCL_Type<"StageHandle"> {
   let mnemonic = "StageHandle";
 }
 
+def Fixed : HeteroCL_Type<"Fixed"> {
+  let summary = "fixed point";
+  let mnemonic = "Fixed";
+  let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
+  let printer = [{
+    $_printer << "fixed<" << getImpl()->width << ", " << getImpl()->frac << ">";
+  }];
+  let parser = [{
+    if (parser.parseLess())
+      return Type();
+    std::size_t width;
+    if ($_parser.parseInteger(width))
+      return Type();
+    if ($_parser.parseComma())
+      return Type();
+    std::size_t frac;
+    if ($_parser.parseInteger(frac))
+      return Type();
+    if ($_parser.parseGreater())
+      return Type();
+    return get($_ctxt, width, frac);
+  }];
+}
+
+def UFixed : HeteroCL_Type<"UFixed"> {
+  let summary = "unsigned fixed point";
+  let mnemonic = "UFixed";
+  let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
+  let printer = [{
+    $_printer << "ufixed<" << getImpl()->width << ", " << getImpl()->frac << ">";
+  }];
+  let parser = [{
+    if (parser.parseLess())
+      return Type();
+    std::size_t width;
+    if ($_parser.parseInteger(width))
+      return Type();
+    if ($_parser.parseComma())
+      return Type();
+    std::size_t frac;
+    if ($_parser.parseInteger(frac))
+      return Type();
+    if ($_parser.parseGreater())
+      return Type();
+    return get($_ctxt, width, frac);
+  }];
+}
+
 #endif // HCL_TYPES

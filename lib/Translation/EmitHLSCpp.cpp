@@ -1353,13 +1353,15 @@ void ModuleEmitter::emitBlock(Block &block) {
 
 void ModuleEmitter::emitLoopDirectives(Operation *op) {
   if (auto ii = getLoopDirective(op, "pipeline_ii")) {
-    os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue() << "\n";
+    os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue()
+       << "\n";
   }
-  
+
   if (auto factor = getLoopDirective(op, "unroll")) {
     auto val = factor.cast<IntegerAttr>().getValue();
     if (val == 0)
-      os << "#pragma HLS unroll" << "\n";
+      os << "#pragma HLS unroll"
+         << "\n";
     else
       os << "#pragma HLS unroll factor=" << val << "\n";
   }
@@ -1379,7 +1381,25 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
     getPartitionFactors(type, &factors);
 
     for (int64_t dim = 0; dim < type.getRank(); ++dim) {
-      if (factors[dim] != 1) {
+      if (!isFullyPartitioned(type, dim)) {
+        if (factors[dim] != 1) {
+          emitPragmaFlag = true;
+
+          indent();
+          os << "#pragma HLS array_partition";
+          os << " variable=";
+          emitValue(memref);
+
+          // Emit partition type.
+          if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+            os << " block";
+          else
+            os << " cyclic";
+
+          os << " factor=" << factors[dim];
+          os << " dim=" << dim + 1 << "\n";
+        }
+      } else { // fully partitioned
         emitPragmaFlag = true;
 
         indent();
@@ -1388,12 +1408,7 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         emitValue(memref);
 
         // Emit partition type.
-        if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-          os << " block";
-        else
-          os << " cyclic";
-
-        os << " factor=" << factors[dim];
+        os << " complete";
         os << " dim=" << dim + 1 << "\n";
       }
     }
@@ -1489,10 +1504,10 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
   //   // An empty line.
   //   os << "\n";
 
-  //   // Emit other pragmas for function ports.
-  //   for (auto &port : portList)
-  //     if (port.getType().isa<MemRefType>())
-  //       emitArrayDirectives(port);
+  // Emit other pragmas for function ports.
+  for (auto &port : portList)
+    if (port.getType().isa<MemRefType>())
+      emitArrayDirectives(port);
   // }
 }
 
@@ -1526,22 +1541,22 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
 
   // Emit results.
-  // if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
-  //   for (auto result : funcReturn.getOperands()) {
-  //     os << ",\n";
-  //     indent();
-  //     // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-  //     // index, index. However, typically this should not happen.
-  //     if (result.getType().isa<ShapedType>())
-  //       emitArrayDecl(result);
-  //     else
-  //       // In Vivado HLS, pointer indicates the value is an output.
-  //       emitValue(result, /*rank=*/0, /*isPtr=*/true);
+  if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
+    for (auto result : funcReturn.getOperands()) {
+      os << ",\n";
+      indent();
+      // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
+      // index, index. However, typically this should not happen.
+      if (result.getType().isa<ShapedType>())
+        emitArrayDecl(result);
+      else
+        // In Vivado HLS, pointer indicates the value is an output.
+        emitValue(result, /*rank=*/0, /*isPtr=*/true);
 
-  //     portList.push_back(result);
-  //   }
-  // } else
-  //   emitError(func, "doesn't have a return operation as terminator.");
+      portList.push_back(result);
+    }
+  } else
+    emitError(func, "doesn't have a return operation as terminator.");
 
   reduceIndent();
   os << "\n) {";

@@ -185,7 +185,7 @@ AffineMap hcl::getLayoutMap(MemRefType memrefType) {
   return memrefMaps.back();
 }
 
-bool hcl::isFullyPartitioned(MemRefType memrefType) {
+bool hcl::isFullyPartitioned(MemRefType memrefType, int axis) {
   if (memrefType.getRank() == 0)
     return true;
 
@@ -194,9 +194,27 @@ bool hcl::isFullyPartitioned(MemRefType memrefType) {
     SmallVector<int64_t, 8> factors;
     getPartitionFactors(memrefType, &factors);
 
+    // Case 1: Use floordiv & mod
     auto shapes = memrefType.getShape();
-    fullyPartitioned =
-        factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
+    if (axis == -1) // all the dimensions
+      fullyPartitioned =
+          factors == SmallVector<int64_t, 8>(shapes.begin(), shapes.end());
+    else
+      fullyPartitioned = factors[axis] == shapes[axis];
+
+    // Case 2: Partition index is an identity function
+    if (axis == -1) {
+      bool flag = true;
+      for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+        auto expr = layoutMap.getResult(dim);
+        if (!expr.isa<AffineDimExpr>())
+          flag = false;
+      }
+      fullyPartitioned |= flag;
+    } else {
+      auto expr = layoutMap.getResult(axis);
+      fullyPartitioned |= expr.isa<AffineDimExpr>();
+    }
   }
 
   return fullyPartitioned;
@@ -207,7 +225,7 @@ bool hcl::isFullyPartitioned(MemRefType memrefType) {
 // returned as well.
 int64_t hcl::getPartitionFactors(MemRefType memrefType,
                                  SmallVector<int64_t, 8> *factors) {
-  auto shape = memrefType.getShape();
+  //   auto shape = memrefType.getShape();
   auto layoutMap = getLayoutMap(memrefType);
   int64_t accumFactor = 1;
 
@@ -222,7 +240,9 @@ int64_t hcl::getPartitionFactors(MemRefType memrefType,
           if (expr.getKind() == AffineExprKind::Mod)
             factor = rhsExpr.getValue();
           else if (expr.getKind() == AffineExprKind::FloorDiv)
-            factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
+            // factor = (shape[dim] + rhsExpr.getValue() - 1) /
+            // rhsExpr.getValue();
+            factor = rhsExpr.getValue();
         }
     }
 

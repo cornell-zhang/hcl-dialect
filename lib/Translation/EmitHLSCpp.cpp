@@ -7,7 +7,7 @@
 #include "hcl/Translation/EmitHLSCpp.h"
 #include "hcl/Dialect/Visitor.h"
 // #include "hcl/Dialect/InitAllDialects.h"
-// #include "hcl/Support/Utils.h"
+#include "hcl/Support/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/AffineExprVisitor.h"
@@ -207,7 +207,7 @@ public:
   // void emitAffineMaxMin(OpType op, const char *syntax);
   void emitAffineLoad(AffineLoadOp op);
   void emitAffineStore(AffineStoreOp op);
-  // void emitAffineYield(AffineYieldOp op);
+  void emitAffineYield(AffineYieldOp op);
 
   // /// Memref-related statement emitters.
   // template <typename OpType> void emitAlloc(OpType op);
@@ -242,7 +242,7 @@ private:
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
   void emitArrayDecl(Value array);
   unsigned emitNestedLoopHead(Value val);
-  // void emitNestedLoopTail(unsigned rank);
+  void emitNestedLoopTail(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
 
   /// MLIR component and HLS C++ pragma emitters.
@@ -370,7 +370,7 @@ public:
   // }
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
-  // bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
+  bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
 
   /// Memref-related statements.
   // bool visitOp(memref::AllocOp op) {
@@ -624,6 +624,114 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   emitInfoAndNewLine(op);
 }
 
+// TODO: For now, all values created in the AffineIf region will be declared
+// in the generated C++. However, values which will be returned by affine
+// yield operation should not be declared again. How to "bind" the pair of
+// values inside/outside of AffineIf region needs to be considered.
+void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
+  if (op.getNumOperands() == 0)
+    return;
+
+  // For now, only AffineParallel and AffineIf operations will use
+  // AffineYield to return generated values.
+  if (auto parentOp = dyn_cast<AffineIfOp>(op->getParentOp())) {
+    unsigned resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
+      indent();
+      emitValue(result, rank);
+      os << " = ";
+      emitValue(op.getOperand(resultIdx++), rank);
+      os << ";";
+      emitInfoAndNewLine(op);
+      emitNestedLoopTail(rank);
+    }
+  } else if (auto parentOp = dyn_cast<AffineParallelOp>(op->getParentOp())) {
+    indent();
+    os << "if (";
+    unsigned ivIdx = 0;
+    for (auto iv : parentOp.getBody()->getArguments()) {
+      emitValue(iv);
+      os << " == 0";
+      if (ivIdx++ != parentOp.getBody()->getNumArguments() - 1)
+        os << " && ";
+    }
+    os << ") {\n";
+
+    // When all induction values are 0, generated values will be directly
+    // assigned to the current results, correspondingly.
+    addIndent();
+    unsigned resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
+      indent();
+      emitValue(result, rank);
+      os << " = ";
+      emitValue(op.getOperand(resultIdx++), rank);
+      os << ";";
+      emitInfoAndNewLine(op);
+      emitNestedLoopTail(rank);
+    }
+    reduceIndent();
+
+    indent();
+    os << "} else {\n";
+
+    // Otherwise, generated values will be accumulated/reduced to the
+    // current results with corresponding AtomicRMWKind operations.
+    addIndent();
+    auto RMWAttrs =
+        getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
+    resultIdx = 0;
+    for (auto result : parentOp.getResults()) {
+      unsigned rank = emitNestedLoopHead(result);
+      indent();
+      emitValue(result, rank);
+      // switch ((AtomicRMWKind)RMWAttrs[resultIdx]) {
+      // case (AtomicRMWKind::addf):
+      // case (AtomicRMWKind::addi):
+      //   os << " += ";
+      //   emitValue(op.getOperand(resultIdx++), rank);
+      //   break;
+      // case (AtomicRMWKind::assign):
+      //   os << " = ";
+      //   emitValue(op.getOperand(resultIdx++), rank);
+      //   break;
+      // case (AtomicRMWKind::maxf):
+      // case (AtomicRMWKind::maxs):
+      // case (AtomicRMWKind::maxu):
+      //   os << " = max(";
+      //   emitValue(result, rank);
+      //   os << ", ";
+      //   emitValue(op.getOperand(resultIdx++), rank);
+      //   os << ")";
+      //   break;
+      // case (AtomicRMWKind::minf):
+      // case (AtomicRMWKind::mins):
+      // case (AtomicRMWKind::minu):
+      //   os << " = min(";
+      //   emitValue(result, rank);
+      //   os << ", ";
+      //   emitValue(op.getOperand(resultIdx++), rank);
+      //   os << ")";
+      //   break;
+      // case (AtomicRMWKind::mulf):
+      // case (AtomicRMWKind::muli):
+      //   os << " *= ";
+      //   emitValue(op.getOperand(resultIdx++), rank);
+      //   break;
+      // }
+      os << ";";
+      emitInfoAndNewLine(op);
+      emitNestedLoopTail(rank);
+    }
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
+}
+
 /// C++ component emitters.
 void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
   assert(!(rank && isPtr) && "should be either an array or a pointer.");
@@ -668,7 +776,7 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   emitValue(op->getOperand(1), rank);
   os << ";";
   emitInfoAndNewLine(op);
-  // emitNestedLoopTail(rank);
+  emitNestedLoopTail(rank);
 }
 
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
@@ -679,7 +787,7 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   emitValue(op->getOperand(0), rank);
   os << ");";
   emitInfoAndNewLine(op);
-  // emitNestedLoopTail(rank);
+  emitNestedLoopTail(rank);
 }
 
 unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
@@ -712,6 +820,15 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
   }
 
   return rank;
+}
+
+void ModuleEmitter::emitNestedLoopTail(unsigned rank) {
+  for (unsigned i = 0; i < rank; ++i) {
+    reduceIndent();
+
+    indent();
+    os << "}\n";
+  }
 }
 
 void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
@@ -794,7 +911,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   reduceIndent();
   os << "\n) {";
-  // emitInfoAndNewLine(func);
+  emitInfoAndNewLine(func);
 
   // Emit function body.
   addIndent();

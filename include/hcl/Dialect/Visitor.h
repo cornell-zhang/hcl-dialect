@@ -40,6 +40,7 @@ public:
             memref::ViewOp, memref::SubViewOp, AtomicRMWOp, GenericAtomicRMWOp,
             AtomicYieldOp,
             // Tensor-related statements.
+            tensor::ExtractOp, tensor::InsertOp,
             memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
             SplatOp, memref::DimOp, RankOp,
             // Unary expressions.
@@ -115,6 +116,8 @@ public:
   HANDLE(memref::SubViewOp);
 
   // Tensor-related statements.
+  HANDLE(tensor::ExtractOp);
+  HANDLE(tensor::InsertOp);
   HANDLE(memref::TensorLoadOp);
   HANDLE(memref::TensorStoreOp);
   HANDLE(memref::BufferCastOp);

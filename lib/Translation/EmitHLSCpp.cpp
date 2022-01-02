@@ -218,6 +218,8 @@ public:
   void emitStore(memref::StoreOp op);
 
   /// Tensor-related statement emitters.
+  void emitTensorExtract(tensor::ExtractOp op);
+  void emitTensorInsert(tensor::InsertOp op);
   void emitTensorLoad(memref::TensorLoadOp op);
   void emitTensorStore(memref::TensorStoreOp op);
   void emitTensorToMemref(memref::BufferCastOp op);
@@ -384,6 +386,12 @@ public:
   bool visitOp(memref::DeallocOp op) { return true; }
 
   /// Tensor-related statements.
+  bool visitOp(tensor::ExtractOp op) {
+    return emitter.emitTensorExtract(op), true;
+  }
+  bool visitOp(tensor::InsertOp op) {
+    return emitter.emitTensorInsert(op), true;
+  }
   bool visitOp(memref::TensorLoadOp op) {
     return emitter.emitTensorLoad(op), true;
   }
@@ -989,6 +997,34 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   emitInfoAndNewLine(op);
 }
 
+void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.tensor());
+  for (auto index : op.indices()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
+  }
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitTensorInsert(tensor::InsertOp op) {
+  indent();
+  emitValue(op.dest());
+  for (auto index : op.indices()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
+  }
+  os << " = ";
+  emitValue(op.scalar());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
   auto rank = emitNestedLoopHead(op.getResult());
@@ -1326,34 +1362,34 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
 }
 
 void ModuleEmitter::emitArrayDirectives(Value memref) {
-  // bool emitPragmaFlag = false;
-  // auto type = memref.getType().cast<MemRefType>();
+  bool emitPragmaFlag = false;
+  auto type = memref.getType().cast<MemRefType>();
 
-  // if (auto layoutMap = getLayoutMap(type)) {
-  //   // Emit array_partition pragma(s).
-  //   SmallVector<int64_t, 8> factors;
-  //   getPartitionFactors(type, &factors);
+  if (auto layoutMap = getLayoutMap(type)) {
+    // Emit array_partition pragma(s).
+    SmallVector<int64_t, 8> factors;
+    getPartitionFactors(type, &factors);
 
-  //   for (int64_t dim = 0; dim < type.getRank(); ++dim) {
-  //     if (factors[dim] != 1) {
-  //       emitPragmaFlag = true;
+    for (int64_t dim = 0; dim < type.getRank(); ++dim) {
+      if (factors[dim] != 1) {
+        emitPragmaFlag = true;
 
-  //       indent();
-  //       os << "#pragma HLS array_partition";
-  //       os << " variable=";
-  //       emitValue(memref);
+        indent();
+        os << "#pragma HLS array_partition";
+        os << " variable=";
+        emitValue(memref);
 
-  //       // Emit partition type.
-  //       if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
-  //         os << " block";
-  //       else
-  //         os << " cyclic";
+        // Emit partition type.
+        if (layoutMap.getResult(dim).getKind() == AffineExprKind::FloorDiv)
+          os << " block";
+        else
+          os << " cyclic";
 
-  //       os << " factor=" << factors[dim];
-  //       os << " dim=" << dim + 1 << "\n";
-  //     }
-  //   }
-  // }
+        os << " factor=" << factors[dim];
+        os << " dim=" << dim + 1 << "\n";
+      }
+    }
+  }
 
   // // Emit resource pragma when the array is not DRAM kind and is not fully
   // // partitioned.
@@ -1378,9 +1414,9 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   //   os << "\n";
   // }
 
-  // // Emit an empty line.
-  // if (emitPragmaFlag)
-  //   os << "\n";
+  // Emit an empty line.
+  if (emitPragmaFlag)
+    os << "\n";
 }
 
 void ModuleEmitter::emitFunctionDirectives(FuncOp func,

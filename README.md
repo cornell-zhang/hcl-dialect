@@ -44,12 +44,18 @@ make -j
 ## Run HeteroCL Dialect
 ```sh
 # perform loop transformation passes
-./bin/hcl-opt --opt ../test/compute/cascade.mlir
+./bin/hcl-opt --opt ../test/compute/tiling.mlir
 
 # generate C++ HLS code
-./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_add.mlir
+./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_conv.mlir
 ```
 
+Otherwise, you can use our provided script to generate C++ HLS code from MLIR.
+
+```sh
+cd ../examples
+make ../test/compute/tiling
+```
 
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)

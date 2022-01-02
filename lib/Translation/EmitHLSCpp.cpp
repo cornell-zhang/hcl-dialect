@@ -621,6 +621,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   if (op->hasAttr("loop_name")) { // loop label
     auto loop_name =
         op->getAttr("loop_name").cast<StringAttr>().getValue().str();
+    std::replace(loop_name.begin(), loop_name.end(), '.', '_');
     os << "l_" << loop_name << ": ";
   }
   os << "for (";

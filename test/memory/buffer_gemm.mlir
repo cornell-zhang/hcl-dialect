@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s | hcl-opt | FileCheck %s
 
 module {
-    func @gemm_buffer_at_axis_0(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func @gemm_buffer_at_axis_0(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -20,9 +20,9 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0) -> memref<1024xf32>
-        return %C : memref<1024x1024xf32>
+        return
     }
-    func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -41,10 +41,10 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 1) -> memref<1xf32>
-        return %C : memref<1024x1024xf32>
+        return
     }
     // storing at reduction axis is prohibited
-    func @gemm_buffer_at_axis_2(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func @gemm_buffer_at_axis_2(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -63,6 +63,6 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 2) -> memref<1xf32>
-        return %C : memref<1024x1024xf32>
+        return
     }
 }

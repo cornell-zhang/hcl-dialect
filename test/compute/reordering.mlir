@@ -1,5 +1,5 @@
 module {
-    func @gemm(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @gemm(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -19,9 +19,9 @@ module {
         } { loop_name = "i", stage_name = "s" }
         %li_outer, %li_inner = hcl.split (%s, %li, 8)
         hcl.reorder (%s, %lk, %lj, %li_inner)
-        return %C : tensor<1024x1024xf32>
+        return
     }
-    func @gemm_reorder_outermost(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @gemm_reorder_outermost(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -40,6 +40,6 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         hcl.reorder (%s, %lk, %li, %lj)
-        return %C : tensor<1024x1024xf32>
+        return
     }
 }

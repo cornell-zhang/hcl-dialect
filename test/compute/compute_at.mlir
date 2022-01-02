@@ -27,7 +27,7 @@ module {
         hcl.compute_at (%s1, %s2, %l4)
         return
     }
-    func @matrix_multiply( %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>, %D: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func @matrix_multiply( %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>, %D: memref<1024x1024xf32>)
     {
         %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -64,6 +64,6 @@ module {
             } { loop_name = "j1" }
         } { loop_name = "i1", stage_name = "s2" }
         hcl.compute_at (%s1, %s2, %l6)
-        return %C : memref<1024x1024xf32>
+        return
     }
 }

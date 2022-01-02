@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s | hcl-opt | FileCheck %s
 
 module {
-  func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>) -> memref<30x30xf32>
+  func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>)
   {
     %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
     %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -24,9 +24,9 @@ module {
     } { loop_name = "i", stage_name = "s" }
     hcl.reorder(%s, %lry, %lrx, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<30x30xf32>, 0) -> memref<30xf32>
-    return %Output : memref<30x30xf32>
+    return
   }
-  func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
+  func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
     %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
@@ -55,9 +55,9 @@ module {
     } {loop_name = "oc", stage_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 1) -> memref<30xf32>
-    return %Output : memref<6x30x30xf32>
+    return
   }
-  func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
+  func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
     %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
@@ -85,9 +85,9 @@ module {
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 2) -> memref<1xf32>
-    return %Output : memref<6x30x30xf32>
+    return
   }
-  func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
+  func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
     %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
@@ -115,9 +115,9 @@ module {
       } { loop_name = "i" }
     } {loop_name = "oc", stage_name = "s" }
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0) -> memref<30x30xf32>
-    return %Output : memref<6x30x30xf32>
+    return
   }
-  func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>) -> memref<6x30x30xf32>
+  func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
     %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
@@ -146,6 +146,6 @@ module {
     } {loop_name = "oc", stage_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %li, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, 0) -> memref<30x30xf32>
-    return %Output : memref<6x30x30xf32>
+    return
   }
 }

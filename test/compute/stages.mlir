@@ -1,5 +1,5 @@
 module {
-    func @matrix_multiply(%A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @matrix_multiply(%A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>)
     {
         %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -35,6 +35,6 @@ module {
         } { loop_name = "i1", stage_name = "s2"}
         hcl.reorder (%s1, %l3, %l2)
         hcl.reorder (%s2, %l31, %l21, %l11)
-        return %C : tensor<1024x1024xf32>
+        return
     }
 }

@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s | hcl-opt | FileCheck %s
 
 module {
-    func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>) -> memref<10x8xf32>
+    func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -17,9 +17,9 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.reuse_at(%s, %A: memref<10x10xf32>, 1) -> memref<3xf32>
-        return %B : memref<10x8xf32>
+        return
     }
-    func @blur5(%A: memref<10x10xf32>, %B: memref<10x5xf32>) -> memref<10x5xf32>
+    func @blur5(%A: memref<10x10xf32>, %B: memref<10x5xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -39,9 +39,9 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.reuse_at(%s, %A: memref<10x10xf32>, 1) -> memref<5xf32>
-        return %B : memref<10x5xf32>
+        return
     }
-    func @blur_x(%A: memref<10x10xf32>, %B: memref<8x10xf32>) -> memref<8x10xf32>
+    func @blur_x(%A: memref<10x10xf32>, %B: memref<8x10xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -57,7 +57,7 @@ module {
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.reuse_at(%s, %A: memref<10x10xf32>, 0) -> memref<3x10xf32>
-        return %B : memref<8x10xf32>
+        return
     }
     // func @blur_reduction(%A: memref<10x10xf32>, %B: memref<10x8xf32>) -> memref<10x8xf32>
     // {
@@ -78,7 +78,7 @@ module {
     //     %buf = hcl.reuse_at(%s, %A: memref<10x10xf32>, 1) -> memref<3xf32>
     //     return %B : memref<10x8xf32>
     // }
-    func @conv2d(%A: memref<10x10xf32>, %B: memref<8x8xf32>) -> memref<8x8xf32>
+    func @conv2d(%A: memref<10x10xf32>, %B: memref<8x8xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -103,6 +103,6 @@ module {
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.reuse_at(%s, %A: memref<10x10xf32>, 0) -> memref<3x10xf32>
         hcl.partition(%buf: memref<3x10xf32>, "CompletePartition", 1)
-        return %B : memref<8x8xf32>
+        return
     }
 }

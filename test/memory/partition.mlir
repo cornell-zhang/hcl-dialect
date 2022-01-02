@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s | hcl-opt | FileCheck %s
 
 module {
-    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -21,8 +21,8 @@ module {
         } { loop_name = "i", stage_name = "s" }
         hcl.partition(%A: memref<1024x1024xf32>, "CyclicPartition", 0, 4)
         hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 2, 2)
-        hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 1, 4)
+        // hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 1, 4)
         hcl.partition(%C: memref<1024x1024xf32>, "CompletePartition", 1)
-        return %C : memref<1024x1024xf32>
+        return
     }
 }

@@ -1,5 +1,5 @@
 module {
-    func @gemm_fuse_two(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @gemm_fuse_two(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -19,9 +19,9 @@ module {
         } { loop_name = "i", stage_name = "s" }
         %l_fused = hcl.fuse (%s, %li, %lj)
         // (i,j)->(ij/1024,ij%1024)
-        return %C : tensor<1024x1024xf32>
+        return
     }
-    func @gemm_fuse_three(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>) -> tensor<1024x1024xf32>
+    func @gemm_fuse_three(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
         %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -41,6 +41,6 @@ module {
         } { loop_name = "i", stage_name = "s" }
         %l_fused = hcl.fuse (%s, %li, %lj, %lk)
         // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
-        return %C : tensor<1024x1024xf32>
+        return
     }
 }

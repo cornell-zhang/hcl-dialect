@@ -109,7 +109,6 @@ int main(int argc, char **argv) {
   // https://mlir.llvm.org/docs/PassManagement/
   mlir::PassManager pm(&context);
   if (enableOpt) {
-    std::cout << "Enable opt" << std::endl;
     // Add operation agnostic passes here
     // pm.addPass(mlir::createCanonicalizerPass());
 

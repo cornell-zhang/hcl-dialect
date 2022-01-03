@@ -13,4 +13,6 @@ add_mlir_dialect_library(MLIRHCLPasses
     LINK_LIBS PUBLIC
     MLIRIR
     MLIRPass
+    MLIRHeteroCL
+    MLIRHCLSupport
 )

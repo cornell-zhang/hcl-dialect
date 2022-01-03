@@ -23,11 +23,15 @@ namespace hcl {
 /// Parse loop directives.
 Attribute getLoopDirective(Operation *op, std::string name);
 
+StringRef getLoopName(AffineForOp &forOp);
+
+void setStageName(AffineForOp &forOp, StringRef stage_name);
+
 /// Parse other attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
-bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
-                     const SmallVector<std::string, 6> &nameArr);
+bool setLoopNames(SmallVector<AffineForOp, 6> &forOps,
+                  const SmallVector<std::string, 6> &nameArr);
 bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
                         const SmallVector<int, 6> &attr_arr,
                         std::string attr_name);
@@ -42,8 +46,7 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 /// AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
-LogicalResult getStage(FuncOp &func, AffineForOp &forOp,
-                       StringRef stage_name);
+LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef stage_name);
 
 bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                SmallVector<AffineForOp, 6> &resForOps,

@@ -24,6 +24,15 @@ Attribute hcl::getLoopDirective(Operation *op, std::string name) {
   return op->getAttr(name);
 }
 
+StringRef hcl::getLoopName(AffineForOp &forOp) {
+  return forOp->getAttr("loop_name").cast<StringAttr>().getValue();
+}
+
+void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
+  forOp->setAttr("stage_name",
+                 StringAttr::get(forOp->getContext(), stage_name));
+}
+
 /// Parse other attributes.
 SmallVector<int64_t, 8> hcl::getIntArrayAttrValue(Operation *op,
                                                   StringRef name) {
@@ -56,8 +65,8 @@ bool hcl::addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
   return true;
 }
 
-bool hcl::addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
-                          const SmallVector<std::string, 6> &nameArr) {
+bool hcl::setLoopNames(SmallVector<AffineForOp, 6> &forOps,
+                       const SmallVector<std::string, 6> &nameArr) {
   assert(forOps.size() == nameArr.size());
   unsigned cnt_loop = 0;
   for (AffineForOp newForOp : forOps) {

@@ -1,5 +1,6 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
+#include "hcl/Support/Utils.h"
 #include "hcl/Transforms/HeteroCLPasses.h"
 
 #include "mlir/Analysis/Utils.h"
@@ -16,12 +17,14 @@
 #include "mlir/Transforms/RegionUtils.h"
 
 #include <algorithm>
-#include <iostream>
 #include <map>
 #include <set>
-#include <type_traits>
 #include <vector>
+
 using namespace mlir;
+using namespace hcl;
+
+using AffineLoopBand = SmallVector<AffineForOp, 6>;
 
 namespace {
 
@@ -35,27 +38,17 @@ struct HCLLoopTransformation
     return "Loop transformation in HeteroCL";
   }
 
-  void runSplitting(FuncOp &f, hcl::SplitOp &splitOp);
-  void runTiling(FuncOp &f, hcl::TileOp &tileOp);
-  void runReordering(FuncOp &f, hcl::ReorderOp &reorderOp);
-  void runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp);
-  void runPipelining(FuncOp &f, hcl::PipelineOp &pipelineOp);
-  void runParallel(FuncOp &f, hcl::ParallelOp &parallelOp);
-  void runFusing(FuncOp &f, hcl::FuseOp &fuseOp);
-  void runComputeAt(FuncOp &f, hcl::ComputeAtOp &computeAtOp);
-  void runPartition(FuncOp &f, hcl::PartitionOp &partitionOp);
-  void runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp);
-  void runBufferAt(FuncOp &f, hcl::BufferAtOp &bufferAtOp);
-  // utils
-  bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
-                                 SmallVector<AffineForOp, 6> &resForOps,
-                                 SmallVector<StringRef, 6> &nameArr, int depth,
-                                 bool countReductionLoops);
-  bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
-                       const SmallVector<std::string, 6> &nameArr);
-  bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
-                          const SmallVector<int, 6> &attr_arr,
-                          std::string attr_name);
+  LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp);
+  LogicalResult runTiling(FuncOp &f, TileOp &tileOp);
+  LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp);
+  LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp);
+  LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp);
+  LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp);
+  LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp);
+  LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp);
+  LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp);
+  LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp);
+  LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp);
 };
 
 } // namespace
@@ -77,241 +70,153 @@ struct ExprCompare {
   }
 };
 
-bool HCLLoopTransformation::findContiguousNestedLoops(
-    const AffineForOp &rootAffineForOp, SmallVector<AffineForOp, 6> &resForOps,
-    SmallVector<StringRef, 6> &nameArr, int depth = -1,
-    bool countReductionLoops = true) {
-  // depth = -1 means traverses all the inner loops
-  AffineForOp forOp = rootAffineForOp;
-  unsigned int sizeNameArr = nameArr.size();
-  if (sizeNameArr != 0)
-    depth = sizeNameArr;
-  else if (depth == -1)
-    depth = 0x3f3f3f3f;
-  resForOps.clear();
-  for (int i = 0; i < depth; ++i) {
-    if (!forOp) {
-      if (depth != 0x3f3f3f3f)
-        return false;
-      else // reach the inner-most loop
-        return true;
-    }
-
-    Attribute attr = forOp->getAttr("loop_name");
-    const StringRef curr_loop = attr.cast<StringAttr>().getValue();
-    if (sizeNameArr != 0 && curr_loop != nameArr[i])
-      return false;
-
-    if (forOp->hasAttr("reduction") == 1 && !countReductionLoops) {
-      i--;
-    } else {
-      resForOps.push_back(forOp);
-      if (sizeNameArr == 0)
-        nameArr.push_back(curr_loop);
-    }
-    Block &body = forOp.region().front();
-    // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
-    //   break;
-
-    forOp = dyn_cast<AffineForOp>(&body.front());
-  }
-  return true;
-}
-
-bool HCLLoopTransformation::addIntAttrsToLoops(
-    SmallVector<AffineForOp, 6> &forOps, const SmallVector<int, 6> &attr_arr,
-    const std::string attr_name) {
-  assert(forOps.size() == attr_arr.size());
-  unsigned cnt_loop = 0;
-  for (AffineForOp newForOp : forOps) {
-    newForOp->setAttr(
-        attr_name,
-        IntegerAttr::get(
-            IntegerType::get(newForOp->getContext(), 32,
-                             IntegerType::SignednessSemantics::Signless),
-            attr_arr[cnt_loop]));
-    cnt_loop++;
-  }
-  return true;
-}
-
-bool HCLLoopTransformation::addNamesToLoops(
-    SmallVector<AffineForOp, 6> &forOps,
-    const SmallVector<std::string, 6> &nameArr) {
-  assert(forOps.size() == nameArr.size());
-  unsigned cnt_loop = 0;
-  for (AffineForOp newForOp : forOps) {
-    newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(),
-                                                   nameArr[cnt_loop]));
-    cnt_loop++;
-  }
-  return true;
-}
-
-/*
- *  Algorithm:
- *  1) Iterate schedule and get all SplitOp
- *  2) For each SplitOp, find corresponding loop
- *  3) Add names to new loops
- *  4) Remove the schedule operator
- */
-void HCLLoopTransformation::runSplitting(FuncOp &f, hcl::SplitOp &splitOp) {
-  SmallVector<AffineForOp, 6> tiledNest;
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
+  // 1) Get the schedule
   unsigned int factor = splitOp.factor();
   const auto loop_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(splitOp.loop().getDefiningOp())
-          .loop_name();
+      dyn_cast<CreateLoopHandleOp>(splitOp.loop().getDefiningOp()).loop_name();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(splitOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(splitOp.stage().getDefiningOp())
           .stage_name();
 
-  // 2) Find the requested stage,
-  //    traverse all the nested loops,
-  //    and split the requested loop
-  SmallVector<std::string, 6> newNameArr;
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    // 2.1) Find stage
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      bool isOuterMost = false;
-      bool isFound = false;
-      SmallVector<AffineForOp, 6> forOps;
-      SmallVector<unsigned, 6> tileSizes;
-      // 2.2) Find loop
-      rootForOp.walk([&](AffineForOp forOp) {
-        if (!isFound &&
-            loop_name ==
-                forOp->getAttr("loop_name").cast<StringAttr>().getValue()) {
-          isFound = true;
-          forOps.push_back(forOp);
-          tileSizes.push_back(factor);
-          if (forOp->hasAttr("stage_name"))
-            isOuterMost = true;
-        }
-      });
-      // handle exception
-      if (!isFound) {
-        splitOp.emitError("Cannot find the requested loop in Stage ")
-            << stage_name.str();
-        return signalPassFailure();
-      }
-      // 2.3) Split the loop
-      if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
-        return signalPassFailure();
-
-      // 3) Add names to new loops
-      newNameArr.push_back(loop_name.str() + ".outer");
-      newNameArr.push_back(loop_name.str() + ".inner");
-      addNamesToLoops(tiledNest, newNameArr);
-      if (isOuterMost) {
-        tiledNest[0]->setAttr(
-            "stage_name",
-            StringAttr::get(tiledNest[0]->getContext(), stage_name));
-      }
-      break;
-    }
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
   }
+
+  // 3) Find the requested loop
+  bool isOuterMost = false;
+  AffineLoopBand band;
+  rootForOp->walk([&](AffineForOp forOp) {
+    if (band.size() == 0 && loop_name == getLoopName(forOp)) {
+      band.push_back(forOp);
+      if (forOp->hasAttr("stage_name"))
+        isOuterMost = true;
+    }
+  });
+  // handle exception
+  if (band.size() == 0) {
+    splitOp.emitError("Cannot find Loop ")
+        << loop_name.str() << " in Stage " << stage_name.str();
+    return failure();
+  }
+
+  // 4) Split the loop
+  SmallVector<unsigned, 6> tileSizes;
+  tileSizes.push_back(factor);
+  AffineLoopBand tiledNest;
+  if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
+    return failure();
+
+  // 3) Add names to new loops
+  SmallVector<std::string, 6> newNameArr;
+  newNameArr.push_back(loop_name.str() + ".outer");
+  newNameArr.push_back(loop_name.str() + ".inner");
+  setLoopNames(tiledNest, newNameArr);
+  if (isOuterMost)
+    setStageName(tiledNest[0], stage_name);
 
   // 4) Create new loop handles
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);
-  auto outer = builder.create<hcl::CreateLoopHandleOp>(
-      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()),
+  auto outer = builder.create<CreateLoopHandleOp>(
+      firstOp->getLoc(), LoopHandleType::get(firstOp->getContext()),
       StringAttr::get(firstOp->getContext(), newNameArr[0]));
-  auto inner = builder.create<hcl::CreateLoopHandleOp>(
-      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()),
+  auto inner = builder.create<CreateLoopHandleOp>(
+      firstOp->getLoc(), LoopHandleType::get(firstOp->getContext()),
       StringAttr::get(firstOp->getContext(), newNameArr[1]));
+
+  // 5) Link the loop handles with SSA values
   splitOp.getResult(0).replaceAllUsesWith(outer);
   splitOp.getResult(1).replaceAllUsesWith(inner);
+
+  return success();
 }
 
-void HCLLoopTransformation::runTiling(FuncOp &f, hcl::TileOp &tileOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
+  // 1) Get the schedule
   unsigned int x_factor = tileOp.x_factor();
   unsigned int y_factor = tileOp.y_factor();
-  const StringRef x_loop =
-      dyn_cast<hcl::CreateLoopHandleOp>(tileOp.x_loop().getDefiningOp())
-          .loop_name();
-  const StringRef y_loop =
-      dyn_cast<hcl::CreateLoopHandleOp>(tileOp.y_loop().getDefiningOp())
-          .loop_name();
+  const auto x_loop =
+      dyn_cast<CreateLoopHandleOp>(tileOp.x_loop().getDefiningOp()).loop_name();
+  const auto y_loop =
+      dyn_cast<CreateLoopHandleOp>(tileOp.y_loop().getDefiningOp()).loop_name();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(tileOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(tileOp.stage().getDefiningOp())
           .stage_name();
 
-  // 2) Find the requested stage,
-  //    traverse all the nested loops,
-  //    and tile the requested loops
-  SmallVector<std::string, 6> newNameArr;
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    // 2.1) Find stage
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      bool isOuterMost = false;
-      bool isFound = false;
-      SmallVector<AffineForOp, 6> forOps;
-      SmallVector<unsigned, 6> tileSizes;
-      tileSizes.push_back(x_factor);
-      tileSizes.push_back(y_factor);
-      SmallVector<StringRef, 6> nameArr;
-      nameArr.push_back(x_loop);
-      nameArr.push_back(y_loop);
-      // 2.2) Find loops
-      rootForOp.walk([&](AffineForOp forOp) {
-        if (!isFound && findContiguousNestedLoops(forOp, forOps, nameArr))
-          isFound = true;
-        return;
-      });
-      // handle exception
-      if (!isFound) {
-        tileOp.emitError("Cannot find contiguous nested loops starting from Loop ")
-            << nameArr[0].str();
-        return signalPassFailure();
-      }
-      if (forOps[0]->hasAttr("stage_name"))
-        isOuterMost = true;
-      // 2.3) Tile the loops
-      SmallVector<AffineForOp, 6> tiledNest;
-      if (failed(tilePerfectlyNested(forOps, tileSizes, &tiledNest)))
-        return signalPassFailure();
-
-      // 3) Add names to new loops
-      newNameArr.push_back(x_loop.str() + ".outer");
-      newNameArr.push_back(x_loop.str() + ".inner");
-      newNameArr.push_back(y_loop.str() + ".outer");
-      newNameArr.push_back(y_loop.str() + ".inner");
-      addNamesToLoops(tiledNest, newNameArr);
-      if (isOuterMost) {
-        tiledNest[0]->setAttr(
-            "stage_name",
-            StringAttr::get(tiledNest[0]->getContext(), stage_name));
-      }
-      break;
-    }
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
   }
 
-  // 4) Create new loop handles
+  // 3) Find the requested loops
+  bool isFound = false;
+  bool isOuterMost = false;
+  SmallVector<StringRef, 6> nameArr;
+  nameArr.push_back(x_loop);
+  nameArr.push_back(y_loop);
+  AffineLoopBand band;
+  rootForOp.walk([&](AffineForOp forOp) {
+    if (!isFound && findContiguousNestedLoops(forOp, band, nameArr))
+      isFound = true;
+    return;
+  });
+  // handle exception
+  if (!isFound) {
+    tileOp.emitError("Cannot find contiguous nested loops starting from Loop ")
+        << x_loop.str();
+    return failure();
+  }
+  if (band[0]->hasAttr("stage_name"))
+    isOuterMost = true;
+
+  // 4) Tile the loops
+  SmallVector<unsigned, 6> tileSizes;
+  tileSizes.push_back(x_factor);
+  tileSizes.push_back(y_factor);
+  AffineLoopBand tiledNest;
+  if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
+    return failure();
+
+  // 5) Add names to new loops
+  SmallVector<std::string, 6> newNameArr;
+  newNameArr.push_back(x_loop.str() + ".outer");
+  newNameArr.push_back(x_loop.str() + ".inner");
+  newNameArr.push_back(y_loop.str() + ".outer");
+  newNameArr.push_back(y_loop.str() + ".inner");
+  setLoopNames(tiledNest, newNameArr);
+  if (isOuterMost)
+    setStageName(tiledNest[0], stage_name);
+
+  // 6) Create new loop handles &
+  //    Link the loop handles with SSA values
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);
   for (int i = 0; i < 4; ++i) {
-    auto handle = builder.create<hcl::CreateLoopHandleOp>(
-        firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()),
+    auto handle = builder.create<CreateLoopHandleOp>(
+        firstOp->getLoc(), LoopHandleType::get(firstOp->getContext()),
         StringAttr::get(firstOp->getContext(), newNameArr[i]));
     tileOp.getResult(i).replaceAllUsesWith(handle);
   }
+
+  return success();
 }
 
-void HCLLoopTransformation::runReordering(FuncOp &f,
-                                          hcl::ReorderOp &reorderOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
+                                                   ReorderOp &reorderOp) {
+  // 1) Get the schedule
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
           .stage_name();
   const auto loopsToBeReordered = reorderOp.loops(); // operand_range
   if (loopsToBeReordered.size() < 2) {
     reorderOp.emitError("Should at least input 2 loops to be reordered");
-    return signalPassFailure();
+    return failure();
   }
 
   // 2) get all the loop names and id mapping
@@ -319,7 +224,7 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
     // 2.1) Find stage
     if (stage_name ==
         rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      SmallVector<AffineForOp, 6> forOps;
+      AffineLoopBand forOps;
       SmallVector<unsigned, 6> permMap;
       std::map<std::string, unsigned> name2id;
       std::vector<std::string> origNameVec;
@@ -394,7 +299,7 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
         permuteLoops(nest, permMap);
       } else {
         reorderOp.emitError("Cannot permute the loops");
-        return signalPassFailure();
+        return failure();
       }
 
       // 5) rename stage
@@ -406,10 +311,12 @@ void HCLLoopTransformation::runReordering(FuncOp &f,
       break;
     }
   }
+  return success();
 }
 
-void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runUnrolling(FuncOp &f,
+                                                  UnrollOp &unrollOp) {
+  // 1) Get the schedule
   auto optional_factor = unrollOp.factor();
   unsigned int factor;
   if (optional_factor.hasValue()) {
@@ -418,10 +325,9 @@ void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
     factor = 0; // fully unroll
   }
   const auto loop_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(unrollOp.loop().getDefiningOp())
-          .loop_name();
+      dyn_cast<CreateLoopHandleOp>(unrollOp.loop().getDefiningOp()).loop_name();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(unrollOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(unrollOp.stage().getDefiningOp())
           .stage_name();
 
   // 2) Traverse all the nested loops and find the requested one
@@ -442,16 +348,17 @@ void HCLLoopTransformation::runUnrolling(FuncOp &f, hcl::UnrollOp &unrollOp) {
       break;
     }
   }
+  return success();
 }
 
-void HCLLoopTransformation::runParallel(FuncOp &f,
-                                        hcl::ParallelOp &parallelOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runParallel(FuncOp &f,
+                                                 ParallelOp &parallelOp) {
+  // 1) Get the schedule
   const auto loop_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(parallelOp.loop().getDefiningOp())
+      dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp())
           .loop_name();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(parallelOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(parallelOp.stage().getDefiningOp())
           .stage_name();
 
   // 2) Traverse all the nested loops and find the requested one
@@ -473,11 +380,12 @@ void HCLLoopTransformation::runParallel(FuncOp &f,
       break;
     }
   }
+  return success();
 }
 
-void HCLLoopTransformation::runPipelining(FuncOp &f,
-                                          hcl::PipelineOp &pipelineOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runPipelining(FuncOp &f,
+                                                   PipelineOp &pipelineOp) {
+  // 1) Get the schedule
   auto optional_ii = pipelineOp.ii();
   unsigned int ii;
   if (optional_ii.hasValue()) {
@@ -486,10 +394,10 @@ void HCLLoopTransformation::runPipelining(FuncOp &f,
     ii = 1;
   }
   const auto loop_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(pipelineOp.loop().getDefiningOp())
+      dyn_cast<CreateLoopHandleOp>(pipelineOp.loop().getDefiningOp())
           .loop_name();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(pipelineOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(pipelineOp.stage().getDefiningOp())
           .stage_name();
 
   // 2) Traverse all the nested loops and find the requested one
@@ -510,12 +418,13 @@ void HCLLoopTransformation::runPipelining(FuncOp &f,
       break;
     }
   }
+  return success();
 }
 
 // modified from lib/Transforms/Utils/LoopUtils.cpp
-void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
+LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
   if (loops.size() < 2)
-    return;
+    return failure();
 
   AffineForOp innermost = loops.back();
   AffineForOp outermost = loops.front();
@@ -527,7 +436,7 @@ void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
     // We only work on normalized loops.
     if (loop.getStep() != 1 || !loop.hasConstantLowerBound() ||
         loop.getConstantLowerBound() != 0)
-      return;
+      return failure();
   }
   SmallVector<Value, 4> upperBoundSymbols;
   SmallVector<Value, 4> ubOperands(ub.getOperands().begin(),
@@ -624,25 +533,26 @@ void coalesceLoops(MutableArrayRef<AffineForOp> loops) {
       Block::iterator(secondOutermostLoop.getOperation()),
       innermost.getBody()->getOperations());
   secondOutermostLoop.erase();
+  return success();
 }
 
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
-void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runFusing(FuncOp &f, FuseOp &fuseOp) {
+  // 1) Get the schedule
   const auto loopsToBeFused = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToBeFused.size();
   if (sizeOfFusedLoops < 2) {
     fuseOp.emitError("Should at least input 2 loops to be fused");
-    return signalPassFailure();
+    return failure();
   }
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(fuseOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(fuseOp.stage().getDefiningOp())
           .stage_name();
   SmallVector<StringRef, 6> nameArr;
   for (auto loop : loopsToBeFused) {
     nameArr.push_back(
-        dyn_cast<hcl::CreateLoopHandleOp>(loop.getDefiningOp()).loop_name());
+        dyn_cast<CreateLoopHandleOp>(loop.getDefiningOp()).loop_name());
   }
 
   // 2) Traverse all the nested loops and find the requested ones
@@ -651,7 +561,7 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
     if (stage_name ==
         rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
       AffineForOp loopToBeDestroyed;
-      SmallVector<AffineForOp, 6> forOps;
+      AffineLoopBand forOps;
       bool isOuterMost = false;
       bool isFound = false;
       rootForOp.walk([&](AffineForOp forOp) {
@@ -661,9 +571,10 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
       });
       // handle exception
       if (!isFound) {
-        fuseOp.emitError("Cannot find contiguous nested loops starting from Loop ")
+        fuseOp.emitError(
+            "Cannot find contiguous nested loops starting from Loop ")
             << nameArr[0].str();
-        return signalPassFailure();
+        return failure();
       }
       if (forOps[0]->hasAttr("stage_name"))
         isOuterMost = true;
@@ -671,7 +582,8 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
       // 3) construct new loop
       MutableArrayRef<AffineForOp> loops =
           llvm::makeMutableArrayRef(forOps.data(), sizeOfFusedLoops);
-      coalesceLoops(loops);
+      if (failed(coalesceLoops(loops)))
+        return failure();
 
       // 4) add name to the new loop
       for (auto forOp : forOps) {
@@ -693,23 +605,24 @@ void HCLLoopTransformation::runFusing(FuncOp &f, hcl::FuseOp &fuseOp) {
   // 4) Create new loop handles
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);
-  auto fused = builder.create<hcl::CreateLoopHandleOp>(
-      firstOp->getLoc(), hcl::LoopHandleType::get(firstOp->getContext()),
+  auto fused = builder.create<CreateLoopHandleOp>(
+      firstOp->getLoc(), LoopHandleType::get(firstOp->getContext()),
       StringAttr::get(firstOp->getContext(), new_name));
   fuseOp.getResult().replaceAllUsesWith(fused);
+  return success();
 }
 
-void HCLLoopTransformation::runComputeAt(FuncOp &f,
-                                         hcl::ComputeAtOp &computeAtOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runComputeAt(FuncOp &f,
+                                                  ComputeAtOp &computeAtOp) {
+  // 1) Get the schedule
   const auto loop_name =
-      dyn_cast<hcl::CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
+      dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
           .loop_name();
   const auto producer_name =
-      dyn_cast<hcl::CreateStageHandleOp>(computeAtOp.producer().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(computeAtOp.producer().getDefiningOp())
           .stage_name();
   const auto consumer_name =
-      dyn_cast<hcl::CreateStageHandleOp>(computeAtOp.consumer().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(computeAtOp.consumer().getDefiningOp())
           .stage_name();
 
   // 2) Traverse all the outer-most loops and find the requested one
@@ -729,7 +642,7 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
   }
   if (!isFound.first || !isFound.second) {
     computeAtOp.emitError("Cannot find corresponding producer and consumer");
-    return signalPassFailure();
+    return failure();
   }
   int cnt_depth = 0;
   int requested_depth = 0;
@@ -750,7 +663,7 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
   if (result.value == FusionResult::Success) {
     fuseLoops(producerFor, consumerFor, sliceUnion);
     producerFor.erase();
-    return;
+    return success();
   } else if (result.value == FusionResult::FailPrecondition) {
     err_msg = "failed precondition for fusion (e.g. same block)";
   } else if (result.value == FusionResult::FailBlockDependence) {
@@ -763,12 +676,12 @@ void HCLLoopTransformation::runComputeAt(FuncOp &f,
     err_msg = "slice is computed, but it is incorrect";
   }
   computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
-  // return signalPassFailure();
+  return failure();
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-void HCLLoopTransformation::runPartition(FuncOp &f,
-                                         hcl::PartitionOp &partitionOp) {
+LogicalResult HCLLoopTransformation::runPartition(FuncOp &f,
+                                                  PartitionOp &partitionOp) {
   auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
   unsigned int target_dim = partitionOp.dim();
@@ -778,9 +691,9 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
     factor = optional_factor.getValue();
   } else {
     factor = -1;
-    if (kind != hcl::PartitionKindEnum::CompletePartition) {
+    if (kind != PartitionKindEnum::CompletePartition) {
       partitionOp.emitError("Should pass in `factor' for array partition");
-      return signalPassFailure();
+      return failure();
     }
   }
 
@@ -795,8 +708,9 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
       }
     }
     if (!isFound) {
-      partitionOp.emitError("Cannot find the requested array to be partitioned");
-      return signalPassFailure();
+      partitionOp.emitError(
+          "Cannot find the requested array to be partitioned");
+      return failure();
     }
   } else {
     array = memref;
@@ -816,29 +730,31 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
       if (layouts.size() != 0) {
         // TODO: not sure why warning does not work (no output)
-        // partitionOp.emitWarning("Partition on the same axis. The original layout map will be rewritten!");
-        partitionOp.emitError("Partition on the same axis. The original layout map will be rewritten!");
+        // partitionOp.emitWarning("Partition on the same axis. The original
+        // layout map will be rewritten!");
+        partitionOp.emitError("Partition on the same axis. The original layout "
+                              "map will be rewritten!");
       }
-      if (kind == hcl::PartitionKindEnum::CyclicPartition) {
+      if (kind == PartitionKindEnum::CyclicPartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 0, 1
         partitionIndices.push_back(builder.getAffineDimExpr(dim) % factor);
         addressIndices.push_back(
             builder.getAffineDimExpr(dim).floorDiv(factor));
-      } else if (kind == hcl::PartitionKindEnum::BlockPartition) {
+      } else if (kind == PartitionKindEnum::BlockPartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 0, 1, 1
         partitionIndices.push_back(
             builder.getAffineDimExpr(dim).floorDiv(factor));
         addressIndices.push_back(builder.getAffineDimExpr(dim) % factor);
-      } else if (kind == hcl::PartitionKindEnum::CompletePartition) {
+      } else if (kind == PartitionKindEnum::CompletePartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 2, 3
         partitionIndices.push_back(builder.getAffineDimExpr(dim));
         addressIndices.push_back(builder.getAffineConstantExpr(0));
       } else {
         partitionOp.emitError("No this partition kind");
-        return signalPassFailure();
+        return failure();
       }
     } else {
       if (layouts.size() == 0) {
@@ -868,14 +784,16 @@ void HCLLoopTransformation::runPartition(FuncOp &f,
   auto resultTypes = f.front().getTerminator()->getOperandTypes();
   auto inputTypes = f.front().getArgumentTypes();
   f.setType(builder.getFunctionType(inputTypes, resultTypes));
+  return success();
 }
 
-void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runReuseAt(FuncOp &f,
+                                                ReuseAtOp &reuseAtOp) {
+  // 1) Get the schedule
   auto target = reuseAtOp.target(); // return a Value type
   unsigned int axis = reuseAtOp.axis();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
           .stage_name();
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
@@ -917,7 +835,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         reuseAtOp.emitError("Cannot find reuse pattern on axis ")
             << std::to_string(axis)
             << ". Only support stride 1 reuse pattern now";
-        return signalPassFailure();
+        return failure();
       }
       SmallVector<SmallVector<AffineExpr>> allLoadAffineExpr;
       rootForOp.walk([&](AffineLoadOp loadOp) {
@@ -929,7 +847,7 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
             singleLoadAffineExpr.push_back(diff);
           } else {
             reuseAtOp.emitError("Cannot support non-constant stride");
-            return signalPassFailure();
+            return;
           }
           for (unsigned int i = axis + 1; i < rank; ++i) {
             singleLoadAffineExpr.push_back(loadOp.getAffineMap().getResult(i));
@@ -1039,8 +957,9 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
         // affine.store %tmp, %buf[0]
         AffineLoadOp load;
         if (i < numLoad - 1) { // load from buffer
-          auto affineMap = AffineMap::get(
-              buf_rank /*rank*/, 0, allLoadAffineExpr[i + 1], builder.getContext());
+          auto affineMap =
+              AffineMap::get(buf_rank /*rank*/, 0, allLoadAffineExpr[i + 1],
+                             builder.getContext());
           // ValueRange operands{innerMostForOp.getInductionVar()};
           SmallVector<Value> operands;
           unsigned int size = forOps.size();
@@ -1073,15 +992,16 @@ void HCLLoopTransformation::runReuseAt(FuncOp &f, hcl::ReuseAtOp &reuseAtOp) {
       break;
     }
   }
+  return success();
 }
 
-void HCLLoopTransformation::runBufferAt(FuncOp &f,
-                                        hcl::BufferAtOp &bufferAtOp) {
-  // 1) get schedule
+LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
+                                                 BufferAtOp &bufferAtOp) {
+  // 1) Get the schedule
   auto target = bufferAtOp.target(); // return a Value type
   int axis = bufferAtOp.axis();
   const auto stage_name =
-      dyn_cast<hcl::CreateStageHandleOp>(bufferAtOp.stage().getDefiningOp())
+      dyn_cast<CreateStageHandleOp>(bufferAtOp.stage().getDefiningOp())
           .stage_name();
 
   // 2) Traverse all the nested loops and find the requested one
@@ -1089,7 +1009,7 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
   for (auto rootForOp : f.getOps<AffineForOp>()) {
     if (stage_name ==
         rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      SmallVector<AffineForOp, 6> forOps;
+      AffineLoopBand forOps;
       SmallVector<StringRef, 6> nameArr;
       // TODO: test if the requested loop has the target tensor
       if (isDone)
@@ -1097,7 +1017,7 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       bool isFound = findContiguousNestedLoops(rootForOp, forOps, nameArr);
       if (!isFound) {
         bufferAtOp.emitError("Cannot find nested loops for buffer_at");
-        return;
+        return failure();
       }
       SmallVector<AffineForOp, 6> nonReductionForOps;
       SmallVector<StringRef, 6> nonReductionNameArr;
@@ -1118,13 +1038,13 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
         bufferAtOp.emitError("Cannot buffer at the inner-most loop: axis=")
             << std::to_string(axis)
             << " inner-most axis=" << std::to_string(forOps.size() - 1);
-        return;
+        return failure();
       }
       if (axis >= 0 && axis >= firstReductionIdx) {
         bufferAtOp.emitError("Cannot buffer inside the reduction loops: axis=")
             << std::to_string(axis)
             << ", first reduction axis=" << std::to_string(firstReductionIdx);
-        return;
+        return failure();
       }
       // without reordering: (0, 1, 2r)
       //   buf_at 0: 1;(1,2r);1 insert at all[axis+1] but take non-red[axis+1]
@@ -1332,7 +1252,7 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
         newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_init");
         newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_back");
         SmallVector<AffineForOp, 6> newLoops{initLoops[0], writeBackLoops[0]};
-        addNamesToLoops(newLoops, newNameArr);
+        setLoopNames(newLoops, newNameArr);
         // automatic pipelining
         SmallVector<AffineForOp, 6> twoLoops{
             initLoops[initLoops.size() - 1],
@@ -1344,6 +1264,7 @@ void HCLLoopTransformation::runBufferAt(FuncOp &f,
       break;
     }
   }
+  return success();
 }
 
 void HCLLoopTransformation::runOnFunction() {
@@ -1352,38 +1273,49 @@ void HCLLoopTransformation::runOnFunction() {
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
   for (Operation &op : f.getOps()) {
-    if (auto new_op = dyn_cast<hcl::SplitOp>(op)) {
-      runSplitting(f, new_op);
+    if (auto new_op = dyn_cast<SplitOp>(op)) {
+      if (failed(runSplitting(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::TileOp>(op)) {
-      runTiling(f, new_op);
+    } else if (auto new_op = dyn_cast<TileOp>(op)) {
+      if (failed(runTiling(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::ReorderOp>(op)) {
-      runReordering(f, new_op);
+    } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
+      if (failed(runReordering(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::UnrollOp>(op)) {
-      runUnrolling(f, new_op);
+    } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
+      if (failed(runUnrolling(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::PipelineOp>(op)) {
-      runPipelining(f, new_op);
+    } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
+      if (failed(runPipelining(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::ParallelOp>(op)) {
-      runParallel(f, new_op);
+    } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
+      if (failed(runParallel(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::FuseOp>(op)) {
-      runFusing(f, new_op);
+    } else if (auto new_op = dyn_cast<FuseOp>(op)) {
+      if (failed(runFusing(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::ComputeAtOp>(op)) {
-      runComputeAt(f, new_op);
+    } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
+      if (failed(runComputeAt(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::PartitionOp>(op)) {
-      runPartition(f, new_op);
+    } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+      if (failed(runPartition(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::ReuseAtOp>(op)) {
-      runReuseAt(f, new_op);
+    } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
+      if (failed(runReuseAt(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<hcl::BufferAtOp>(op)) {
-      runBufferAt(f, new_op);
+    } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
+      if (failed(runBufferAt(f, new_op)))
+        return signalPassFailure();
       opToRemove.push_back(&op);
     }
   }
@@ -1391,12 +1323,12 @@ void HCLLoopTransformation::runOnFunction() {
   std::reverse(opToRemove.begin(), opToRemove.end());
   std::set<Operation *> handleToRemove;
   for (Operation *op : opToRemove) {
-    if (auto new_op = dyn_cast<hcl::SplitOp>(op)) {
+    if (auto new_op = dyn_cast<SplitOp>(op)) {
       handleToRemove.insert(new_op.loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<hcl::TileOp>(op)) {
+    } else if (auto new_op = dyn_cast<TileOp>(op)) {
       handleToRemove.insert(new_op.x_loop().getDefiningOp());
       handleToRemove.insert(new_op.y_loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<hcl::FuseOp>(op)) {
+    } else if (auto new_op = dyn_cast<FuseOp>(op)) {
       for (auto loop : new_op.loops()) {
         handleToRemove.insert(loop.getDefiningOp());
       }

@@ -19,7 +19,10 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
 {
     let summary = "loop handle";
     let description = [{
-        loop handle
+        Create a loop handle
+
+        Parameters
+        loop_name (String) - The name of a loop
     }];
 
     let arguments = (ins StrAttr:$loop_name);
@@ -33,7 +36,10 @@ def HeteroCL_CreateStageHandleOp : HeteroCL_Op<"create_stage_handle">
 {
     let summary = "stage handle";
     let description = [{
-        stage handle
+        Create a stage handle
+
+        Parameters
+        stage_name (String) - The name of a stage
     }];
 
     let arguments = (ins StrAttr:$stage_name);
@@ -47,15 +53,16 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 {
     let summary = "reorder";
     let description = [{
-        reorder
+        hcl.reorder(*args)
+
+        Reorder the arguments in the specified order.
+
+        Parameters
+        args (list of IterVar) - The order to be ordered
     }];
 
-    // variadic
     let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
     let results = (outs );
-    // optional groups
-    // https://mlir.llvm.org/docs/OpDefinitions/#optional-groups
-    // TODO: should at least have one input
     let assemblyFormat = [{
         `(` $stage `,` ($loops^)? `)` attr-dict
     }];
@@ -65,7 +72,19 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
 {
     let summary = "split";
     let description = [{
-        split
+        hcl.split(parent, factor=None, nparts=None, mode='transform')
+
+        Split the stage either by factor providing outer scope, or both
+
+        Parameters
+        * parent (IterVar) - The parent iter var.
+        * factor (Expr, optional) - The splitting factor
+        * nparts (Expr, optional) - The number of outer parts.
+        * mode (str, "transform" or "annotate") - “transform” mode changes the IR structure, “annotate” mode adds attributes.
+
+        Returns
+        * outer (IterVar) - The outer variable of iteration.
+        * inner (IterVar) - The inner variable of iteration.
     }];
 
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, UI32Attr:$factor);
@@ -81,7 +100,23 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
 {
     let summary = "tile";
     let description = [{
-        tile
+        hcl.tile(x_parent, y_parent, x_factor, y_factor)
+
+        Perform tiling on two dimensions
+
+        The final loop order from outmost to inner most are [x_outer, y_outer, x_inner, y_inner]
+
+        Parameters
+        x_parent (IterVar) - The original x dimension
+        y_parent (IterVar) - The original y dimension
+        x_factor (Expr) - The stride factor on x axis
+        y_factor (Expr) - The stride factor on y axis
+
+        Returns
+        x_outer (IterVar) - Outer axis of x dimension
+        y_outer (IterVar) - Outer axis of y dimension
+        x_inner (IterVar) - Inner axis of x dimension
+        p_y_inner (IterVar) - Inner axis of y dimension
     }];
 
     let arguments = (ins StageHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
@@ -95,7 +130,17 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
 {
     let summary = "fuse";
     let description = [{
-        fuse
+        hcl.fuse(*args)
+
+        Fuse multiple consecutive iteration variables into a single iteration variable.
+
+        fused = fuse(...fuse(fuse(args[0], args[1]), args[2]),..., args[-1]) The order is from outer to inner.
+
+        Parameters
+        args (list of IterVars) - Itervars that proceeds each other
+
+        Returns
+        fused - The fused variable of iteration.
     }];
 
     let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
@@ -109,7 +154,13 @@ def HeteroCL_ComputeAtOp : HeteroCL_Op<"compute_at">
 {
     let summary = "compute_at";
     let description = [{
-        compute_at
+        hcl.compute_at(parent, scope)
+
+        Attach the stage at parent's scope
+
+        Parameters
+        * parent (_Stage) - The parent stage
+        * scope (IterVar) - The loop scope t be attached to.
     }];
 
     let arguments = (ins StageHandle:$producer, StageHandle:$consumer, LoopHandle:$axis);
@@ -123,10 +174,15 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
 {
     let summary = "unroll";
     let description = [{
-        unroll
+        hcl.unroll(var, factor=0)
+
+        Unroll the iteration.
+
+        Parameters
+        * var (IterVar) - The iteration to be unrolled.
+        * factor (Expr) - The unroll factor. Default value 0 means full unroll.
     }];
 
-    // factor=0 means fully unroll the loop
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
@@ -138,7 +194,13 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
 {
     let summary = "pipeline";
     let description = [{
-        pipeline
+        hcl.pipeline(var, initiation_interval=1)
+
+        Pipeline the iteration.
+
+        Parameters
+        * var (IterVar) - The iteration to be pipelined.
+        * initiation_interval (Expr) - The initiation interval in pipeline schedule. Default value is 1.
     }];
 
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
@@ -156,7 +218,12 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
 {
     let summary = "parallel";
     let description = [{
-        parallel
+        hcl.parallel(var)
+
+        Parallelize the iteration.
+
+        Parameters
+        var (IterVar) - The iteration to be parallelized.
     }];
 
     let arguments = (ins StageHandle:$stage, LoopHandle:$loop);
@@ -170,20 +237,17 @@ def HeteroCL_PartitionOp : HeteroCL_Op<"partition">
 {
     let summary = "partition";
     let description = [{
-        hcl. partition(target, partition_type=0, dim=0, factor=0)
+        hcl.partition(target, partition_type=0, dim=0, factor=0)
 
         Partition a Tensor into smaller Tensors or even registers
 
         Users can specify the partition type, which includes Complete, Block, and Cyclic. The default type is Complete, which means we completely partition the specified dimension. If Block is specified, the tensor is partitioned into N blocks with equal size. The number N is specified by the factor. Otherwise, if Cyclic is specified, the elements of the tensor is partition in a cyclic manner. For example, if the factor is three, the 1st element will be assigned to the 1st partitioned tensor; the 2nd element will be assigned to the 2nd one; and so on. Finally, if Complete is specified, the factor will be ignored. If dim is set to 0, it means we partition all dimensions.
 
         Parameters
-        target (Tensor) - The tensor to be partitioned
-
-        partition_type ({Complete, Block, Cyclic}, optional) - The partition type
-
-        dim (int, optional) - The dimension to be partitioned
-
-        factor (int, optional) - The partition factor
+        * target (Tensor) - The tensor to be partitioned
+        * partition_type ({Complete, Block, Cyclic}, optional) - The partition type
+        * dim (int, optional) - The dimension to be partitioned
+        * factor (int, optional) - The partition factor
     }];
 
     let arguments = (ins AnyMemRef:$target,
@@ -200,7 +264,17 @@ def HeteroCL_ReuseAtOp : HeteroCL_Op<"reuse_at">
 {
     let summary = "reuse_at";
     let description = [{
-        reuse_at
+        hcl.reuse_at(target, parent, axis, name=None)
+
+        Create a reuse buffer reusing the output of current stage
+
+        This returns a new tensor representing the reuse buffer. A stage is also built correspondingly. The new stage will be a sub-stage of the parent stage under the specified axis. Thus, the axis must be inside the axis list of the parent stage.
+
+        Parameters
+        * target (Tensor) - The tensor whose values will be reused
+        * parent (Stage) - The stage that reuses the output of the current stage
+        * axis (IterVar) - The axis that generates the reuse values
+        * name (string, optional) - The name of the reuse buffer
     }];
 
     let arguments = (ins StageHandle:$stage, AnyMemRef:$target, UI32Attr:$axis);
@@ -214,7 +288,16 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
 {
     let summary = "buffer_at";
     let description = [{
-        buffer_at
+        hcl.buffer_at(target, parent, axis)
+
+        Create a write buffer at the axis
+
+        This returns a new tensor representing the write buffer. A stage is also built correspondingly. The new stage will be a sub-stage of the parent stage under the specified axis. Thus, the axis must be inside the axis list of the parent stage.
+
+        Parameters
+        * target (Tensor) - The tensor whose values will be buffered
+        * parent (Stage) - The stage that includes the target tensor
+        * axis (IterVar) - The axis that generates the buffer
     }];
 
     let arguments = (ins StageHandle:$stage, AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);

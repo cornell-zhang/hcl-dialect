@@ -1,6 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The ScaleHLS Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the ScaleHLS project
 //
 //===----------------------------------------------------------------------===//
 
@@ -37,9 +39,91 @@ SmallVector<int64_t, 8> hcl::getIntArrayAttrValue(Operation *op,
     return SmallVector<int64_t, 8>();
 }
 
+bool hcl::addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
+                             const SmallVector<int, 6> &attr_arr,
+                             const std::string attr_name) {
+  assert(forOps.size() == attr_arr.size());
+  unsigned cnt_loop = 0;
+  for (AffineForOp newForOp : forOps) {
+    newForOp->setAttr(
+        attr_name,
+        IntegerAttr::get(
+            IntegerType::get(newForOp->getContext(), 32,
+                             IntegerType::SignednessSemantics::Signless),
+            attr_arr[cnt_loop]));
+    cnt_loop++;
+  }
+  return true;
+}
+
+bool hcl::addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
+                          const SmallVector<std::string, 6> &nameArr) {
+  assert(forOps.size() == nameArr.size());
+  unsigned cnt_loop = 0;
+  for (AffineForOp newForOp : forOps) {
+    newForOp->setAttr("loop_name", StringAttr::get(newForOp->getContext(),
+                                                   nameArr[cnt_loop]));
+    cnt_loop++;
+  }
+  return true;
+}
+
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
+
+LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
+                            StringRef stage_name) {
+  for (auto rootForOp : func.getOps<AffineForOp>()) {
+    if (stage_name ==
+        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
+      forOp = rootForOp;
+      return success();
+    }
+  }
+  return failure();
+}
+
+bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
+                                    SmallVector<AffineForOp, 6> &resForOps,
+                                    SmallVector<StringRef, 6> &nameArr,
+                                    int depth, bool countReductionLoops) {
+  // depth = -1 means traverses all the inner loops
+  AffineForOp forOp = rootAffineForOp;
+  unsigned int sizeNameArr = nameArr.size();
+  if (sizeNameArr != 0)
+    depth = sizeNameArr;
+  else if (depth == -1)
+    depth = 0x3f3f3f3f;
+  resForOps.clear();
+  for (int i = 0; i < depth; ++i) {
+    if (!forOp) {
+      if (depth != 0x3f3f3f3f)
+        return false;
+      else // reach the inner-most loop
+        return true;
+    }
+
+    Attribute attr = forOp->getAttr("loop_name");
+    const StringRef curr_loop = attr.cast<StringAttr>().getValue();
+    if (sizeNameArr != 0 && curr_loop != nameArr[i])
+      return false;
+
+    if (forOp->hasAttr("reduction") == 1 && !countReductionLoops) {
+      i--;
+    } else {
+      resForOps.push_back(forOp);
+      if (sizeNameArr == 0)
+        nameArr.push_back(curr_loop);
+    }
+    Block &body = forOp.region().front();
+    // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
+    //   break;
+
+    forOp = dyn_cast<AffineForOp>(&body.front());
+  }
+  return true;
+}
 
 /// Collect all load and store operations in the block and return them in "map".
 void hcl::getMemAccessesMap(Block &block, MemAccessesMap &map) {

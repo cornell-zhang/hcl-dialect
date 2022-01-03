@@ -1,6 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The ScaleHLS Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the ScaleHLS project
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,6 +26,11 @@ Attribute getLoopDirective(Operation *op, std::string name);
 /// Parse other attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
+bool addNamesToLoops(SmallVector<AffineForOp, 6> &forOps,
+                     const SmallVector<std::string, 6> &nameArr);
+bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
+                        const SmallVector<int, 6> &attr_arr,
+                        std::string attr_name);
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
@@ -34,6 +41,14 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 /// For storing all affine memory access operations (including AffineLoadOp, and
 /// AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
+
+LogicalResult getStage(FuncOp &func, AffineForOp &forOp,
+                       StringRef stage_name);
+
+bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
+                               SmallVector<AffineForOp, 6> &resForOps,
+                               SmallVector<StringRef, 6> &nameArr,
+                               int depth = -1, bool countReductionLoops = true);
 
 /// Collect all load and store operations in the block and return them in "map".
 void getMemAccessesMap(Block &block, MemAccessesMap &map);

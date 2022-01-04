@@ -135,7 +135,7 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
     bool isDominance = true;
     for (auto user : sndApply->getUsers()) {
       DominanceInfo domInfo;
-      if (!domInfo.properlyDominates(sndApply->getResult(0),user)) {
+      if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
         isDominance = false;
         break;
       }
@@ -218,8 +218,49 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
   AffineLoopBand tiledNest;
   if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
     return failure();
+  if (isOuterMost)
+    rootForOp = tiledNest[0];
 
-  // 5) Add names to new loops
+  // 5) Loop normalization
+  // Note: 5) & 6) are used for making the loop bound constants
+  //       Otherwise, loops are not perfectly nested
+  for (int i = 0; i < 4; ++i)
+    normalizeAffineFor(tiledNest[i]);
+  // the tiled factor loops are the inner two
+  for (int i = 2; i < 4; ++i) {
+    auto ub = tiledNest[i].getUpperBound();
+    auto ubMap = ub.getMap();
+    auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
+    OpBuilder opBuilder(tiledNest[i]);
+    tiledNest[i].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+  }
+
+  // 6) Sink AffineApply Operations
+  for (int i = 1; i >= 0; --i) { // from inner to outer
+    auto fstApply = *(tiledNest[i].getOps<AffineApplyOp>().begin());
+    auto sndApply = *(tiledNest[i + 2].getOps<AffineApplyOp>().begin());
+    bool isDone = false;
+    rootForOp->walk([&](AffineForOp forOp) { // from the innermost
+      if (isDone)
+        return;
+      sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+      // definition should come before reference
+      bool isDominance = true;
+      for (auto user : sndApply->getUsers()) {
+        DominanceInfo domInfo;
+        if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
+          isDominance = false;
+          break;
+        }
+      }
+      if (isDominance) {
+        fstApply->moveBefore(sndApply);
+        isDone = true;
+      }
+    });
+  }
+
+  // 7) Add names to new loops
   SmallVector<std::string, 6> newNameArr;
   newNameArr.push_back(x_loop.str() + ".outer");
   newNameArr.push_back(x_loop.str() + ".inner");
@@ -229,7 +270,7 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
   if (isOuterMost)
     setStageName(tiledNest[0], stage_name);
 
-  // 6) Create new loop handles &
+  // 8) Create new loop handles &
   //    Link the loop handles with SSA values
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);

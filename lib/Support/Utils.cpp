@@ -28,6 +28,11 @@ StringRef hcl::getLoopName(AffineForOp &forOp) {
   return forOp->getAttr("loop_name").cast<StringAttr>().getValue();
 }
 
+void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
+  forOp->setAttr("loop_name",
+                 StringAttr::get(forOp->getContext(), loop_name));
+}
+
 void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
   forOp->setAttr("stage_name",
                  StringAttr::get(forOp->getContext(), stage_name));

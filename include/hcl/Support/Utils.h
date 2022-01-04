@@ -25,6 +25,7 @@ Attribute getLoopDirective(Operation *op, std::string name);
 
 StringRef getLoopName(AffineForOp &forOp);
 
+void setLoopName(AffineForOp &forOp, std::string loop_name);
 void setStageName(AffineForOp &forOp, StringRef stage_name);
 
 /// Parse other attributes.

@@ -19,11 +19,11 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %li_outer, %li_inner = hcl.split (%s, %li, 8)
-        %li_in_out, %li_in_in = hcl.split (%s, %li_inner, 16) // nest with split
-        %li_out_out, %li_out_in = hcl.split (%s, %li_outer, 2) // multiple split
-        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%s, %lj, %lk, 2, 4) // split & tile
-        // %l14, %l15, %l16, %l17 = hcl.tile (%s, %li_in_out, %li_in_in, 2, 2) // nest with split (failed)
+        %li_outer, %li_inner = hcl.split (%s, %li, 16)
+        %li_in_out, %li_in_in = hcl.split (%s, %li_inner, 4) // nest with split
+        %li_out_out, %li_out_in = hcl.split (%s, %li_outer, 8) // multiple split
+        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%s, %lj, %lk, 16, 8) // split & tile
+        %l14, %l15, %l16, %l17 = hcl.tile (%s, %li_in_out, %li_in_in, 2, 2) // nest with split (failed)
         hcl.unroll (%s, %lk_in, 16) // unroll
         hcl.pipeline (%s, %lk_out, 1) // pipeline
         hcl.parallel (%s, %lj_in) // parallel

@@ -32,9 +32,8 @@ SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
 bool setLoopNames(SmallVector<AffineForOp, 6> &forOps,
                   const SmallVector<std::string, 6> &nameArr);
-bool addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
-                        const SmallVector<int, 6> &attr_arr,
-                        std::string attr_name);
+bool setIntAttr(SmallVector<AffineForOp, 6> &forOps,
+                const SmallVector<int, 6> &attr_arr, std::string attr_name);
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//

@@ -48,9 +48,9 @@ SmallVector<int64_t, 8> hcl::getIntArrayAttrValue(Operation *op,
     return SmallVector<int64_t, 8>();
 }
 
-bool hcl::addIntAttrsToLoops(SmallVector<AffineForOp, 6> &forOps,
-                             const SmallVector<int, 6> &attr_arr,
-                             const std::string attr_name) {
+bool hcl::setIntAttr(SmallVector<AffineForOp, 6> &forOps,
+                     const SmallVector<int, 6> &attr_arr,
+                     const std::string attr_name) {
   assert(forOps.size() == attr_arr.size());
   unsigned cnt_loop = 0;
   for (AffineForOp newForOp : forOps) {

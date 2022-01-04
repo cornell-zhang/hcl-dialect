@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <map>
 #include <set>
-#include <vector>
 
 using namespace mlir;
 using namespace hcl;
@@ -213,104 +212,110 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
           .stage_name();
-  const auto loopsToBeReordered = reorderOp.loops(); // operand_range
-  if (loopsToBeReordered.size() < 2) {
+  const auto loopsToReorder = reorderOp.loops(); // operand_range
+  if (loopsToReorder.size() < 2) {
     reorderOp.emitError("Should at least input 2 loops to be reordered");
     return failure();
   }
 
-  // 2) get all the loop names and id mapping
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    // 2.1) Find stage
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      AffineLoopBand forOps;
-      SmallVector<unsigned, 6> permMap;
-      std::map<std::string, unsigned> name2id;
-      std::vector<std::string> origNameVec;
-      unsigned int curr_depth = 0;
-      rootForOp.walk([&](AffineForOp rootAffineForOp) { // from the inner most!
-        std::string curr_loop_name = rootAffineForOp->getAttr("loop_name")
-                                         .cast<StringAttr>()
-                                         .getValue()
-                                         .str();
-        name2id[curr_loop_name] = curr_depth;
-        origNameVec.push_back(curr_loop_name);
-        curr_depth++;
-      });
-      std::reverse(origNameVec.begin(), origNameVec.end());
-      for (auto name : origNameVec) { // need to reverse
-        name2id[name] = curr_depth - 1 - name2id[name];
-      }
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
 
-      // 3) traverse all the input arguments that need to be reordered and
-      // construct permMap possible inputs:
-      // a) # arguments = # loops: (i,j,k)->(k,j,i)
-      // b) # arguments != # loops: input (k,i), but should be the same as a)
-      // 3.1) map input arguments to the corresponding loop names
-      std::vector<std::string> toBeReorderedNameVec;
-      for (auto loop : loopsToBeReordered) {
-        toBeReorderedNameVec.push_back(loop.getDefiningOp()
-                                           ->getAttr("loop_name")
-                                           .cast<StringAttr>()
-                                           .getValue()
-                                           .str());
-      }
-      // 3.2) traverse the original loop nests and create a new order for the
-      // loops
-      //     since the input arguments may not cover all the loops
-      //     so this step is needed for creating permMap
-      unsigned int cntInArgs = 0;
-      unsigned int outerMostIdx = 0;
-      std::vector<std::string> allNameVec;
-      // first fill in the missing loops for case b)
-      for (unsigned int i = 0, e = origNameVec.size(); i < e; ++i) {
-        auto name = origNameVec[i];
-        auto iterator = std::find(toBeReorderedNameVec.begin(),
-                                  toBeReorderedNameVec.end(), name);
-        if (iterator != toBeReorderedNameVec.end()) { // name in the arguments
-          allNameVec.push_back(toBeReorderedNameVec[cntInArgs++]);
-        } else { // not in
-          allNameVec.push_back(name);
-        }
-      }
-      for (unsigned int i = 0, e = origNameVec.size(); i < e; ++i) {
-        auto name = origNameVec[i];
-        auto iterator = std::find(allNameVec.begin(), allNameVec.end(), name);
-        unsigned int idx = iterator - allNameVec.begin();
-        permMap.push_back(idx);
-        if (idx == 0) {
-          outerMostIdx = i;
-        }
-      }
+  // 3) Traverse all the loops in the stage
+  //    Get a mapping from loop name to id
+  std::map<std::string, unsigned> oldName2ID;
+  SmallVector<std::string> oldLoopNames;
+  unsigned int curr_depth = 0;
+  rootForOp.walk([&](AffineForOp forOp) { // from the inner most!
+    std::string loop_name = getLoopName(forOp).str();
+    oldName2ID[loop_name] = curr_depth;
+    oldLoopNames.push_back(loop_name);
+    curr_depth++;
+  });
+  // since .walk() method traverse the nested loops
+  // from the inner-most, the names and mapping should be reversed
+  std::reverse(oldLoopNames.begin(), oldLoopNames.end());
+  for (auto name : oldLoopNames) {
+    oldName2ID[name] = curr_depth - 1 - oldName2ID[name];
+  }
 
-      // 4) permute the loops
-      // TODO: a) bug: Reorder with a splitted loop may lead to problems of
-      // operand dominance
-      //       b) imperfect loops
-      SmallVector<AffineForOp, 6> nest;
-      // Get the maximal perfect nest
-      getPerfectlyNestedLoops(nest, rootForOp);
-      // Permute if the nest's size is consistent with the specified
-      // permutation
-      if (nest.size() >= 2 && nest.size() == permMap.size()) {
-        if (outerMostIdx != 0)
-          nest[0]->removeAttr("stage_name");
-        permuteLoops(nest, permMap);
-      } else {
-        reorderOp.emitError("Cannot permute the loops");
-        return failure();
-      }
+  // 4) Traverse all the input arguments that need to be reordered and
+  // construct permMap
+  // Possible inputs:
+  // a) # arguments = # loops: (i,j,k)->(k,j,i)
+  // b) # arguments != # loops: input (k,i), but should be the same as a)
 
-      // 5) rename stage
-      if (outerMostIdx != 0) {
-        nest[outerMostIdx]->setAttr(
-            "stage_name",
-            StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
-      }
-      break;
+  // 4.1) Map input arguments to the corresponding loop names
+  SmallVector<std::string> nameOfLoopsToReorder;
+  for (auto loop : loopsToReorder) {
+    nameOfLoopsToReorder.push_back(loop.getDefiningOp()
+                                       ->getAttr("loop_name")
+                                       .cast<StringAttr>()
+                                       .getValue()
+                                       .str());
+  }
+
+  // 4.2) Make Case b) to Case a)
+  //      i.e. fill in all the missing loops in Case b)
+  SmallVector<std::string> nameOfAllLoopsWithNewOrder;
+  unsigned int cntInArgs = 0;
+  for (unsigned int i = 0, e = oldLoopNames.size(); i < e; ++i) {
+    auto name = oldLoopNames[i];
+    auto iterator = std::find(nameOfLoopsToReorder.begin(),
+                              nameOfLoopsToReorder.end(), name);
+    if (iterator != nameOfLoopsToReorder.end()) { // name in the arguments
+      nameOfAllLoopsWithNewOrder.push_back(nameOfLoopsToReorder[cntInArgs++]);
+    } else { // not in
+      nameOfAllLoopsWithNewOrder.push_back(name);
     }
   }
+
+  // 4.3) Traverse the original loop nests and create a new order (permMap) for
+  // the loops, where permMap[i] means the ith loop in the original nests will
+  // become the permMap[i]-th loop
+  unsigned int outerMostIdx = 0;
+  SmallVector<unsigned, 6> permMap;
+  for (unsigned int i = 0, e = oldLoopNames.size(); i < e; ++i) {
+    auto name = oldLoopNames[i];
+    auto iterator = std::find(nameOfAllLoopsWithNewOrder.begin(),
+                              nameOfAllLoopsWithNewOrder.end(), name);
+    unsigned int idx = iterator - nameOfAllLoopsWithNewOrder.begin();
+    permMap.push_back(idx);
+    if (idx == 0) {
+      outerMostIdx = i;
+    }
+  }
+
+  // 5) Permute the loops
+  // TODO: a) bug: Reorder with a splitted loop may lead to problems of
+  // operand dominance
+  //       b) imperfect loops
+  // 5.1) Get the maximal perfect nest
+  AffineLoopBand nest;
+  getPerfectlyNestedLoops(nest, rootForOp);
+  // 5.2) Permute if the nest's size is consistent with the specified
+  // permutation
+  if (nest.size() >= 2 && nest.size() == permMap.size()) {
+    if (outerMostIdx != 0)
+      nest[0]->removeAttr("stage_name");
+    permuteLoops(nest, permMap);
+  } else {
+    reorderOp.emitError("Cannot permute the loops because the size of the loop "
+                        "band is not consistent with the permutation mapping.");
+    return failure();
+  }
+
+  // 6) Rename the stage if the outermost loop moves inward
+  if (outerMostIdx != 0) {
+    nest[outerMostIdx]->setAttr(
+        "stage_name",
+        StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
+  }
+
   return success();
 }
 
@@ -330,24 +335,29 @@ LogicalResult HCLLoopTransformation::runUnrolling(FuncOp &f,
       dyn_cast<CreateStageHandleOp>(unrollOp.stage().getDefiningOp())
           .stage_name();
 
-  // 2) Traverse all the nested loops and find the requested one
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      rootForOp.walk([&](AffineForOp forOp) {
-        Attribute attr = forOp->getAttr("loop_name");
-        if (loop_name == attr.cast<StringAttr>().getValue()) {
-          forOp->setAttr(
-              "unroll",
-              IntegerAttr::get(
-                  IntegerType::get(forOp->getContext(), 32,
-                                   IntegerType::SignednessSemantics::Signless),
-                  factor));
-        }
-      });
-      break;
-    }
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
   }
+
+  // 3) Find the requested loop and attach attribute
+  bool isFound = false;
+  rootForOp.walk([&](AffineForOp forOp) {
+    if (!isFound && loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{(int)factor};
+      setIntAttr(band, attr_arr, "unroll");
+      isFound = true;
+    }
+  });
+  // handle exception
+  if (!isFound) {
+    unrollOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
+  }
+
   return success();
 }
 
@@ -361,25 +371,29 @@ LogicalResult HCLLoopTransformation::runParallel(FuncOp &f,
       dyn_cast<CreateStageHandleOp>(parallelOp.stage().getDefiningOp())
           .stage_name();
 
-  // 2) Traverse all the nested loops and find the requested one
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      rootForOp.walk([&](AffineForOp forOp) {
-        Attribute attr = forOp->getAttr("loop_name");
-        if (loop_name == attr.cast<StringAttr>().getValue()) {
-          forOp->setAttr(
-              "parallel",
-              IntegerAttr::get(
-                  IntegerType::get(forOp->getContext(), 32,
-                                   IntegerType::SignednessSemantics::Signless),
-                  1) // true
-          );
-        }
-      });
-      break;
-    }
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
   }
+
+  // 3) Find the requested loop and attach attribute
+  bool isFound = false;
+  rootForOp.walk([&](AffineForOp forOp) {
+    if (!isFound && loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{1};
+      setIntAttr(band, attr_arr, "parallel");
+      isFound = true;
+    }
+  });
+  // handle exception
+  if (!isFound) {
+    parallelOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
+  }
+
   return success();
 }
 
@@ -400,23 +414,27 @@ LogicalResult HCLLoopTransformation::runPipelining(FuncOp &f,
       dyn_cast<CreateStageHandleOp>(pipelineOp.stage().getDefiningOp())
           .stage_name();
 
-  // 2) Traverse all the nested loops and find the requested one
-  for (auto rootForOp : f.getOps<AffineForOp>()) {
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
-      rootForOp.walk([&](AffineForOp forOp) {
-        Attribute attr = forOp->getAttr("loop_name");
-        if (loop_name == attr.cast<StringAttr>().getValue()) {
-          forOp->setAttr(
-              "pipeline_ii",
-              IntegerAttr::get(
-                  IntegerType::get(forOp->getContext(), 32,
-                                   IntegerType::SignednessSemantics::Signless),
-                  ii));
-        }
-      });
-      break;
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop and attach attribute
+  bool isFound = false;
+  rootForOp.walk([&](AffineForOp forOp) {
+    if (!isFound && loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{(int)ii};
+      setIntAttr(band, attr_arr, "pipeline_ii");
+      isFound = true;
     }
+  });
+  // handle exception
+  if (!isFound) {
+    pipelineOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
   }
   return success();
 }
@@ -1258,7 +1276,7 @@ LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
             initLoops[initLoops.size() - 1],
             writeBackLoops[writeBackLoops.size() - 1]};
         SmallVector<int, 6> II{1, 1};
-        addIntAttrsToLoops(twoLoops, II, "pipeline_ii");
+        setIntAttr(twoLoops, II, "pipeline_ii");
       }
       isDone = true;
       break;

@@ -5,6 +5,7 @@
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -108,8 +109,44 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
   AffineLoopBand tiledNest;
   if (failed(tilePerfectlyNested(band, tileSizes, &tiledNest)))
     return failure();
+  if (isOuterMost)
+    rootForOp = tiledNest[0];
 
-  // 3) Add names to new loops
+  // 5) Loop normalization
+  // Note: 5) & 6) are used for making the loop bound constants
+  //       Otherwise, loops are not perfectly nested
+  normalizeAffineFor(tiledNest[0]);
+  normalizeAffineFor(tiledNest[1]);
+  auto ub = tiledNest[1].getUpperBound();
+  auto ubMap = ub.getMap();
+  auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
+  OpBuilder opBuilder(tiledNest[1]);
+  tiledNest[1].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+
+  // 6) Sink AffineApply Operations
+  auto fstApply = *(tiledNest[0].getOps<AffineApplyOp>().begin());
+  auto sndApply = *(tiledNest[1].getOps<AffineApplyOp>().begin());
+  bool isDone = false;
+  rootForOp->walk([&](AffineForOp forOp) { // from the innermost
+    if (isDone)
+      return;
+    sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+    // definition should come before reference
+    bool isDominance = true;
+    for (auto user : sndApply->getUsers()) {
+      DominanceInfo domInfo;
+      if (!domInfo.properlyDominates(sndApply->getResult(0),user)) {
+        isDominance = false;
+        break;
+      }
+    }
+    if (isDominance) {
+      fstApply->moveBefore(sndApply);
+      isDone = true;
+    }
+  });
+
+  // 7) Add names to new loops
   SmallVector<std::string, 6> newNameArr;
   newNameArr.push_back(loop_name.str() + ".outer");
   newNameArr.push_back(loop_name.str() + ".inner");
@@ -117,7 +154,7 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
   if (isOuterMost)
     setStageName(tiledNest[0], stage_name);
 
-  // 4) Create new loop handles
+  // 8) Create new loop handles
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);
   auto outer = builder.create<CreateLoopHandleOp>(
@@ -127,7 +164,7 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
       firstOp->getLoc(), LoopHandleType::get(firstOp->getContext()),
       StringAttr::get(firstOp->getContext(), newNameArr[1]));
 
-  // 5) Link the loop handles with SSA values
+  // 9) Link the loop handles with SSA values
   splitOp.getResult(0).replaceAllUsesWith(outer);
   splitOp.getResult(1).replaceAllUsesWith(inner);
 
@@ -291,9 +328,7 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
   }
 
   // 5) Permute the loops
-  // TODO: a) bug: Reorder with a splitted loop may lead to problems of
-  // operand dominance
-  //       b) imperfect loops
+  // TODO: imperfect loops
   // 5.1) Get the maximal perfect nest
   AffineLoopBand nest;
   getPerfectlyNestedLoops(nest, rootForOp);
@@ -304,8 +339,11 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
       nest[0]->removeAttr("stage_name");
     permuteLoops(nest, permMap);
   } else {
-    reorderOp.emitError("Cannot permute the loops because the size of the loop "
-                        "band is not consistent with the permutation mapping.");
+    reorderOp.emitError("Cannot permute the loops because the size of the "
+                        "perfectly nested loop band (")
+        << nest.size() << ")"
+        << "is not consistent with the size of permutation mapping ("
+        << permMap.size() << ")";
     return failure();
   }
 

@@ -519,14 +519,14 @@ LogicalResult HCLLoopTransformation::runPipelining(FuncOp &f,
 }
 
 // modified from lib/Transforms/Utils/LoopUtils.cpp
-LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
+LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
+                            AffineForOp stageLoop) {
   if (loops.size() < 2)
     return failure();
 
   AffineForOp innermost = loops.back();
   AffineForOp outermost = loops.front();
   AffineBound ub = outermost.getUpperBound();
-  AffineMap origUbMap = ub.getMap();
   Location loc = outermost.getLoc();
   OpBuilder builder(outermost);
   for (AffineForOp loop : loops) {
@@ -534,49 +534,27 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
     if (loop.getStep() != 1 || !loop.hasConstantLowerBound() ||
         loop.getConstantLowerBound() != 0)
       return failure();
+    // TODO: support AffineMap loop bounds
+    if (!loop.hasConstantUpperBound())
+      return failure();
   }
   SmallVector<Value, 4> upperBoundSymbols;
   SmallVector<Value, 4> ubOperands(ub.getOperands().begin(),
                                    ub.getOperands().end());
 
   // 1. Store the upper bound of the outermost loop in a variable.
-  Value prev;
-  if (!llvm::hasSingleElement(origUbMap.getResults()))
-    prev = builder.create<AffineMinOp>(loc, origUbMap, ubOperands);
-  else
-    prev = builder.create<AffineApplyOp>(loc, origUbMap, ubOperands);
-  upperBoundSymbols.push_back(prev);
-
   // 2. Emit code computing the upper bound of the coalesced loop as product of
   // the number of iterations of all loops.
-  for (AffineForOp loop : loops.drop_front()) {
-    ub = loop.getUpperBound();
-    origUbMap = ub.getMap();
-    ubOperands = ub.getOperands();
-    Value upperBound;
-    // If upper bound map has more than one result, take their minimum.
-    if (!llvm::hasSingleElement(origUbMap.getResults()))
-      upperBound = builder.create<AffineMinOp>(loc, origUbMap, ubOperands);
-    else
-      upperBound = builder.create<AffineApplyOp>(loc, origUbMap, ubOperands);
-    upperBoundSymbols.push_back(upperBound);
-    SmallVector<Value, 4> operands;
-    operands.push_back(prev);
-    operands.push_back(upperBound);
-    // Maintain running product of loop upper bounds.
-    prev = builder.create<AffineApplyOp>(
-        loc,
-        AffineMap::get(/*numDims=*/1,
-                       /*numSymbols=*/1,
-                       builder.getAffineDimExpr(0) *
-                           builder.getAffineSymbolExpr(0)),
-        operands);
+  int64_t prod = 1;
+  for (AffineForOp loop : loops) {
+    auto cstUb = loop.getConstantUpperBound();
+    prod *= cstUb;
+    auto cstOp = builder.create<ConstantIndexOp>(loc, cstUb);
+    upperBoundSymbols.push_back(cstOp);
+    // hoist to the outermost
+    cstOp->moveBefore(stageLoop);
   }
-  // Set upper bound of the coalesced loop.
-  AffineMap newUbMap = AffineMap::get(
-      /*numDims=*/0,
-      /*numSymbols=*/1, builder.getAffineSymbolExpr(0), builder.getContext());
-  outermost.setUpperBound(prev, newUbMap);
+  outermost.setConstantUpperBound(prod);
 
   builder.setInsertionPointToStart(outermost.getBody());
 
@@ -589,6 +567,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
   // Compute these iteratively from the innermost loop by creating a "running
   // quotient" of division by the range.
   Value previous = outermost.getInductionVar();
+  SmallVector<Operation *> opToSink;
   for (unsigned idx = loops.size(); idx > 0; --idx) {
     if (idx != loops.size()) {
       SmallVector<Value, 4> operands;
@@ -601,6 +580,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
               builder.getAffineDimExpr(0).floorDiv(
                   builder.getAffineSymbolExpr(0))),
           operands);
+      opToSink.push_back(previous.getDefiningOp());
     }
     // Modified value of the induction variables of the nested loops after
     // coalescing.
@@ -617,6 +597,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
               /*numDims=*/1, /*numSymbols=*/1,
               builder.getAffineDimExpr(0) % builder.getAffineSymbolExpr(0)),
           applyOperands);
+      opToSink.push_back(inductionVariable.getDefiningOp());
     }
     replaceAllUsesInRegionWith(loops[idx - 1].getInductionVar(),
                                inductionVariable, loops.back().region());
@@ -630,6 +611,28 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops) {
       Block::iterator(secondOutermostLoop.getOperation()),
       innermost.getBody()->getOperations());
   secondOutermostLoop.erase();
+
+  // 5. Sink AffineApply operations
+  bool isDone = false;
+  std::reverse(opToSink.begin(), opToSink.end());
+  loops[0]->walk([&](AffineForOp forOp) { // from the innermost
+    if (forOp == loops[0] || isDone)
+      return;
+    bool isDominance = true;
+    for (auto applyOp : opToSink) {
+      applyOp->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+      // definition should come before reference
+      for (auto user : applyOp->getUsers()) {
+        DominanceInfo domInfo;
+        if (!domInfo.properlyDominates(applyOp->getResult(0), user)) {
+          isDominance = false;
+          break;
+        }
+      }
+    }
+    if (isDominance)
+      isDone = true;
+  });
   return success();
 }
 
@@ -677,23 +680,25 @@ LogicalResult HCLLoopTransformation::runFusing(FuncOp &f, FuseOp &fuseOp) {
   if (band[0]->hasAttr("stage_name"))
     isOuterMost = true;
 
-  // 3) construct new loop
+  // 3) Construct new loop
   MutableArrayRef<AffineForOp> fusedLoops =
       llvm::makeMutableArrayRef(band.data(), sizeOfFusedLoops);
-  if (failed(coalesceLoops(fusedLoops)))
+  if (failed(coalesceLoops(fusedLoops, rootForOp)))
     return failure();
+  if (isOuterMost)
+    rootForOp = fusedLoops[0];
 
-  // 4) add name to the new loop
+  // 5) Add name to the new loop
   std::string new_name;
-  for (auto forOp : band) {
-    new_name += getLoopName(forOp).str() + "_";
+  for (auto name : nameArr) {
+    new_name += name.str() + "_";
   }
   new_name += "fused";
   setLoopName(fusedLoops[0], new_name);
   if (isOuterMost)
     setStageName(fusedLoops[0], stage_name);
 
-  // 5) Create new loop handles &
+  // 6) Create new loop handles &
   //    Link the loop handles with SSA values
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);

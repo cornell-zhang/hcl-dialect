@@ -24,7 +24,8 @@ cmake -G "Unix Makefiles" ../llvm \
    -DLLVM_BUILD_EXAMPLES=ON \
    -DLLVM_TARGETS_TO_BUILD="X86" \
    -DCMAKE_BUILD_TYPE=Release \
-   -DLLVM_ENABLE_ASSERTIONS=ON
+   -DLLVM_ENABLE_ASSERTIONS=ON \
+   -DLLVM_INSTALL_UTILS=ON
 make -j
 ```
 
@@ -55,6 +56,13 @@ Or you can use our provided script to directly generate C++ HLS code from MLIR.
 ```sh
 cd ../examples
 make ../test/compute/tiling
+```
+
+
+## Integration tests
+```sh
+cd build
+cmake --build . --target check-hcl
 ```
 
 ## References

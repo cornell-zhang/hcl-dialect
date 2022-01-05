@@ -1,3 +1,5 @@
+// RUN: hcl-opt -opt %s | FileCheck %s
+
 module {
     func @gemm_fuse_two(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
@@ -5,6 +7,7 @@ module {
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
         %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        // CHECK: affine.for %[[ARG:.*]] = 0 to 1048576 {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 512 {
@@ -27,6 +30,7 @@ module {
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
         %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        // CHECK: affine.for %[[ARG:.*]] = 0 to 536870912 {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 512 {
@@ -50,7 +54,9 @@ module {
         %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
         %ll = hcl.create_loop_handle "l" : !hcl.LoopHandle
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        // CHECK: affine.for %[[ARG:.*]] = 0 to 1024 {
         affine.for %i = 0 to 1024 {
+            // CHECK: affine.for %[[ARG1:.*]] = 0 to 1048576 {
             affine.for %j = 0 to 1024 {
                 affine.for %l = 0 to 1024 {
                     affine.for %k = 0 to 512 {

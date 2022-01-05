@@ -1,3 +1,5 @@
+// RUN: hcl-opt -opt %s | FileCheck %s
+
 module {
     func @gemm(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
     {
@@ -14,8 +16,12 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                // CHECK:   } {loop_name = "i.inner"}
+                // CHECK: } {loop_name = "j"}
                 } { loop_name = "k" }
+            // CHECK: } {loop_name = "k"}
             } { loop_name = "j" }
+        // CHECK: } {loop_name = "i.outer", stage_name = "s"}
         } { loop_name = "i", stage_name = "s" }
         %li_outer, %li_inner = hcl.split (%s, %li, 8)
         hcl.reorder (%s, %lk, %lj, %li_inner)
@@ -36,8 +42,11 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                // CHECK: } {loop_name = "j"}
                 } { loop_name = "k" }
+            // CHECK: } {loop_name = "i"}
             } { loop_name = "j" }
+        // CHECK: } {loop_name = "k", stage_name = "s"}
         } { loop_name = "i", stage_name = "s" }
         hcl.reorder (%s, %lk, %li, %lj)
         return

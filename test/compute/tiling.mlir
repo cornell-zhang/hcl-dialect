@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s | hcl-opt | FileCheck %s
+// RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
     func @matrix_multiply(%A: tensor<1024x512xf32>, %B: tensor<512x1024xf32>, %C: tensor<1024x1024xf32>)
@@ -7,6 +7,16 @@ module {
         %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
         %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        // CHECK: affine.for %arg3 = 0 to 8 {
+        // CHECK:   affine.for %arg4 = 0 to 8 {
+        // CHECK:     affine.for %arg5 = 0 to 2 {
+        // CHECK:       affine.for %arg6 = 0 to 2 {
+        // CHECK:         affine.for %arg7 = 0 to 2 {
+        // CHECK:           affine.for %arg8 = 0 to 2 {
+        // CHECK:             affine.for %arg9 = 0 to 64 {
+        // CHECK:               affine.for %arg10 = 0 to 64 {
+        // CHECK:                 affine.for %arg11 = 0 to 16 {
+        // CHECK:                   affine.for %arg12 = 0 to 8 {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 512 {
@@ -16,6 +26,9 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                // CHECK:     } {loop_name = "k.inner", unroll = 16 : i32}
+                // CHECK:   } {loop_name = "k.outer", pipeline_ii = 1 : i32}
+                // CHECK: } {loop_name = "j.inner", parallel = 1 : i32}
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }

@@ -1,3 +1,5 @@
+// RUN: hcl-opt -opt %s | FileCheck %s
+
 module {
     func @matrix_multiply(%A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>)
     {
@@ -18,8 +20,11 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                // CHECK: } {loop_name = "j"}
                 } { loop_name = "k" }
+            // CHECK: } {loop_name = "k"}
             } { loop_name = "j" }
+        // CHECK: } {loop_name = "i", stage_name = "s1"}
         } { loop_name = "i", stage_name = "s1" }
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
@@ -30,8 +35,11 @@ module {
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
                     tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                // CHECK: } {loop_name = "i1"}
                 } { loop_name = "k1" }
+            // CHECK: } {loop_name = "j1"}
             } { loop_name = "j1" }
+        // CHECK: } {loop_name = "k1", stage_name = "s2"}
         } { loop_name = "i1", stage_name = "s2"}
         hcl.reorder (%s1, %l3, %l2)
         hcl.reorder (%s2, %l31, %l21, %l11)

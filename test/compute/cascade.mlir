@@ -1,11 +1,19 @@
-// RUN: hcl-opt %s | hcl-opt | FileCheck %s
+// RUN: hcl-opt -opt %s | FileCheck %s
 
+// CHECK: #map0 = affine_map<(d0) -> (d0 * 16)>
+// CHECK: #map1 = affine_map<(d0, d1) -> (d1 + d0)>
+// CHECK: #map2 = affine_map<(d0) -> (d0 * 2)>
+// CHECK: #map3 = affine_map<(d0) -> (d0 * 4)>
+// CHECK: #map4 = affine_map<(d0) -> (d0 * 8)>
 module {
     func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>) -> memref<1024x1024xf32>
     {
         %C = memref.alloc() : memref<1024x1024xf32>
+        // CHECK: affine.for %[[ARG:.*]] = 0 to 1024 {
         affine.for %i = 0 to 1024 {
+            // CHECK: affine.for %[[ARG1:.*]] = 0 to 1024 {
             affine.for %j = 0 to 1024 {
+                // CHECK: affine.for %[[ARG2:.*]] = 0 to 512 {
                 affine.for %k = 0 to 512 {
                     %a = affine.load %A[%i, %k] : memref<1024x512xf32>
                     %b = affine.load %B[%k, %j] : memref<512x1024xf32>
@@ -24,9 +32,24 @@ module {
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
         %l3 = hcl.create_loop_handle "k" : !hcl.LoopHandle
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        // CHECK: affine.for %[[ARG:.*]] = 0 to 128 {
+        // CHECK:   affine.for %[[ARG1:.*]] = 0 to 8 {
         affine.for %i = 0 to 1024 {
+            // CHECK: affine.for %[[ARG2:.*]] = 0 to 32 {
+            // CHECK: affine.for %[[ARG3:.*]] = 0 to 16 {
+            // CHECK: affine.for %[[ARG4:.*]] = 0 to 128 {
             affine.for %j = 0 to 1024 {
+                // CHECK: affine.for %[[ARG5:.*]] = 0 to 2 {
+                // CHECK: affine.for %[[ARG6:.*]] = 0 to 4 {
                 affine.for %k = 0 to 512 {
+                    // CHECK: %8 = affine.apply #map0(%[[ARG2]])
+                    // CHECK: %9 = affine.apply #map1(%8, %[[ARG3]])
+                    // CHECK: %10 = affine.apply #map2(%9)
+                    // CHECK: %11 = affine.apply #map1(%10, %[[ARG5]])
+                    // CHECK: %12 = affine.apply #map3(%arg7)
+                    // CHECK: %13 = affine.apply #map1(%12, %[[ARG6]])
+                    // CHECK: %14 = affine.apply #map4(%arg3)
+                    // CHECK: %15 = affine.apply #map1(%14, %[[ARG1]])
                     %a = tensor.extract %A[%i, %k] : tensor<1024x512xf32>
                     %b = tensor.extract %B[%k, %j] : tensor<512x1024xf32>
                     %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>

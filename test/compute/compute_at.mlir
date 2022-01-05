@@ -1,3 +1,5 @@
+// RUN: hcl-opt -opt %s | FileCheck %s
+
 module {
     func @sibling_fusion(%arg0: memref<10x10xf32>, %arg1: memref<10x10xf32>,
                      %arg2: memref<10x10xf32>, %arg3: memref<10x10xf32>,
@@ -8,6 +10,8 @@ module {
         %l4 = hcl.create_loop_handle "k1" : !hcl.LoopHandle
         %s1 = hcl.create_stage_handle "s1" : !hcl.StageHandle
         %s2 = hcl.create_stage_handle "s2" : !hcl.StageHandle
+        // CHECK: affine.for %arg5 = 0 to 3 {
+        // CHECK:   affine.for %arg6 = 0 to 3 {
         affine.for %arg5 = 0 to 3 {
             affine.for %arg6 = 0 to 3 {
             %0 = affine.load %arg0[%arg5, %arg6] : memref<10x10xf32>

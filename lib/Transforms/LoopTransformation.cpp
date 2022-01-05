@@ -863,10 +863,9 @@ LogicalResult HCLLoopTransformation::runPartition(FuncOp &f,
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
       if (layouts.size() != 0) {
         // TODO: not sure why warning does not work (no output)
-        // partitionOp.emitWarning("Partition on the same axis. The original
-        // layout map will be rewritten!");
-        partitionOp.emitError("Partition on the same axis. The original layout "
-                              "map will be rewritten!");
+        // partitionOp.emitWarning
+        partitionOp.emitError("Partition on the array partitioned before."
+                              "The original layout map will be rewritten!");
       }
       if (kind == PartitionKindEnum::CyclicPartition) {
         // original index:  0, 1, 2, 3
@@ -875,11 +874,16 @@ LogicalResult HCLLoopTransformation::runPartition(FuncOp &f,
         addressIndices.push_back(
             builder.getAffineDimExpr(dim).floorDiv(factor));
       } else if (kind == PartitionKindEnum::BlockPartition) {
+        // * block factor N means partition into N blocks
+        //   each block has shape[dim] / factor elements
+        //   (not N elements in each block!)
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 0, 1, 1
+        auto blockFactor =
+            (arrayType.getShape()[dim] + factor - 1) / factor; // ceil
         partitionIndices.push_back(
-            builder.getAffineDimExpr(dim).floorDiv(factor));
-        addressIndices.push_back(builder.getAffineDimExpr(dim) % factor);
+            builder.getAffineDimExpr(dim).floorDiv(blockFactor));
+        addressIndices.push_back(builder.getAffineDimExpr(dim) % blockFactor);
       } else if (kind == PartitionKindEnum::CompletePartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 2, 3

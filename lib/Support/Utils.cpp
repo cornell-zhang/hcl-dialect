@@ -29,8 +29,7 @@ StringRef hcl::getLoopName(AffineForOp &forOp) {
 }
 
 void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
-  forOp->setAttr("loop_name",
-                 StringAttr::get(forOp->getContext(), loop_name));
+  forOp->setAttr("loop_name", StringAttr::get(forOp->getContext(), loop_name));
 }
 
 void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
@@ -323,7 +322,7 @@ bool hcl::isFullyPartitioned(MemRefType memrefType, int axis) {
 // returned as well.
 int64_t hcl::getPartitionFactors(MemRefType memrefType,
                                  SmallVector<int64_t, 8> *factors) {
-  //   auto shape = memrefType.getShape();
+  auto shape = memrefType.getShape();
   auto layoutMap = getLayoutMap(memrefType);
   int64_t accumFactor = 1;
 
@@ -338,9 +337,7 @@ int64_t hcl::getPartitionFactors(MemRefType memrefType,
           if (expr.getKind() == AffineExprKind::Mod)
             factor = rhsExpr.getValue();
           else if (expr.getKind() == AffineExprKind::FloorDiv)
-            // factor = (shape[dim] + rhsExpr.getValue() - 1) /
-            // rhsExpr.getValue();
-            factor = rhsExpr.getValue();
+            factor = (shape[dim] + rhsExpr.getValue() - 1) / rhsExpr.getValue();
         }
     }
 

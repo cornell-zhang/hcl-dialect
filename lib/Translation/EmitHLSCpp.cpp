@@ -1570,19 +1570,22 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
 
   // Emit results.
+  auto args = func.getArguments();
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
     for (auto result : funcReturn.getOperands()) {
-      os << ",\n";
-      indent();
-      // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-      // index, index. However, typically this should not happen.
-      if (result.getType().isa<ShapedType>())
-        emitArrayDecl(result);
-      else
-        // In Vivado HLS, pointer indicates the value is an output.
-        emitValue(result, /*rank=*/0, /*isPtr=*/true);
+      if (std::find(args.begin(), args.end(), result) == args.end()) {
+        os << ",\n";
+        indent();
+        // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
+        // index, index. However, typically this should not happen.
+        if (result.getType().isa<ShapedType>())
+          emitArrayDecl(result);
+        else
+          // In Vivado HLS, pointer indicates the value is an output.
+          emitValue(result, /*rank=*/0, /*isPtr=*/true);
 
-      portList.push_back(result);
+        portList.push_back(result);
+      }
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");

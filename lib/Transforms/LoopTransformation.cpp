@@ -674,7 +674,8 @@ LogicalResult HCLLoopTransformation::runFusing(FuncOp &f, FuseOp &fuseOp) {
   // handle exception
   if (!isFound) {
     fuseOp.emitError("Cannot find contiguous nested loops starting from Loop ")
-        << nameArr[0].str();
+        << nameArr[0].str()
+        << ". Please specify the loop to be fused from outermost to innermost.";
     return failure();
   }
   if (band[0]->hasAttr("stage_name"))

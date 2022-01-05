@@ -33,3 +33,10 @@
 
 build
 .vscode
+
+# MLIR intermediate results
+*.opt
+
+# HLS
+*.log
+*.prj

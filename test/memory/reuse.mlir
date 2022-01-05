@@ -1,5 +1,6 @@
-// RUN: hcl-opt %s | hcl-opt | FileCheck %s
+// RUN: hcl-opt -opt %s | FileCheck %s
 
+// CHECK: #set0 = affine_set<(d0) : (d0 - 2 >= 0)>
 module {
     func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
     {
@@ -8,6 +9,20 @@ module {
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
         affine.for %i = 0 to 10 {
             affine.for %j = 0 to 8 {
+                // CHECK: %4 = affine.load %3[1] : memref<3xf32>
+                // CHECK: affine.store %4, %3[0] : memref<3xf32>
+                // CHECK: %5 = affine.load %3[2] : memref<3xf32>
+                // CHECK: affine.store %5, %3[1] : memref<3xf32>
+                // CHECK: %6 = affine.load %arg0[%arg2, %arg3] : memref<10x10xf32>
+                // CHECK: affine.store %6, %3[2] : memref<3xf32>
+                // CHECK: affine.if #set0(%arg3) {
+                // CHECK:   %7 = affine.load %3[0] : memref<3xf32>
+                // CHECK:   %8 = affine.load %3[1] : memref<3xf32>
+                // CHECK:   %9 = affine.load %3[2] : memref<3xf32>
+                // CHECK:   %10 = addf %7, %8 : f32
+                // CHECK:   %11 = addf %10, %9 : f32
+                // CHECK:   affine.store %11, %arg1[%arg2, %arg3 - 2] : memref<10x8xf32>
+                // CHECK: }
                 %tmp = affine.load %A[%i, %j] : memref<10x10xf32>
                 %tmp1 = affine.load %A[%i, %j+1] : memref<10x10xf32>
                 %tmp2 = affine.load %A[%i, %j+2] : memref<10x10xf32>

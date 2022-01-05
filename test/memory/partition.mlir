@@ -1,7 +1,10 @@
-// RUN: hcl-opt %s | hcl-opt | FileCheck %s
+// RUN: hcl-opt -opt %s | FileCheck %s
 
+// CHECK: #map0 = affine_map<(d0, d1) -> (d0 mod 4, d1 mod 4, d0 floordiv 4, d1 floordiv 4)>
+// CHECK: #map1 = affine_map<(d0, d1) -> (d0 floordiv 256, d1 floordiv 512, d0 mod 256, d1 floordiv 512)>
+// CHECK: #map2 = affine_map<(d0, d1) -> (d0, 0, 0, d1)>
 module {
-    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
+    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
     {
         %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -21,8 +24,10 @@ module {
         } { loop_name = "i", stage_name = "s" }
         hcl.partition(%A: memref<1024x1024xf32>, "CyclicPartition", 0, 4)
         hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 2, 2)
-        // hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 1, 4)
+        // expected-error@+1 {{Partition on the array partitioned before.The original layout map will be rewritten!}}
+        hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 1, 4)
         hcl.partition(%C: memref<1024x1024xf32>, "CompletePartition", 1)
-        return
+        // CHECK: return %arg2 : memref<1024x1024xf32, #map2>
+        return %C : memref<1024x1024xf32>
     }
 }

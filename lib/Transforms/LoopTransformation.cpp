@@ -102,6 +102,12 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
         << loop_name.str() << " in Stage " << stage_name.str();
     return failure();
   }
+  if (factor >= band[0].getConstantUpperBound()) {
+    splitOp.emitError("The requested tiling factor (")
+        << factor << ") is larger than the upper bound ("
+        << band[0].getConstantUpperBound() << ") of the loop";
+    return failure();
+  }
 
   // 4) Split the loop
   SmallVector<unsigned, 6> tileSizes;
@@ -119,9 +125,15 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
   normalizeAffineFor(tiledNest[1]);
   auto ub = tiledNest[1].getUpperBound();
   auto ubMap = ub.getMap();
-  auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
-  OpBuilder opBuilder(tiledNest[1]);
-  tiledNest[1].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+  if (ubMap.isConstant()) {
+    // Exception case that cannot change loop bound:
+    // #map1 = affine_map<(d0, d1) -> (7, -d0 + 1024)>
+    // %5 = affine.apply #map0(%arg3)
+    // affine.for %arg4 = 0 to min #map1(%5, %5)
+    auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
+    OpBuilder opBuilder(tiledNest[1]);
+    tiledNest[1].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+  }
 
   // 6) Sink AffineApply Operations
   auto fstApply = *(tiledNest[0].getOps<AffineApplyOp>().begin());
@@ -140,11 +152,11 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
         break;
       }
     }
-    if (isDominance) {
-      fstApply->moveBefore(sndApply);
+    if (isDominance)
       isDone = true;
-    }
   });
+  if (isDone && ubMap.isConstant())
+    fstApply->moveBefore(sndApply);
 
   // 7) Add names to new loops
   SmallVector<std::string, 6> newNameArr;
@@ -208,6 +220,18 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
         << x_loop.str();
     return failure();
   }
+  if (x_factor >= band[0].getConstantUpperBound()) {
+    tileOp.emitError("The requested tiling factor (")
+        << x_factor << ") is larger than the upper bound ("
+        << band[0].getConstantUpperBound() << ") of the loop";
+    return failure();
+  }
+  if (y_factor >= band[1].getConstantUpperBound()) {
+    tileOp.emitError("The requested tiling factor (")
+        << y_factor << ") is larger than the upper bound ("
+        << band[1].getConstantUpperBound() << ") of the loop";
+    return failure();
+  }
   if (band[0]->hasAttr("stage_name"))
     isOuterMost = true;
 
@@ -230,9 +254,11 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
   for (int i = 2; i < 4; ++i) {
     auto ub = tiledNest[i].getUpperBound();
     auto ubMap = ub.getMap();
-    auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
-    OpBuilder opBuilder(tiledNest[i]);
-    tiledNest[i].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+    if (ubMap.isConstant()) {
+      auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
+      OpBuilder opBuilder(tiledNest[i]);
+      tiledNest[i].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+    }
   }
 
   // 6) Sink AffineApply Operations
@@ -253,11 +279,11 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
           break;
         }
       }
-      if (isDominance) {
-        fstApply->moveBefore(sndApply);
+      if (isDominance)
         isDone = true;
-      }
     });
+    if (isDone && tiledNest[i + 2].getUpperBound().getMap().isConstant())
+      fstApply->moveBefore(sndApply);
   }
 
   // 7) Add names to new loops

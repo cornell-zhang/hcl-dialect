@@ -12,6 +12,8 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Analysis/Utils.h"
+
 
 namespace mlir {
 namespace hcl {
@@ -96,6 +98,9 @@ void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
 Optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
+
+// Returns a string representation of 'sliceUnion'.
+std::string getSliceStr(const mlir::ComputationSliceState &sliceUnion);
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

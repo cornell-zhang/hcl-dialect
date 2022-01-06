@@ -538,3 +538,35 @@ bool PtrLikeMemRefAccess::operator==(const PtrLikeMemRefAccess &rhs) const {
   return llvm::all_of(diff.getAffineMap().getResults(),
                       [](AffineExpr e) { return e == 0; });
 }
+
+// Returns the index of 'op' in its block.
+inline static unsigned getBlockIndex(Operation &op) {
+  unsigned index = 0;
+  for (auto &opX : *op.getBlock()) {
+    if (&op == &opX)
+      break;
+    ++index;
+  }
+  return index;
+}
+
+// Returns a string representation of 'sliceUnion'.
+std::string hcl::getSliceStr(const mlir::ComputationSliceState &sliceUnion) {
+  std::string result;
+  llvm::raw_string_ostream os(result);
+  // Slice insertion point format [loop-depth, operation-block-index]
+  unsigned ipd = mlir::getNestingDepth(&*sliceUnion.insertPoint);
+  unsigned ipb = getBlockIndex(*sliceUnion.insertPoint);
+  os << "insert point: (" << std::to_string(ipd) << ", " << std::to_string(ipb)
+     << ")";
+  assert(sliceUnion.lbs.size() == sliceUnion.ubs.size());
+  os << " loop bounds: ";
+  for (unsigned k = 0, e = sliceUnion.lbs.size(); k < e; ++k) {
+    os << '[';
+    sliceUnion.lbs[k].print(os);
+    os << ", ";
+    sliceUnion.ubs[k].print(os);
+    os << "] ";
+  }
+  return os.str();
+}

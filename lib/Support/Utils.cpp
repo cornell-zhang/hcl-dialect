@@ -480,6 +480,75 @@ bool hcl::checkDependence(Operation *A, Operation *B) {
   //   return false;
 }
 
+// Gathers all load and store ops in loop nest rooted at 'forOp' into
+// 'loadAndStoreOps'.
+// Copied from
+// https://github.com/llvm/llvm-project/blob/6786d7e4f5b14c4913d17410042fa226fad7187b/mlir/lib/Transforms/Utils/LoopFusionUtils.cpp#L179
+static bool
+gatherLoadsAndStores(AffineForOp forOp,
+                     SmallVectorImpl<Operation *> &loadAndStoreOps) {
+  bool hasIfOp = false;
+  forOp.walk([&](Operation *op) {
+    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
+      loadAndStoreOps.push_back(op);
+    else if (isa<AffineIfOp>(op))
+      hasIfOp = true;
+  });
+  return !hasIfOp;
+}
+
+bool hcl::analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB,
+                       SmallVectorImpl<Dependency> &dependency) {
+  // Gather all load and store from 'forOpA' which precedes 'forOpB' in 'block'.
+  SmallVector<Operation *, 4> opsA;
+  if (!gatherLoadsAndStores(forOpA, opsA)) {
+    return false;
+  }
+
+  // Gather all load and store from 'forOpB' which succeeds 'forOpA' in 'block'.
+  SmallVector<Operation *, 4> opsB;
+  if (!gatherLoadsAndStores(forOpB, opsB)) {
+    return false;
+  }
+
+  DenseSet<Value> OpAReadMemRefs;
+  DenseSet<Value> OpAWriteMemRefs;
+  DenseSet<Value> OpBReadMemRefs;
+  DenseSet<Value> OpBWriteMemRefs;
+
+  for (Operation *op : opsA) {
+    if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
+      OpAReadMemRefs.insert(loadOp.getMemRef());
+    } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+      OpAWriteMemRefs.insert(storeOp.getMemRef());
+    }
+  }
+
+  for (Operation *op : opsB) {
+    if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
+      OpBReadMemRefs.insert(loadOp.getMemRef());
+    } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+      OpBWriteMemRefs.insert(storeOp.getMemRef());
+    }
+  }
+
+  for (Value memref : OpBReadMemRefs) {
+    if (OpAWriteMemRefs.count(memref) > 0)
+      dependency.push_back(Dependency::RAW);
+    else if (OpAReadMemRefs.count(memref) > 0)
+      dependency.push_back(Dependency::RAR);
+  }
+
+  for (Value memref : OpBWriteMemRefs) {
+    if (OpAWriteMemRefs.count(memref) > 0)
+      dependency.push_back(Dependency::WAW);
+    else if (OpAReadMemRefs.count(memref) > 0)
+      dependency.push_back(Dependency::WAR);
+  }
+
+  return true;
+}
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Definition
 //===----------------------------------------------------------------------===//

@@ -10,10 +10,9 @@
 #define HCL_ANALYSIS_UTILS_H
 
 #include "hcl/Dialect/HeteroCLDialect.h"
+#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/Analysis/Utils.h"
-
 
 namespace mlir {
 namespace hcl {
@@ -101,6 +100,12 @@ bool checkDependence(Operation *A, Operation *B);
 
 // Returns a string representation of 'sliceUnion'.
 std::string getSliceStr(const mlir::ComputationSliceState &sliceUnion);
+
+// Dependency types between two stages
+enum Dependency { RAW, RAR, WAR, WAW };
+
+bool analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB,
+                       SmallVectorImpl<Dependency> &dependency);
 
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration

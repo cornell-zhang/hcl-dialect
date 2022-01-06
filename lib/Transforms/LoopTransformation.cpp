@@ -793,9 +793,27 @@ LogicalResult HCLLoopTransformation::runComputeAt(FuncOp &f,
   // 4) Try to merge two loops
   // TODO: bug: 1) cannot support tensor type
   //            2) gemm merge result seems incorrect
+  SmallVector<Dependency, 4> dependency;
+  if (!analyzeDependency(producerFor, consumerFor, dependency)) {
+    std::string err_msg = "Does not support compute_at of stage with if operation.";
+    computeAtOp.emitError("analyzeDependency Failed: ") << err_msg;
+  }
+
+  FusionStrategy strategy(FusionStrategy::Generic);
+  if (dependency.size() > 0) {
+    if (std::find(dependency.begin(), dependency.end(), Dependency::RAW) !=
+        dependency.end()) {
+      strategy = FusionStrategy::ProducerConsumer;
+    } else {
+      strategy = FusionStrategy::Generic;
+    }
+  } else {
+    strategy = FusionStrategy::Sibling;
+  }
+
   ComputationSliceState sliceUnion;
-  FusionResult result =
-      canFuseLoops(producerFor, consumerFor, requested_depth, &sliceUnion);
+  FusionResult result = canFuseLoops(producerFor, consumerFor, requested_depth,
+                                     &sliceUnion, strategy);
   std::string err_msg;
   if (result.value == FusionResult::Success) {
     fuseLoops(producerFor, consumerFor, sliceUnion);

@@ -70,6 +70,14 @@ struct ExprCompare {
   }
 };
 
+Attribute createZeroAttr(OpBuilder &builder, mlir::Type elementType) {
+  if (elementType.isa<FloatType>())
+    return builder.getFloatAttr(elementType, 0.0);
+  if (elementType.isa<IntegerType>())
+    return builder.getIntegerAttr(elementType, 0);
+  return {};
+}
+
 LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
   // 1) Get the schedule
   unsigned int factor = splitOp.factor();
@@ -1007,7 +1015,8 @@ LogicalResult HCLLoopTransformation::runReuseAt(FuncOp &f,
                      .dyn_cast<AffineConstantExpr>()
                      .getValue();
   OpBuilder out_builder(rootForOp); // outside the stage
-  mlir::Type elementType = out_builder.getF32Type();
+  mlir::Type elementType =
+      target.getType().dyn_cast<MemRefType>().getElementType();
   SmallVector<int64_t> shape;
   shape.push_back(distance + 1);
   for (unsigned int i = axis + 1; i < rank; ++i)
@@ -1203,15 +1212,15 @@ LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
                                        // no non-reduction loops inside
     OpBuilder builder(band[firstReductionIdx]);
     Location loc_front = band[firstReductionIdx].getLoc();
-    // TODO: support more data types
-    mlir::Type elementType = builder.getF32Type();
+    mlir::Type elementType =
+        target.getType().dyn_cast<MemRefType>().getElementType();
     SmallVector<Value, 4> memIndices;
     // a) Initialization
     // buffer only has one element
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get({1}, elementType));
     auto zero = builder.create<ConstantOp>(
-        loc_front, elementType, builder.getFloatAttr(elementType, 0.0));
+        loc_front, elementType, createZeroAttr(builder, elementType));
     // no need to create an explicit loop
     auto idx = builder.create<ConstantIndexOp>(loc_front, 0);
     memIndices.push_back(idx);
@@ -1271,14 +1280,15 @@ LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
       ubs.push_back(nonReductionForOps[axis + 1].getConstantUpperBound());
     }
     // TODO: support more data types
-    mlir::Type elementType = builder.getF32Type();
+    mlir::Type elementType =
+        target.getType().dyn_cast<MemRefType>().getElementType();
     SmallVector<Value, 4> memIndices;
     // a) Initialization
     // a.1) Allocate buffer
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get(ubs, elementType));
     auto zero = builder.create<ConstantOp>(
-        loc_front, elementType, builder.getFloatAttr(elementType, 0.0));
+        loc_front, elementType, createZeroAttr(builder, elementType));
 
     // a.2) Create initialization loop
     //      need to create an explicit loop

@@ -9,7 +9,7 @@
 #ifndef HCL_ATTRS
 #define HCL_ATTRS
 
-include "HeteroCLDialect.td"
+include "hcl/Dialect/HeteroCLDialect.td"
 
 // https://mlir.llvm.org/docs/OpDefinitions/#enum-attributes
 def CompletePartition: I32EnumAttrCase<"CompletePartition", 0>;

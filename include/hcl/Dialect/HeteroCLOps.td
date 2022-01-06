@@ -9,9 +9,9 @@
 #ifndef HCL_OPS
 #define HCL_OPS
 
-include "HeteroCLDialect.td"
-include "HeteroCLTypes.td"
-include "HeteroCLAttrs.td"
+include "hcl/Dialect/HeteroCLDialect.td"
+include "hcl/Dialect/HeteroCLTypes.td"
+include "hcl/Dialect/HeteroCLAttrs.td"
 
 include "mlir/Interfaces/SideEffectInterfaces.td"
 

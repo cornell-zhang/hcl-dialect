@@ -9,7 +9,7 @@
 #ifndef HCL_TYPES
 #define HCL_TYPES
 
-include "HeteroCLDialect.td"
+include "hcl/Dialect/HeteroCLDialect.td"
 
 // // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
 // https://github.com/llvm/torch-mlir/blob/main/include/torch-mlir/Dialect/Torch/IR/TorchTypes.td#L50

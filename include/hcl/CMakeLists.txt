@@ -1,1 +1,2 @@
+add_subdirectory(Bindings)
 add_subdirectory(Dialect)

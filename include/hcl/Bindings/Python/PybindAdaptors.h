@@ -30,14 +30,14 @@
 
 namespace py = pybind11;
 
+// TODO: Move this to Interop.h and make it externally configurable/use it
+// consistently to locate the "import mlir" top-level.
+#define MLIR_PYTHON_PACKAGE_PREFIX "mlir."
+
 // Raw CAPI type casters need to be declared before use, so always include them
 // first.
 namespace pybind11 {
 namespace detail {
-
-// template <typename T>
-// struct type_caster<llvm::Optional<T>> : optional_caster<llvm::Optional<T>>
-// {};
 
 /// Helper to convert a presumed MLIR API object to a capsule, accepting either
 /// an explicit Capsule (which can happen when two C APIs are communicating
@@ -59,7 +59,8 @@ static py::object mlirApiObjectToCapsule(py::handle apiObject) {
 // ownership is unclear.
 
 /// Casts object <-> MlirAffineMap.
-template <> struct type_caster<MlirAffineMap> {
+template <>
+struct type_caster<MlirAffineMap> {
   PYBIND11_TYPE_CASTER(MlirAffineMap, _("MlirAffineMap"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -72,7 +73,7 @@ template <> struct type_caster<MlirAffineMap> {
   static handle cast(MlirAffineMap v, return_value_policy, handle) {
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonAffineMapToCapsule(v));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("AffineMap")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
@@ -80,7 +81,8 @@ template <> struct type_caster<MlirAffineMap> {
 };
 
 /// Casts object <-> MlirAttribute.
-template <> struct type_caster<MlirAttribute> {
+template <>
+struct type_caster<MlirAttribute> {
   PYBIND11_TYPE_CASTER(MlirAttribute, _("MlirAttribute"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -93,7 +95,7 @@ template <> struct type_caster<MlirAttribute> {
   static handle cast(MlirAttribute v, return_value_policy, handle) {
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonAttributeToCapsule(v));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("Attribute")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
@@ -101,7 +103,8 @@ template <> struct type_caster<MlirAttribute> {
 };
 
 /// Casts object -> MlirContext.
-template <> struct type_caster<MlirContext> {
+template <>
+struct type_caster<MlirContext> {
   PYBIND11_TYPE_CASTER(MlirContext, _("MlirContext"));
   bool load(handle src, bool) {
     if (src.is_none()) {
@@ -109,7 +112,7 @@ template <> struct type_caster<MlirContext> {
       // TODO: This raises an error of "No current context" currently.
       // Update the implementation to pretty-print the helpful error that the
       // core implementations print in this case.
-      src = py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+      src = py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
                 .attr("Context")
                 .attr("current");
     }
@@ -124,7 +127,8 @@ template <> struct type_caster<MlirContext> {
 
 /// Casts object <-> MlirLocation.
 // TODO: Coerce None to default MlirLocation.
-template <> struct type_caster<MlirLocation> {
+template <>
+struct type_caster<MlirLocation> {
   PYBIND11_TYPE_CASTER(MlirLocation, _("MlirLocation"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -137,7 +141,7 @@ template <> struct type_caster<MlirLocation> {
   static handle cast(MlirLocation v, return_value_policy, handle) {
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonLocationToCapsule(v));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("Location")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
@@ -145,7 +149,8 @@ template <> struct type_caster<MlirLocation> {
 };
 
 /// Casts object <-> MlirModule.
-template <> struct type_caster<MlirModule> {
+template <>
+struct type_caster<MlirModule> {
   PYBIND11_TYPE_CASTER(MlirModule, _("MlirModule"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -158,7 +163,7 @@ template <> struct type_caster<MlirModule> {
   static handle cast(MlirModule v, return_value_policy, handle) {
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonModuleToCapsule(v));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("Module")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
@@ -166,7 +171,8 @@ template <> struct type_caster<MlirModule> {
 };
 
 /// Casts object <-> MlirOperation.
-template <> struct type_caster<MlirOperation> {
+template <>
+struct type_caster<MlirOperation> {
   PYBIND11_TYPE_CASTER(MlirOperation, _("MlirOperation"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -181,7 +187,7 @@ template <> struct type_caster<MlirOperation> {
       return py::none();
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonOperationToCapsule(v));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("Operation")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
@@ -189,7 +195,8 @@ template <> struct type_caster<MlirOperation> {
 };
 
 /// Casts object -> MlirPassManager.
-template <> struct type_caster<MlirPassManager> {
+template <>
+struct type_caster<MlirPassManager> {
   PYBIND11_TYPE_CASTER(MlirPassManager, _("MlirPassManager"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -202,7 +209,8 @@ template <> struct type_caster<MlirPassManager> {
 };
 
 /// Casts object <-> MlirType.
-template <> struct type_caster<MlirType> {
+template <>
+struct type_caster<MlirType> {
   PYBIND11_TYPE_CASTER(MlirType, _("MlirType"));
   bool load(handle src, bool) {
     py::object capsule = mlirApiObjectToCapsule(src);
@@ -215,29 +223,8 @@ template <> struct type_caster<MlirType> {
   static handle cast(MlirType t, return_value_policy, handle) {
     py::object capsule =
         py::reinterpret_steal<py::object>(mlirPythonTypeToCapsule(t));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+    return py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
         .attr("Type")
-        .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
-        .release();
-  }
-};
-
-/// Casts object <-> MlirValue.
-template <> struct type_caster<MlirValue> {
-  PYBIND11_TYPE_CASTER(MlirValue, _("MlirValue"));
-  bool load(handle src, bool) {
-    py::object capsule = mlirApiObjectToCapsule(src);
-    value = mlirPythonCapsuleToValue(capsule.ptr());
-    if (mlirValueIsNull(value)) {
-      return false;
-    }
-    return true;
-  }
-  static handle cast(MlirValue t, return_value_policy, handle) {
-    py::object capsule =
-        py::reinterpret_steal<py::object>(mlirPythonValueToCapsule(t));
-    return py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
-        .attr("Value")
         .attr(MLIR_PYTHON_CAPI_FACTORY_ATTR)(capsule)
         .release();
   }
@@ -339,7 +326,7 @@ public:
                           IsAFunctionTy isaFunction)
       : mlir_attribute_subclass(
             scope, attrClassName, isaFunction,
-            py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir"))
+            py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir")
                 .attr("Attribute")) {}
 
   /// Subclasses with a provided mlir.ir.Attribute super-class. This must
@@ -391,7 +378,7 @@ public:
                      IsAFunctionTy isaFunction)
       : mlir_type_subclass(
             scope, typeClassName, isaFunction,
-            py::module::import(MAKE_MLIR_PYTHON_QUALNAME("ir")).attr("Type")) {}
+            py::module::import(MLIR_PYTHON_PACKAGE_PREFIX "ir").attr("Type")) {}
 
   /// Subclasses with a provided mlir.ir.Type super-class. This must
   /// be used if the subclass is being defined in the same extension module

@@ -19,21 +19,19 @@ declare_mlir_python_sources(MLIRPythonSources.Dialects
 set(MLIR_PYTHON_SOURCE_DIR "${MLIR_MAIN_SRC_DIR}/lib/Bindings/Python")
 set(HCL_BINARY_DIR "${PROJECT_BINARY_DIR}/tools/hcl")
 
-# declare_mlir_python_sources(HCLBindingsPythonExtension)
-# 
-# declare_mlir_python_extension(HCLBindingsPythonExtension.Core
-#   MODULE_NAME _hcl
-#   ADD_TO_PARENT HCLBindingsPythonExtension
-#   SOURCES
-#     HCLModule.cpp
-#     ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
-#   EMBED_CAPI_LINK_LIBS
-#     MLIRHCLCAPIHLSCpp
-#   PRIVATE_LINK_LIBS
-#     LLVMSupport
-#     MLIRHCLConversion
-#     MLIRHCLTransforms
-# )
+declare_mlir_python_sources(HCLBindingsPythonExtension)
+
+declare_mlir_python_extension(HCLBindingsPythonExtension.Core
+  MODULE_NAME _hcl
+  ADD_TO_PARENT HCLBindingsPythonExtension
+  SOURCES
+    HCLModule.cpp
+    ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
+  EMBED_CAPI_LINK_LIBS
+    MLIRHCLCAPIHLSCpp
+  PRIVATE_LINK_LIBS
+    LLVMSupport
+)
 
 ################################################################################
 # Declare Python sources
@@ -80,7 +78,7 @@ add_mlir_python_common_capi_library(HCLBindingsPythonCAPI
   DECLARED_SOURCES
     MLIRPythonSources
     HCLBindingsPythonSources
-    #HCLBindingsPythonExtension
+    HCLBindingsPythonExtension
 )
 
 # Bundle the MLIR python sources into our package.
@@ -94,7 +92,7 @@ add_mlir_python_modules(HCLMLIRPythonModules
     MLIRPythonSources
     # We need the hcl extensions co-located with the MLIR extensions. When
     # the namespace is unified, this moves to the below.
-    #HCLBindingsPythonExtension
+    HCLBindingsPythonExtension
   COMMON_CAPI_LINK_LIBS
     HCLBindingsPythonCAPI
 )

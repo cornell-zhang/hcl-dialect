@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD 14 CACHE STRING "C++ standard to conform to")
 
 set(CMAKE_BUILD_TYPE Debug)
 
-set(PYTHON_BINDING OFF)
+if(PYTHON_BINDING)
+message(STATUS "Using Python binding")
+endif()
 
 find_package(MLIR REQUIRED CONFIG)
 

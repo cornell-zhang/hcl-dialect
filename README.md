@@ -51,6 +51,7 @@ git checkout tags/llvmorg-13.0.0 -b v13.0.0
       -DCMAKE_BUILD_TYPE=Release \
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_UTILS=ON \
+      -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
       -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
    mkdir tools/mlir/python/dialects # Makefile bug
    make -j

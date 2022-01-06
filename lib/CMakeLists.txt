@@ -1,4 +1,6 @@
+if (PYTHON_BINDING)
 add_subdirectory(CAPI)
+endif()
 add_subdirectory(Dialect)
 add_subdirectory(Transforms)
 add_subdirectory(Translation)

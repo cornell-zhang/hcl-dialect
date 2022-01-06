@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 14 CACHE STRING "C++ standard to conform to")
 
 set(CMAKE_BUILD_TYPE Debug)
 
+set(PYTHON_BINDING OFF)
+
 find_package(MLIR REQUIRED CONFIG)
 
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")

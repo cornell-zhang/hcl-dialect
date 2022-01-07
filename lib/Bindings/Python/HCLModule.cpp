@@ -8,13 +8,13 @@
 
 #include "hcl/Bindings/Python/PybindAdaptors.h"
 
+#include "hcl-c/EmitHLSCpp.h"
+#include "hcl-c/HCL.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/../../lib/Bindings/Python/IRModule.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
-#include "hcl-c/EmitHLSCpp.h"
-#include "hcl-c/HCL.h"
-#include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/ADT/SmallVector.h"
@@ -32,7 +32,6 @@ using namespace hcl;
 //===----------------------------------------------------------------------===//
 // Customized Python classes
 //===----------------------------------------------------------------------===//
-
 
 //===----------------------------------------------------------------------===//
 // Emission APIs

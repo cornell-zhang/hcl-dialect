@@ -5,8 +5,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl-c/HCL.h"
-#include "mlir/CAPI/Registration.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
+#include "mlir/CAPI/Registration.h"
 
 using namespace mlir;
 using namespace hcl;

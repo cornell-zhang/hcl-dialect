@@ -1,10 +1,2 @@
-add_mlir_public_c_api_library(MLIRHCLCAPIHLSCpp
-  EmitHLSCpp.cpp
-
-  ADDITIONAL_HEADER_DIRS
-  ${MLIR_MAIN_INCLUDE_DIR}/mlir-c
-
-  LINK_LIBS PUBLIC
-  MLIRCAPIIR
-  MLIRHCLEmitHLSCpp
-  )
+add_subdirectory(Dialect)
+add_subdirectory(Translation)

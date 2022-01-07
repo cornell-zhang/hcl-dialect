@@ -6,7 +6,7 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-#include "PybindAdaptors.h"
+#include "hcl/Bindings/Python/PybindAdaptors.h"
 
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/../../lib/Bindings/Python/IRModule.h"
@@ -59,9 +59,9 @@ PYBIND11_MODULE(_hcl, m) {
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
 
-    MlirDialectHandle hlscpp = mlirGetDialectHandle__hlscpp__();
-    mlirDialectHandleRegisterDialect(hlscpp, context);
-    mlirDialectHandleLoadDialect(hlscpp, context);
+    MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
+    mlirDialectHandleRegisterDialect(hcl, context);
+    mlirDialectHandleLoadDialect(hcl, context);
   });
 
   // Emission APIs.

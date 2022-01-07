@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HLSCpp, hlscpp);
+MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HCL, hcl);
 
 #ifdef __cplusplus
 }

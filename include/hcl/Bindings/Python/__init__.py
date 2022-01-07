@@ -4,5 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-# from mlir._mlir_libs._hcl import *
-from mlir._mlir_libs import *
+# from mlir._cext_loader import _load_extension
+# _cextHCL = _load_extension("_hcl")
+
+from ._hcl_ops_gen import *

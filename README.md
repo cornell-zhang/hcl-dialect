@@ -58,11 +58,6 @@ git checkout tags/llvmorg-13.0.0 -b v13.0.0
 
    # Export the generated MLIR Python library
    export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
-   # Add Pybind11 include path
-   export CPLUS_INCLUDE_PATH=$(python3 -c "import pybind11;print(pybind11.get_include())"):${CPLUS_INCLUDE_PATH}
-   # Maybe add Python3 include path, which is used by <Python.h>
-   python3-config --includes
-   export CPLUS_INCLUDE_PATH=/the/above/include/path:${CPLUS_INCLUDE_PATH}
    ```
 
 ### Build HeteroCL Dialect
@@ -82,8 +77,16 @@ cmake -G "Unix Makefiles" .. \
 make -j
 ```
 
-- Build with Python binding: please set `-DPYTHON_BINDING=ON`. After building, export the generated HCL library to enable function call in Python.
+- Build with Python binding
 ```sh
+cmake -G "Unix Makefiles" .. \
+   -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
+   -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
+   -DPYTHON_BINDING=ON \
+   -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
+make -j
+
+# Export the generated HCL-MLIR Python library
 export PYTHONPATH=build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
 

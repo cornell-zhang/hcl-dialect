@@ -4,7 +4,7 @@ include(AddMLIRPython)
 # See documentation for `declare_mlir_python_sources`'s ROOT_DIR
 # argument.
 set(HCL_MLIR_PYTHON_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-set(HCL_MLIR_PYTHON_PACKAGES_DIR "${PROJECT_BINARY_DIR}/tools/hcl")
+set(HCL_MLIR_PYTHON_PACKAGES_DIR "${PROJECT_BINARY_DIR}/tools/hcl/python_packages")
 set(MLIR_PYTHON_SOURCE_DIR "${MLIR_MAIN_SRC_DIR}/lib/Bindings/Python")
 set(HCL_PYTHON_SOURCE_DIR "${PROJECT_SOURCE_DIR}/lib/Bindings/Python")
 
@@ -64,15 +64,15 @@ set(_source_components
 
 add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI
   INSTALL_COMPONENT HCLMLIRPythonModules
-  INSTALL_DESTINATION python_packages/hcl_mlir/hcl_mlir/_mlir_libs
-  OUTPUT_DIRECTORY "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_mlir/hcl_mlir/_mlir_libs"
+  INSTALL_DESTINATION python_packages/hcl_core/hcl_mlir/_mlir_libs
+  OUTPUT_DIRECTORY "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_core/hcl_mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
   DECLARED_SOURCES ${_source_components}
 )
 
 add_mlir_python_modules(HCLMLIRPythonModules
-  ROOT_PREFIX "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_mlir/hcl_mlir"
-  INSTALL_PREFIX "python_packages/hcl_mlir/hcl_mlir"
+  ROOT_PREFIX "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_core/hcl_mlir"
+  INSTALL_PREFIX "python_packages/hcl_core/hcl_mlir"
   DECLARED_SOURCES ${_source_components}
   COMMON_CAPI_LINK_LIBS
     HCLMLIRAggregateCAPI

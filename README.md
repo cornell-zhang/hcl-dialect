@@ -87,7 +87,7 @@ cmake -G "Unix Makefiles" .. \
 make -j
 
 # Export the generated HCL-MLIR Python library
-export PYTHONPATH=build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
+export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
 
 Lastly, you can use the following integration test to see whether your built dialect works properly.

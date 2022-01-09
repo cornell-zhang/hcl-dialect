@@ -47,7 +47,7 @@ git checkout tags/llvmorg-13.0.0 -b v13.0.0
    cmake -G "Unix Makefiles" ../llvm \
       -DLLVM_ENABLE_PROJECTS=mlir \
       -DLLVM_BUILD_EXAMPLES=ON \
-      -DLLVM_TARGETS_TO_BUILD="X86" \
+      -DLLVM_TARGETS_TO_BUILD="host" \
       -DCMAKE_BUILD_TYPE=Release \
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_UTILS=ON \
@@ -84,6 +84,7 @@ cmake -G "Unix Makefiles" .. \
    -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
+mkdir include/hcl/Bindings/Python/affine # Makefile bug
 make -j
 
 # Export the generated HCL-MLIR Python library

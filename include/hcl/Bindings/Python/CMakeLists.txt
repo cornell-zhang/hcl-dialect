@@ -30,6 +30,7 @@ declare_mlir_dialect_python_bindings(
   SOURCES
     __init__.py
     _ods_common.py
+    build_ir.py
   DIALECT_NAME hcl
 )
 

@@ -8,3 +8,5 @@ from ._hcl_ops_gen import *
 
 # load from extension library
 from ._mlir_libs._hcl import *
+
+from .build_ir import *

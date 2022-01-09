@@ -1,79 +1,89 @@
 from mlir.ir import *
-from mlir.dialects import builtin, std
+from mlir.dialects import builtin, std, memref
 from .affine import AffineForOp
 
 ctx = Context()
 loc = Location.unknown(ctx)
 f32 = F32Type.get(ctx)
+i32 = IntegerType.get_signless(32, context=ctx)
+
+def get_expr_op(expr, ip=None):
+    if not isinstance(expr, ExprOp):
+        if type(expr) == int:
+            expr = IntegerAttr.get(i32, expr)
+            expr = ConstantOp(std.ConstantOp(i32, expr, loc=loc, ip=ip))
+        else:
+            expr = FloatAttr.get(f32, expr)
+            expr = ConstantOp(std.ConstantOp(f32, expr, loc=loc, ip=ip))
+    return expr
+
+def get_ip(lhs, rhs):
+    if isinstance(lhs, ExprOp) and lhs.ip != None:
+        return lhs.ip
+    elif isinstance(rhs, ExprOp) and rhs.ip != None:
+        return rhs.ip
+    else:
+        raise RuntimeError("Cannot find insertion point")
 
 class ExprOp(object):
 
-    def __init__(self, ip):
+    def __init__(self, op, ip=None):
+        self.op = op
         self.ip = ip
 
     @staticmethod
-    def get_ip(lhs, rhs):
-        if lhs.ip != None:
-            return lhs.ip
-        elif rhs.ip != None:
-            return rhs.ip
-        else:
-            raise RuntimeError("Cannot find insertion point")
-
-    @staticmethod
     def set_ip(expr, ip):
-        if not hasattr(expr, "ip") or expr.ip == None:
+        if expr.ip == None:
             expr.ip = ip
 
     def get_expr(self):
         if isinstance(self.op, BlockArgument):
+            return self.op
+        elif isinstance(self.op, Attribute):
             return self.op
         else:
             return self.op.result
 
     @staticmethod
     def binary_op(bin_op, lhs, rhs):
-        ip = lhs.get_ip(lhs, rhs)
-        op = bin_op(f32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
-        return op
+        ip = get_ip(lhs, rhs)
+        lhs = get_expr_op(lhs, ip)
+        rhs = get_expr_op(rhs, ip)
+        if isinstance(lhs.op, BlockArgument):
+            op = bin_op(i32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+        else:
+            op = bin_op(f32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+        return op, ip
 
     def __add__(self, other):
-        self.op = self.binary_op(std.AddFOp, self, other)
-        return self
+        return AddOp(*self.binary_op(std.AddFOp, self, other))
 
     def __radd__(self, other):
-        self.op = self.binary_op(std.AddFOp, other, self)
-        return self
+        return AddOp(*self.binary_op(std.AddFOp, other, self))
 
     def __sub__(self, other):
-        self.op = self.binary_op(std.SubFOp, self, other)
-        return self
+        return SubOp(*self.binary_op(std.SubFOp, self, other))
 
     def __rsub__(self, other):
-        self.op = self.binary_op(std.SubFOp, other, self)
-        return self
+        return SubOp(*self.binary_op(std.SubFOp, other, self))
 
     def __mul__(self, other):
-        self.op = self.binary_op(std.MulFOp, self, other)
-        return self
+        return MulOp(*self.binary_op(std.MulFOp, self, other))
 
     def __rmul__(self, other):
-        self.op = self.binary_op(std.MulFOp, other, self)
-        return self
+        return MulOp(*self.binary_op(std.MulFOp, other, self))
 
     def __div__(self, other):
-        self.op = self.binary_op(std.DivFOp, self, other)
-        return self
+        return DivOp(*self.binary_op(std.DivFOp, self, other))
 
     def __rdiv__(self, other):
-        self.op = self.binary_op(std.DivFOp, other, self)
-        return self
+        return DivOp(*self.binary_op(std.DivFOp, other, self))
 
     def __truediv__(self, other):
-        raise RuntimeError("Not implemented")
+        return DivOp(*self.binary_op(std.DivFOp, self, other))
 
     def __rtruediv__(self, other):
-        raise RuntimeError("Not implemented")
+        return DivOp(*self.binary_op(std.DivFOp, other, self))
 
     def __floordiv__(self, other):
         raise RuntimeError("Not implemented")
@@ -184,11 +194,51 @@ class ExprOp(object):
 
 class IterVar(ExprOp):
     """Symbolic variable."""
+    pass
 
-    def __init__(self, val, ip):
-        super(IterVar, self).__init__(ip)
-        self.op = val
+class IntAttr(ExprOp):
+    pass
 
+class FloatAttr(ExprOp):
+    pass
+
+class ConstantOp(ExprOp):
+    pass
+
+class AddOp(ExprOp):
+    pass
+
+class SubOp(ExprOp):
+    pass
+
+class MulOp(ExprOp):
+    pass
+
+class DivOp(ExprOp):
+    pass
+
+class LoadOp(ExprOp):
+    pass
+
+class TensorOp(object):
+
+    def __init__(self, op, ip):
+        self.op = op
+        self.ip = ip
+
+    def __getitem__(self, indices):
+        ip = indices[0].ip
+        new_indices = []
+        for index in indices:
+            if isinstance(index, IterVar):
+                new_indices.append(index.op)
+            else:
+                new_indices.append(index.op.result)
+        return LoadOp(memref.LoadOp(f32, self.op.result, new_indices, loc=loc, ip=ip), ip)
+
+def placeholder(shape, name="", ip=None):
+    memref_type = MemRefType.get(shape, f32)
+    return TensorOp(memref.AllocOp(memref_type, None, None, None, ip=ip), ip)
 
 def make_constant_for(lb, ub, step=1, name="", ip=None):
     # Construct lower bound

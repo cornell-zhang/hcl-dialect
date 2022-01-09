@@ -38,124 +38,122 @@ class ExprOp(object):
 
     def get_expr(self):
         if isinstance(self.op, BlockArgument):
-            return self.op
+            return CastOp(std.IndexCastOp(i32, self.op, ip=self.ip), self.ip).op.result # explicitly index cast
         elif isinstance(self.op, Attribute):
             return self.op
         else:
             return self.op.result
 
     @staticmethod
-    def binary_op(bin_op, lhs, rhs):
+    def binary_op(bin_op, lhs, rhs, arg=""):
         ip = get_ip(lhs, rhs)
         lhs = get_expr_op(lhs, ip)
         rhs = get_expr_op(rhs, ip)
-        if isinstance(lhs.op, BlockArgument):
-            op = bin_op(i32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+        if arg == "":
+            if isinstance(lhs.op, BlockArgument):
+                op = bin_op["i"](i32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+            else:
+                op = bin_op["f"](f32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
         else:
-            op = bin_op(f32, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+            if isinstance(lhs.op, BlockArgument):
+                op = bin_op["i"](i32, arg, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
+            else:
+                op = bin_op["f"](f32, arg, lhs.get_expr(), rhs.get_expr(), loc=loc, ip=ip)
         return op, ip
 
     def __add__(self, other):
-        return AddOp(*self.binary_op(std.AddFOp, self, other))
+        return AddOp(*self.binary_op({"f": std.AddFOp, "i": std.AddIOp}, self, other))
 
     def __radd__(self, other):
-        return AddOp(*self.binary_op(std.AddFOp, other, self))
+        return AddOp(*self.binary_op({"f": std.AddFOp, "i": std.AddIOp}, other, self))
 
     def __sub__(self, other):
-        return SubOp(*self.binary_op(std.SubFOp, self, other))
+        return SubOp(*self.binary_op({"f": std.SubFOp, "i": std.SubIOp}, self, other))
 
     def __rsub__(self, other):
-        return SubOp(*self.binary_op(std.SubFOp, other, self))
+        return SubOp(*self.binary_op({"f": std.SubFOp, "i": std.SubIOp}, other, self))
 
     def __mul__(self, other):
-        return MulOp(*self.binary_op(std.MulFOp, self, other))
+        return MulOp(*self.binary_op({"f": std.MulFOp, "i": std.MulIOp}, self, other))
 
     def __rmul__(self, other):
-        return MulOp(*self.binary_op(std.MulFOp, other, self))
+        return MulOp(*self.binary_op({"f": std.MulFOp, "i": std.MulIOp}, other, self))
 
     def __div__(self, other):
-        return DivOp(*self.binary_op(std.DivFOp, self, other))
+        return DivOp(*self.binary_op({"f": std.DivFOp, "i": std.DivIOp}, self, other))
 
     def __rdiv__(self, other):
-        return DivOp(*self.binary_op(std.DivFOp, other, self))
+        return DivOp(*self.binary_op({"f": std.DivFOp, "i": std.DivIOp}, other, self))
 
     def __truediv__(self, other):
-        return DivOp(*self.binary_op(std.DivFOp, self, other))
+        return DivOp(*self.binary_op({"f": std.DivFOp, "i": std.DivIOp}, self, other))
 
     def __rtruediv__(self, other):
-        return DivOp(*self.binary_op(std.DivFOp, other, self))
+        return DivOp(*self.binary_op({"f": std.DivFOp, "i": std.DivIOp}, other, self))
 
     def __floordiv__(self, other):
-        raise RuntimeError("Not implemented")
+        return FloorDivOp(*self.binary_op({"f": std.SignedFloorDivFOp, "i": std.SignedFloorDivIOp}, other, self))
 
     def __rfloordiv__(self, other):
-        raise RuntimeError("Not implemented")
+        return FloorDivOp(*self.binary_op({"f": std.SignedFloorDivFOp, "i": std.SignedFloorDivIOp}, other, self))
 
     def __mod__(self, other):
-        raise RuntimeError("Not implemented")
+        return RemOp(*self.binary_op({"f": std.RemFOp, "i": std.RemIOp}, other, self))
 
     def __neg__(self):
-        raise RuntimeError("Not implemented")
-        neg_one = _api_internal._const(-1, self.dtype)
-        return self.__mul__(neg_one)
+        if isinstance(self.op, BlockArgument):
+            op = NegIOp(i32, self.get_expr(), loc=loc, ip=ip)
+        else:
+            op = NegFOp(f32, self.get_expr(), loc=loc, ip=ip)
+        return op
 
     def __lshift__(self, other):
-        if "float" in self.dtype:
-            raise APIError("Cannot perform shift with float")
-        return _make.Call(self.dtype, "shift_left", [self, other], Call.PureIntrinsic, None, 0)
+        return ShiftOp(*self.binary_op({"f": std.ShiftLeftOp, "i": std.ShiftLeftOp}, self, other))
 
     def __rshift__(self, other):
-        if "float" in self.dtype:
-            raise APIError("Cannot perform shift with float")
-        return _make.Call(self.dtype, "shift_right", [self, other], Call.PureIntrinsic, None, 0)
+        return ShiftOp(*self.binary_op({"f": std.SignedShiftRightOp, "i": std.SignedShiftRightOp}, other, self))
 
     def __and__(self, other):
-        if "float" in self.dtype:
-            raise APIError("Cannot perform bitwise and with float")
-        return _make.Call(self.dtype, "bitwise_and", [self, other], Call.PureIntrinsic, None, 0)
+        # TODO: emit error when accepting floating points
+        return AndOp(*self.binary_op({"f": std.AndOp, "i": std.AndOp}, self, other))
 
     def __or__(self, other):
-        if "float" in self.dtype:
-            raise APIError("Cannot perform bitwise or with float")
-        return _make.Call(self.dtype, "bitwise_or", [self, other], Call.PureIntrinsic, None, 0)
+        # TODO: emit error when accepting floating points
+        return OrOp(*self.binary_op({"f": std.OrOp, "i": std.OrOp}, self, other))
 
     def __xor__(self, other):
-        if "float" in self.dtype:
-            raise APIError("Cannot perform bitwise xor with float")
-        return _make.Call(self.dtype, "bitwise_xor", [self, other], Call.PureIntrinsic, None, 0)
+        # TODO: emit error when accepting floating points
+        return XOrOp(*self.binary_op({"f": std.XOrOp, "i": std.XOrOp}, self, other))
 
     def __invert__(self):
-        return _make.Call(self.dtype, "bitwise_not", [self], Call.PureIntrinsic, None, 0)
+        raise RuntimeError("Not implemented")
 
     def __lt__(self, other):
-        return _make.LT(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="slt"))
 
     def __le__(self, other):
-        return _make.LE(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="sle"))
 
     def __eq__(self, other):
-        return EqualOp(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="eq"))
 
     def __ne__(self, other):
-        return NotEqualOp(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="ne"))
 
     def __gt__(self, other):
-        return _make.GT(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="sgt"))
 
     def __ge__(self, other):
-        return _make.GE(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="sge"))
 
     def __getitem__(self, indices):
-        if isinstance(indices, slice):
-            return _make.GetSlice(self, indices.start, indices.stop)
-        else:
-            return _make.GetBit(self, indices)
+        raise RuntimeError("Not implemented")
 
     def __setitem__(self, indices, expr):
-        raise APIError("Cannot set bit/slice of an expression")
+        raise RuntimeError("Cannot set bit/slice of an expression")
 
     def __nonzero__(self):
-        raise APIError("1) Cannot use and / or / not operator to Expr, " +
+        raise RuntimeError("1) Cannot use and / or / not operator to Expr, " +
                        "2) Cannot compare NumPy numbers with HeteroCL exprs, " +
                        "hint: swap the operands")
 
@@ -175,7 +173,7 @@ class ExprOp(object):
         ret : Expr
             The equality expression.
         """
-        return _make.EQ(self, other)
+        return CmpOp(*self.binary_op({"f": std.CmpFOp, "i": std.CmpIOp}, self, other, arg="eq"))
 
     def astype(self, dtype):
         """Cast the expression to other type.
@@ -190,7 +188,7 @@ class ExprOp(object):
         expr : Expr
             Expression with new type
         """
-        return _make.static_cast(dtype, self)
+        raise RuntimeError("Not implemented")
 
 class IterVar(ExprOp):
     """Symbolic variable."""
@@ -217,7 +215,37 @@ class MulOp(ExprOp):
 class DivOp(ExprOp):
     pass
 
+class RemOp(ExprOp):
+    pass
+
+class FloorDivOp(ExprOp):
+    pass
+
+class ShiftOp(ExprOp):
+    pass
+
 class LoadOp(ExprOp):
+    pass
+
+class StoreOp(ExprOp):
+    pass
+
+class NegOp(ExprOp):
+    pass
+
+class CmpOp(ExprOp):
+    pass
+
+class AndOp(ExprOp):
+    pass
+
+class OrOp(ExprOp):
+    pass
+
+class XOrOp(ExprOp):
+    pass
+
+class CastOp(ExprOp):
     pass
 
 class TensorOp(object):

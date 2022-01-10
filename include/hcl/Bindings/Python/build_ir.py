@@ -1,6 +1,7 @@
 from mlir.ir import *
 from mlir.dialects import builtin, std, memref
 from .affine import AffineForOp
+import mlir.ir as ir
 
 ctx = Context()
 loc = Location.unknown(ctx)
@@ -10,10 +11,10 @@ i32 = IntegerType.get_signless(32, context=ctx)
 def get_expr_op(expr, ip=None):
     if not isinstance(expr, ExprOp):
         if type(expr) == int:
-            expr = IntegerAttr.get(i32, expr)
+            expr = ir.IntegerAttr.get(i32, expr)
             expr = ConstantOp(std.ConstantOp(i32, expr, loc=loc, ip=ip))
         else:
-            expr = FloatAttr.get(f32, expr)
+            expr = ir.FloatAttr.get(f32, expr)
             expr = ConstantOp(std.ConstantOp(f32, expr, loc=loc, ip=ip))
     return expr
 

@@ -21,6 +21,7 @@ class AffineForOp:
                upperBoundMap,
                iter_args: Sequence[Any] = [],
                name="",
+               stage="",
                *,
                loc=None,
                ip=None):
@@ -43,6 +44,8 @@ class AffineForOp:
     attributes["lower_bound"] = lowerBoundMap
     attributes["upper_bound"] = upperBoundMap
     attributes["loop_name"] = name
+    if stage != "":
+        attributes["stage_name"] = stage
     if lower_bound == None and upper_bound == None:
         operands = list(iter_args)
     else:

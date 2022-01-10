@@ -114,6 +114,33 @@ cd ../examples
 make ../test/compute/tiling
 ```
 
+## Integrate with upstream HeteroCL frontend
+Make sure you have correctly built the above HCL-MLIR dialect, and follow the instruction below.
+
+```sh
+# clone the HeteroCL repo
+git clone https://github.com/chhzh123/heterocl.git heterocl-mlir
+cd heterocl-mlir
+git checkout hcl-mlir
+
+# set up LLVM and cmake paths in Makefile.config
+# You can reuse the built LLVM 13 above, just set
+# LLVM_CONFIG = $BUILD_DIR/bin/llvm-config
+# ...
+
+# build frontend
+make -j
+
+# export library
+export HCL_HOME=$(pwd)
+export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
+
+# run tests
+python3 tests/mlir/test_loop.py
+```
+
+Notice the integration is still in a very early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
+
 
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)

@@ -13,6 +13,10 @@
 extern "C" {
 #endif
 
+/// Checks whether the given type is an loop handle type.
+MLIR_CAPI_EXPORTED bool mlirTypeIsALoopHandle(MlirType type);
+MLIR_CAPI_EXPORTED MlirType mlirLoopHandleTypeGet(MlirContext ctx);
+
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HCL, hcl);
 
 #ifdef __cplusplus

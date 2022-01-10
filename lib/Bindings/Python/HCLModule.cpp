@@ -6,14 +6,13 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-#include "hcl/Bindings/Python/PybindAdaptors.h"
-
+#include "hcl/Bindings/Python/HCLModule.h"
+#include "IRModule.h"
 #include "hcl-c/EmitHLSCpp.h"
 #include "hcl-c/HCL.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/HeteroCLPasses.h"
 #include "mlir-c/Bindings/Python/Interop.h"
-#include "mlir/../../lib/Bindings/Python/IRModule.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
 
@@ -75,6 +74,9 @@ PYBIND11_MODULE(_hcl, m) {
     mlirDialectHandleRegisterDialect(hcl, context);
     mlirDialectHandleLoadDialect(hcl, context);
   });
+
+  // auto irModule = m.def_submodule("ir", "MLIR IR Bindings");
+  populateHCLIRTypes(m);
 
   // Loop transform APIs.
   m.def("loop_transformation", &loopTransformation);

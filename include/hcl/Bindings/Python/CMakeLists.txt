@@ -8,6 +8,8 @@ set(HCL_MLIR_PYTHON_PACKAGES_DIR "${PROJECT_BINARY_DIR}/tools/hcl/python_package
 set(MLIR_PYTHON_SOURCE_DIR "${MLIR_MAIN_SRC_DIR}/lib/Bindings/Python")
 set(HCL_PYTHON_SOURCE_DIR "${PROJECT_SOURCE_DIR}/lib/Bindings/Python")
 
+include_directories(${MLIR_PYTHON_SOURCE_DIR})
+
 # We vendor our own MLIR instance in the `hcl_mlir` namespace.
 #add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=hcl_mlir.")
 
@@ -56,13 +58,18 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   ADD_TO_PARENT HCLMLIRPythonExtensions
   SOURCES
     ${HCL_PYTHON_SOURCE_DIR}/HCLModule.cpp
+    ${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
+    ${MLIR_PYTHON_SOURCE_DIR}/IRCore.cpp
+    ${MLIR_PYTHON_SOURCE_DIR}/IRModule.cpp
     ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRHCLCAPIHLSCpp
     MLIRHCLPasses
     MLIRHCLCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
+    MLIRCAPIDebug
     MLIRCAPIIR
+    MLIRCAPIRegistration
     LLVMSupport
 )
 

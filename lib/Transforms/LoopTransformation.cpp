@@ -32,11 +32,7 @@ struct HCLLoopTransformation
     : public PassWrapper<HCLLoopTransformation, FunctionPass> {
 
   void runOnFunction() override;
-
-  StringRef getArgument() const final { return "hcl-loop-transformation"; }
-  StringRef getDescription() const final {
-    return "Loop transformation in HeteroCL";
-  }
+  void applyLoopTransformation(FuncOp &f);
 
   LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp);
   LogicalResult runTiling(FuncOp &f, TileOp &tileOp);
@@ -49,6 +45,11 @@ struct HCLLoopTransformation
   LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp);
   LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp);
   LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp);
+
+  StringRef getArgument() const final { return "hcl-loop-transformation"; }
+  StringRef getDescription() const final {
+    return "Loop transformation in HeteroCL";
+  }
 };
 
 } // namespace
@@ -795,7 +796,8 @@ LogicalResult HCLLoopTransformation::runComputeAt(FuncOp &f,
   //            2) gemm merge result seems incorrect
   SmallVector<Dependency, 4> dependency;
   if (!analyzeDependency(producerFor, consumerFor, dependency)) {
-    std::string err_msg = "Does not support compute_at of stage with if operation.";
+    std::string err_msg =
+        "Does not support compute_at of stage with if operation.";
     computeAtOp.emitError("analyzeDependency Failed: ") << err_msg;
   }
 
@@ -1423,8 +1425,7 @@ LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
   return success();
 }
 
-void HCLLoopTransformation::runOnFunction() {
-  FuncOp f = getFunction();
+void HCLLoopTransformation::applyLoopTransformation(FuncOp &f) {
   SmallVector<Operation *, 10> opToRemove;
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
@@ -1494,6 +1495,17 @@ void HCLLoopTransformation::runOnFunction() {
   for (Operation *op : handleToRemove) {
     op->erase();
   }
+}
+
+void HCLLoopTransformation::runOnFunction() {
+  FuncOp f = getFunction();
+  applyLoopTransformation(f);
+}
+
+bool hcl::applyLoopTransformation(FuncOp &f) {
+  HCLLoopTransformation pass;
+  pass.applyLoopTransformation(f);
+  return true;
 }
 
 namespace mlir {

@@ -11,6 +11,7 @@
 #include "hcl-c/EmitHLSCpp.h"
 #include "hcl-c/HCL.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Transforms/HeteroCLPasses.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/../../lib/Bindings/Python/IRModule.h"
 #include "mlir/Analysis/LoopAnalysis.h"
@@ -32,6 +33,18 @@ using namespace hcl;
 //===----------------------------------------------------------------------===//
 // Customized Python classes
 //===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Loop transform APIs
+//===----------------------------------------------------------------------===//
+
+static bool loopTransformation(MlirOperation op) {
+  py::gil_scoped_release();
+  auto func = dyn_cast<FuncOp>(unwrap(op));
+  if (!func)
+    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
+  return applyLoopTransformation(func);
+}
 
 //===----------------------------------------------------------------------===//
 // Emission APIs
@@ -62,6 +75,9 @@ PYBIND11_MODULE(_hcl, m) {
     mlirDialectHandleRegisterDialect(hcl, context);
     mlirDialectHandleLoadDialect(hcl, context);
   });
+
+  // Loop transform APIs.
+  m.def("loop_transformation", &loopTransformation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

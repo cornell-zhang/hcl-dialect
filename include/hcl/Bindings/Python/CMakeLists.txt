@@ -59,6 +59,7 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
     ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRHCLCAPIHLSCpp
+    MLIRHCLPasses
     MLIRHCLCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     MLIRCAPIIR

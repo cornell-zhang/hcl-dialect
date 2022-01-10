@@ -58,6 +58,10 @@ git checkout tags/llvmorg-13.0.0 -b v13.0.0
 
    # Export the generated MLIR Python library
    export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
+
+   # To enable better backtracing for debugging,
+   # we suggest setting the following system path
+   export LLVM_SYMBOLIZER_PATH=$(pwd)/bin/llvm-symbolizer
    ```
 
 ### Build HeteroCL Dialect

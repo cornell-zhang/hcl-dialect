@@ -100,10 +100,11 @@ cmake --build . --target check-hcl
 ## Run HeteroCL Dialect
 ```sh
 # perform loop transformation passes
-./bin/hcl-opt --opt ../test/compute/tiling.mlir
+./bin/hcl-opt -opt ../test/compute/tiling.mlir
 
 # generate C++ HLS code
-./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_conv.mlir
+./bin/hcl-opt -opt ../test/compute/tiling.mlir.opt > ../test/compute/tiling.cpp
+./bin/hcl-translate -emit-hlscpp ../test/compute/tiling.mlir.opt > ../test/compute/tiling.cpp
 ```
 
 Or you can use our provided script to directly generate C++ HLS code from MLIR.

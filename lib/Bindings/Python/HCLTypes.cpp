@@ -23,7 +23,7 @@ using namespace mlir::python;
 
 namespace {
 
-/// Floating Point Type subclass - LoopHandleType.
+/// LoopHandleType.
 class PyLoopHandleType : public PyConcreteType<PyLoopHandleType> {
 public:
   static constexpr IsAFunctionTy isaFunction = mlirTypeIsALoopHandle;
@@ -41,8 +41,27 @@ public:
   }
 };
 
+/// StageHandleType.
+class PyStageHandleType : public PyConcreteType<PyStageHandleType> {
+public:
+  static constexpr IsAFunctionTy isaFunction = mlirTypeIsAStageHandle;
+  static constexpr const char *pyClassName = "StageHandleType";
+  using PyConcreteType::PyConcreteType;
+
+  static void bindDerived(ClassTy &c) {
+    c.def_static(
+        "get",
+        [](DefaultingPyMlirContext context) {
+          MlirType t = mlirStageHandleTypeGet(context->get());
+          return PyStageHandleType(context->getRef(), t);
+        },
+        py::arg("context") = py::none(), "Create a stage handle type.");
+  }
+};
+
 } // namespace
 
 void mlir::python::populateHCLIRTypes(py::module &m) {
   PyLoopHandleType::bind(m);
+  PyStageHandleType::bind(m);
 }

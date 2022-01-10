@@ -20,4 +20,12 @@ MlirType mlirLoopHandleTypeGet(MlirContext ctx) {
   return wrap(hcl::LoopHandleType::get(unwrap(ctx)));
 }
 
+bool mlirTypeIsAStageHandle(MlirType type) {
+  return unwrap(type).isa<hcl::StageHandleType>();
+}
+
+MlirType mlirStageHandleTypeGet(MlirContext ctx) {
+  return wrap(hcl::StageHandleType::get(unwrap(ctx)));
+}
+
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HCL, hcl, hcl::HeteroCLDialect)

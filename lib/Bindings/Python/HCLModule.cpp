@@ -17,11 +17,7 @@
 #include "mlir/CAPI/IR.h"
 
 #include "llvm-c/ErrorHandling.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Signals.h"
-
-#include <numpy/arrayobject.h>
-#include <pybind11/pybind11.h>
 
 namespace py = pybind11;
 
@@ -37,9 +33,9 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(MlirOperation op) {
+static bool loopTransformation(PyOperation op) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op));
+  auto func = dyn_cast<FuncOp>(unwrap(op.get()));
   if (!func)
     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
   return applyLoopTransformation(func);
@@ -49,11 +45,11 @@ static bool loopTransformation(MlirOperation op) {
 // Emission APIs
 //===----------------------------------------------------------------------===//
 
-static bool emitHlsCpp(MlirModule mod, py::object fileObject) {
+static bool emitHlsCpp(PyModule &mod, py::object fileObject) {
   PyFileAccumulator accum(fileObject, false);
   py::gil_scoped_release();
   return mlirLogicalResultIsSuccess(
-      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+      mlirEmitHlsCpp(mod.get(), accum.getCallback(), accum.getUserData()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -75,7 +71,7 @@ PYBIND11_MODULE(_hcl, m) {
     mlirDialectHandleLoadDialect(hcl, context);
   });
 
-  // auto irModule = m.def_submodule("ir", "MLIR IR Bindings");
+  // Type construction APIs.
   populateHCLIRTypes(m);
 
   // Loop transform APIs.

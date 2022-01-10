@@ -103,8 +103,8 @@ cmake --build . --target check-hcl
 ./bin/hcl-opt -opt ../test/compute/tiling.mlir
 
 # generate C++ HLS code
-./bin/hcl-opt -opt ../test/compute/tiling.mlir.opt > ../test/compute/tiling.cpp
-./bin/hcl-translate -emit-hlscpp ../test/compute/tiling.mlir.opt > ../test/compute/tiling.cpp
+./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
+./bin/hcl-translate -emit-hlscpp
 ```
 
 Or you can use our provided script to directly generate C++ HLS code from MLIR.

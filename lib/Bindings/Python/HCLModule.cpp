@@ -33,7 +33,7 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(PyOperation op) {
+static bool loopTransformation(PyOperation &op) {
   py::gil_scoped_release();
   auto func = dyn_cast<FuncOp>(unwrap(op.get()));
   if (!func)

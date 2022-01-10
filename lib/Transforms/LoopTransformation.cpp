@@ -417,7 +417,7 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
   } else {
     reorderOp.emitError("Cannot permute the loops because the size of the "
                         "perfectly nested loop band (")
-        << nest.size() << ")"
+        << nest.size() << ") "
         << "is not consistent with the size of permutation mapping ("
         << permMap.size() << ")";
     return failure();
@@ -1502,12 +1502,6 @@ void HCLLoopTransformation::runOnFunction() {
   applyLoopTransformation(f);
 }
 
-bool hcl::applyLoopTransformation(FuncOp &f) {
-  HCLLoopTransformation pass;
-  pass.applyLoopTransformation(f);
-  return true;
-}
-
 namespace mlir {
 namespace hcl {
 // Register Loop Transformation Pass
@@ -1519,5 +1513,12 @@ void registerHCLLoopTransformationPass() {
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
+
+bool applyLoopTransformation(FuncOp &f) {
+  HCLLoopTransformation pass;
+  pass.applyLoopTransformation(f);
+  return true;
+}
+
 } // namespace hcl
 } // namespace mlir

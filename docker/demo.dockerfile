@@ -28,7 +28,8 @@ RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
 ENV PYTHONPATH /root/llvm-project/build/tools/mlir/python_packages/mlir_core
 
 # build HeteroCL dialect
-RUN cd /root/ && export TOKEN="Hecmay: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" && \
+# use your own token value: https://www.shanebart.com/clone-repo-using-token/ 
+RUN cd /root/ && export TOKEN="Username:PersonalToken" && \
     export BUILD_DIR=/root/llvm-project/build && \
     export PREFIX=/root/llvm-project/build && \
     git clone https://$TOKEN@github.com/cornell-zhang/hcl-dialect-prototype.git && \
@@ -43,6 +44,5 @@ RUN cd /root/ && export TOKEN="Hecmay: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" 
 ENV PYTHONPATH /root/hcl-dialect-prototype/build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 
 # test
-# RUN cd /root/hcl-dialect-prototype/build && \
-#    cmake --build . --target check-hcl && \
-#    ./bin/hcl-translate --emit-hlscpp ../test/memory/buffer_conv.mlir
+RUN cd /root/hcl-dialect-prototype/build && \
+   cmake --build . --target check-hcl

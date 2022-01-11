@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HETEROCL_PASSES_H
-#define HETEROCL_PASSES_H
+#ifndef HCLTOLLVM_PASSES_H
+#define HCLTOLLVM_PASSES_H
 
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Pass/Pass.h"
@@ -16,12 +16,11 @@
 namespace mlir {
 namespace hcl {
 
-void registerHCLLoopTransformationPass();
-std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
-
-bool applyLoopTransformation(FuncOp &f);
+// HeteroCL Dialect -> LLVM Dialect
+void registerHCLToLLVMLoweringPass();
+std::unique_ptr<mlir::Pass> createHCLToLLVMLoweringPass();
 
 } // namespace hcl
 } // namespace mlir
 
-#endif // HETEROCL_PASSES_H
+#endif // HCLTOLLVM_PASSES_H

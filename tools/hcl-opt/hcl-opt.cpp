@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/Dialect.h"
@@ -26,9 +27,9 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 
-#include "mlir/Dialect/Affine/Passes.h"
-
 #include "hcl/Dialect/HeteroCLDialect.h"
+
+#include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Transforms/Passes.h"
 
 #include <iostream>

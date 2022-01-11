@@ -1,4 +1,4 @@
-#include "hcl/Transforms/Passes.h"
+#include "hcl/Conversion/HCLToLLVM.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"

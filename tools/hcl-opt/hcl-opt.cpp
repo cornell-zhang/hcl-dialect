@@ -10,6 +10,10 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Export.h"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+#include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
@@ -19,6 +23,9 @@
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/IR/Module.h"
+
 
 #include "mlir/Dialect/Affine/Passes.h"
 
@@ -70,6 +77,8 @@ static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
                     llvm::cl::init(false));
+                  
+static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"), llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Set up the input and output file
@@ -88,6 +97,37 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
     return 3;
   }
+  return 0;
+}
+
+int runJiTCompiler(mlir::ModuleOp module) {
+  // Initialize LLVM targets.
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+
+  // Register the translation from MLIR to LLVM IR, which must happen before we
+  // can JIT-compile.
+  mlir::registerLLVMDialectTranslation(*module->getContext());
+
+  // An optimization pipeline to use within the execution engine.
+  auto optPipeline = mlir::makeOptimizingTransformer(
+      /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0,
+      /*targetMachine=*/nullptr);
+
+  // Create an MLIR execution engine. The execution engine eagerly JIT-compiles
+  // the module.
+  auto maybeEngine = mlir::ExecutionEngine::create(
+      module, /*llvmModuleBuilder=*/nullptr, optPipeline);
+  assert(maybeEngine && "failed to construct an execution engine");
+  auto &engine = maybeEngine.get();
+
+  // Invoke the JIT-compiled function.
+  auto invocationResult = engine->invokePacked("main");
+  if (invocationResult) {
+    llvm::errs() << "JIT invocation failed\n";
+    return -1;
+  }
+
   return 0;
 }
 
@@ -118,7 +158,7 @@ int main(int argc, char **argv) {
   mlir::PassManager pm(&context);
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
-  if (enableOpt) {
+  if (enableOpt || runJiT) {
     optPM.addPass(mlir::hcl::createHCLLoopTransformationPass());
   }
 
@@ -151,5 +191,10 @@ int main(int argc, char **argv) {
   }
   module->print(outfile->os());
   outfile->os() << "\n";
+
+  // run JiT
+  if (runJiT)
+    return runJiTCompiler(*module); 
+
   return 0;
 }

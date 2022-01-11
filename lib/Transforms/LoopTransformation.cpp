@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The HCL-MLIR Authors.
+//
+//===----------------------------------------------------------------------===//
+
+#include "PassDetail.h"
+
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
@@ -35,38 +43,12 @@ namespace {
 #include "hcl/Transforms/Passes.h.inc"
 } // end namespace
 
-
 //===----------------------------------------------------------------------===//
 // Loop transformation
 //===----------------------------------------------------------------------===//
 
-namespace {
-
-struct HCLLoopTransformation
-    : public PassWrapper<HCLLoopTransformation, FunctionPass> {
-
-  void runOnFunction() override;
-  void applyLoopTransformation(FuncOp &f);
-
-  LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp);
-  LogicalResult runTiling(FuncOp &f, TileOp &tileOp);
-  LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp);
-  LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp);
-  LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp);
-  LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp);
-  LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp);
-  LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp);
-  LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp);
-  LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp);
-  LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp);
-
-  StringRef getArgument() const final { return "hcl-loop-transformation"; }
-  StringRef getDescription() const final {
-    return "Loop transformation in HeteroCL";
-  }
-};
-
-} // namespace
+namespace mlir {
+namespace hcl {
 
 struct ExprCompare {
   int findConstantExpr(const AffineExpr &exp) const {
@@ -93,7 +75,7 @@ Attribute createZeroAttr(OpBuilder &builder, mlir::Type elementType) {
   return {};
 }
 
-LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
+LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   // 1) Get the schedule
   unsigned int factor = splitOp.factor();
   const auto loop_name =
@@ -206,7 +188,7 @@ LogicalResult HCLLoopTransformation::runSplitting(FuncOp &f, SplitOp &splitOp) {
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
+LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   // 1) Get the schedule
   unsigned int x_factor = tileOp.x_factor();
   unsigned int y_factor = tileOp.y_factor();
@@ -333,8 +315,7 @@ LogicalResult HCLLoopTransformation::runTiling(FuncOp &f, TileOp &tileOp) {
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
-                                                   ReorderOp &reorderOp) {
+LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   // 1) Get the schedule
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
@@ -447,8 +428,7 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runUnrolling(FuncOp &f,
-                                                  UnrollOp &unrollOp) {
+LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
   auto optional_factor = unrollOp.factor();
   unsigned int factor;
@@ -489,8 +469,7 @@ LogicalResult HCLLoopTransformation::runUnrolling(FuncOp &f,
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runParallel(FuncOp &f,
-                                                 ParallelOp &parallelOp) {
+LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   // 1) Get the schedule
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp())
@@ -525,8 +504,7 @@ LogicalResult HCLLoopTransformation::runParallel(FuncOp &f,
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runPipelining(FuncOp &f,
-                                                   PipelineOp &pipelineOp) {
+LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   // 1) Get the schedule
   auto optional_ii = pipelineOp.ii();
   unsigned int ii;
@@ -687,7 +665,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
 
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
-LogicalResult HCLLoopTransformation::runFusing(FuncOp &f, FuseOp &fuseOp) {
+LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   // 1) Get the schedule
   const auto loopsToFuse = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToFuse.size();
@@ -760,8 +738,7 @@ LogicalResult HCLLoopTransformation::runFusing(FuncOp &f, FuseOp &fuseOp) {
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runComputeAt(FuncOp &f,
-                                                  ComputeAtOp &computeAtOp) {
+LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   // 1) Get the schedule
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
@@ -852,8 +829,7 @@ LogicalResult HCLLoopTransformation::runComputeAt(FuncOp &f,
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-LogicalResult HCLLoopTransformation::runPartition(FuncOp &f,
-                                                  PartitionOp &partitionOp) {
+LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
   // 1) Get the schedule
   auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
@@ -967,8 +943,7 @@ LogicalResult HCLLoopTransformation::runPartition(FuncOp &f,
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runReuseAt(FuncOp &f,
-                                                ReuseAtOp &reuseAtOp) {
+LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   auto target = reuseAtOp.target(); // return a Value type
   unsigned int axis = reuseAtOp.axis();
@@ -1177,8 +1152,7 @@ LogicalResult HCLLoopTransformation::runReuseAt(FuncOp &f,
   return success();
 }
 
-LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
-                                                 BufferAtOp &bufferAtOp) {
+LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   // 1) Get the schedule
   auto target = bufferAtOp.target(); // return a Value type
   int axis = bufferAtOp.axis();
@@ -1439,54 +1413,54 @@ LogicalResult HCLLoopTransformation::runBufferAt(FuncOp &f,
   return success();
 }
 
-void HCLLoopTransformation::applyLoopTransformation(FuncOp &f) {
+bool applyLoopTransformation(FuncOp &f) {
   SmallVector<Operation *, 10> opToRemove;
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
   for (Operation &op : f.getOps()) {
     if (auto new_op = dyn_cast<SplitOp>(op)) {
       if (failed(runSplitting(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<TileOp>(op)) {
       if (failed(runTiling(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
       if (failed(runReordering(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
       if (failed(runUnrolling(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
       if (failed(runPipelining(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
       if (failed(runParallel(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<FuseOp>(op)) {
       if (failed(runFusing(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
       if (failed(runComputeAt(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
       if (failed(runPartition(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
       if (failed(runReuseAt(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
       if (failed(runBufferAt(f, new_op)))
-        return signalPassFailure();
+        return false;
       opToRemove.push_back(&op);
     }
   }
@@ -1509,19 +1483,36 @@ void HCLLoopTransformation::applyLoopTransformation(FuncOp &f) {
   for (Operation *op : handleToRemove) {
     op->erase();
   }
+  return true;
 }
 
-void HCLLoopTransformation::runOnFunction() {
-  FuncOp f = getFunction();
-  applyLoopTransformation(f);
-}
+} // namespace hcl
+} // namespace mlir
+
+namespace {
+
+struct HCLLoopTransformation
+    : public LoopTransformationBase<HCLLoopTransformation> {
+
+  void runOnOperation() override {
+    auto func = getOperation();
+    if (!applyLoopTransformation(func))
+      return signalPassFailure();
+  }
+};
+
+} // namespace
 
 namespace mlir {
 namespace hcl {
+
 // Register Loop Transformation Pass
 void registerHCLLoopTransformationPass() {
   ::registerPasses();
-  mlir::PassRegistration<HCLLoopTransformation>();
+  // mlir::PassPipelineRegistration<>(
+  //     "loop-opt", "Loop transformation pass", [](OpPassManager &pm) {
+  //       pm.addPass(std::make_unique<HCLLoopTransformation>());
+  //     });
 }
 
 // Create A Loop Transformation Pass

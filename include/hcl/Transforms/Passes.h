@@ -19,6 +19,8 @@ namespace hcl {
 void registerHCLLoopTransformationPass();
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
 
+bool applyLoopTransformation(FuncOp &f);
+
 } // namespace hcl
 } // namespace mlir
 

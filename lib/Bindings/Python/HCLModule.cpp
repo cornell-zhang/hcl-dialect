@@ -35,13 +35,13 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-// static bool loopTransformation(PyOperation &op) {
-//   py::gil_scoped_release();
-//   auto func = dyn_cast<FuncOp>(unwrap(op.get()));
-//   if (!func)
-//     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-//   return applyLoopTransformation(func);
-// }
+static bool loopTransformation(PyOperation &op) {
+  py::gil_scoped_release();
+  auto func = dyn_cast<FuncOp>(unwrap(op.get()));
+  if (!func)
+    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
+  return applyLoopTransformation(func);
+}
 
 //===----------------------------------------------------------------------===//
 // Emission APIs
@@ -63,6 +63,9 @@ PYBIND11_MODULE(_hcl, m) {
   llvm::sys::PrintStackTraceOnErrorSignal(/*argv=*/"");
   LLVMEnablePrettyStackTrace();
 
+  // register passes
+  hclMlirRegisterAllPasses();
+
   m.def("register_dialects", [](py::object capsule) {
     // Get the MlirContext capsule from PyMlirContext capsule.
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
@@ -77,7 +80,7 @@ PYBIND11_MODULE(_hcl, m) {
   populateHCLIRTypes(m);
 
   // Loop transform APIs.
-  // m.def("loop_transformation", &loopTransformation);
+  m.def("loop_transformation", &loopTransformation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

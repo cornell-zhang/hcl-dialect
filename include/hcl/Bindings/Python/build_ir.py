@@ -271,22 +271,21 @@ def placeholder(shape, name="", ip=None):
     return TensorOp(shape, memref.AllocOp(memref_type, None, None, None, loc=loc, ip=ip), ip)
 
 def make_constant_for(lb, ub, step=1, name="", stage="", ip=None):
-    with ctx, loc:
-        # Construct lower bound
-        lbCst = AffineConstantExpr.get(lb)
-        lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
-        lbMapAttr = AffineMapAttr.get(lbMap)
+    # Construct lower bound
+    lbCst = AffineConstantExpr.get(lb)
+    lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
+    lbMapAttr = AffineMapAttr.get(lbMap)
 
-        # Construct upper bound
-        ubCst = AffineConstantExpr.get(ub)
-        ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
-        ubMapAttr = AffineMapAttr.get(ubMap)
+    # Construct upper bound
+    ubCst = AffineConstantExpr.get(ub)
+    ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
+    ubMapAttr = AffineMapAttr.get(ubMap)
 
-        # Construct step
-        i32 = IntegerType.get_signless(32)
-        step = IntegerAttr.get(i32, step)
+    # Construct step
+    i32 = IntegerType.get_signless(32)
+    step = IntegerAttr.get(i32, step)
 
-        # Create AffineForOp
-        forOp = AffineForOp(None, None, step, lbMapAttr, ubMapAttr, name=StringAttr.get(name), stage=("" if stage == "" else StringAttr.get(stage)), ip=ip)
+    # Create AffineForOp
+    forOp = AffineForOp(None, None, step, lbMapAttr, ubMapAttr, name=StringAttr.get(name), stage=("" if stage == "" else StringAttr.get(stage)), ip=ip)
 
     return forOp

@@ -29,7 +29,7 @@
 #include "mlir/Dialect/Affine/Passes.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/HeteroCLPasses.h"
+#include "hcl/Transforms/Passes.h"
 
 #include <iostream>
 
@@ -166,6 +166,9 @@ int main(int argc, char **argv) {
   if (enableNormalize) {
     // To make all loop steps to 1.
     optPM.addPass(mlir::createAffineLoopNormalizePass());
+
+    // Sparse Conditional Constant Propagation (SCCP)
+    pm.addPass(mlir::createSCCPPass());
 
     // To factor out the redundant AffineApply/AffineIf operations.
     // optPM.addPass(mlir::createCanonicalizerPass());

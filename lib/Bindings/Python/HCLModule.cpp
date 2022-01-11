@@ -8,10 +8,12 @@
 
 #include "hcl/Bindings/Python/HCLModule.h"
 #include "IRModule.h"
-#include "hcl-c/EmitHLSCpp.h"
-#include "hcl-c/HCL.h"
+#include "hcl-c/Translation/EmitHLSCpp.h"
+#include "hcl-c/Dialect/Registration.h"
+#include "hcl-c/Dialect/HCLTypes.h"
+#include "hcl-c/Dialect/Dialects.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/HeteroCLPasses.h"
+#include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
@@ -33,13 +35,13 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(PyOperation op) {
-  py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op.get()));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyLoopTransformation(func);
-}
+// static bool loopTransformation(PyOperation &op) {
+//   py::gil_scoped_release();
+//   auto func = dyn_cast<FuncOp>(unwrap(op.get()));
+//   if (!func)
+//     throw SetPyError(PyExc_ValueError, "targeted operation not a function");
+//   return applyLoopTransformation(func);
+// }
 
 //===----------------------------------------------------------------------===//
 // Emission APIs
@@ -75,7 +77,7 @@ PYBIND11_MODULE(_hcl, m) {
   populateHCLIRTypes(m);
 
   // Loop transform APIs.
-  m.def("loop_transformation", &loopTransformation);
+  // m.def("loop_transformation", &loopTransformation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

@@ -13,12 +13,6 @@
 extern "C" {
 #endif
 
-MLIR_CAPI_EXPORTED bool mlirTypeIsALoopHandle(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirLoopHandleTypeGet(MlirContext ctx);
-
-MLIR_CAPI_EXPORTED bool mlirTypeIsAStageHandle(MlirType type);
-MLIR_CAPI_EXPORTED MlirType mlirStageHandleTypeGet(MlirContext ctx);
-
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(HCL, hcl);
 
 #ifdef __cplusplus

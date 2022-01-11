@@ -1,7 +1,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
-#include "hcl/Transforms/HeteroCLPasses.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -25,6 +25,20 @@ using namespace mlir;
 using namespace hcl;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
+
+//===----------------------------------------------------------------------===//
+// Pass registration
+//===----------------------------------------------------------------------===//
+
+namespace {
+#define GEN_PASS_REGISTRATION
+#include "hcl/Transforms/Passes.h.inc"
+} // end namespace
+
+
+//===----------------------------------------------------------------------===//
+// Loop transformation
+//===----------------------------------------------------------------------===//
 
 namespace {
 
@@ -417,7 +431,7 @@ LogicalResult HCLLoopTransformation::runReordering(FuncOp &f,
   } else {
     reorderOp.emitError("Cannot permute the loops because the size of the "
                         "perfectly nested loop band (")
-        << nest.size() << ")"
+        << nest.size() << ") "
         << "is not consistent with the size of permutation mapping ("
         << permMap.size() << ")";
     return failure();
@@ -1502,22 +1516,18 @@ void HCLLoopTransformation::runOnFunction() {
   applyLoopTransformation(f);
 }
 
-bool hcl::applyLoopTransformation(FuncOp &f) {
-  HCLLoopTransformation pass;
-  pass.applyLoopTransformation(f);
-  return true;
-}
-
 namespace mlir {
 namespace hcl {
 // Register Loop Transformation Pass
 void registerHCLLoopTransformationPass() {
-  PassRegistration<HCLLoopTransformation>();
+  ::registerPasses();
+  mlir::PassRegistration<HCLLoopTransformation>();
 }
 
 // Create A Loop Transformation Pass
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
+
 } // namespace hcl
 } // namespace mlir

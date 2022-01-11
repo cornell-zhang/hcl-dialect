@@ -6,26 +6,25 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+#include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
-#include "mlir/Target/LLVMIR/Export.h"
-#include "mlir/ExecutionEngine/ExecutionEngine.h"
-#include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Support/MlirOptMain.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Export.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/IR/Module.h"
-
+#include "llvm/Support/ToolOutputFile.h"
 
 #include "mlir/Dialect/Affine/Passes.h"
 
@@ -77,8 +76,9 @@ static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
                     llvm::cl::init(false));
-                  
-static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"), llvm::cl::init(false));
+
+static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"),
+                                  llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
   // Set up the input and output file
@@ -143,6 +143,7 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::registerAllPasses();
   mlir::hcl::registerHCLLoopTransformationPass();
+  mlir::hcl::registerHCLToLLVMLoweringPass();
 
   // Parse pass names in main to ensure static initialization completed
   llvm::cl::ParseCommandLineOptions(argc, argv,
@@ -177,6 +178,10 @@ int main(int argc, char **argv) {
     // pm.addPass(mlir::createCSEPass());
   }
 
+  if (runJiT) {
+    optPM.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
+  }
+
   // Run the pass pipeline
   if (mlir::failed(pm.run(*module))) {
     return 4;
@@ -194,7 +199,7 @@ int main(int argc, char **argv) {
 
   // run JiT
   if (runJiT)
-    return runJiTCompiler(*module); 
+    return runJiTCompiler(*module);
 
   return 0;
 }

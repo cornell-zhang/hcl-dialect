@@ -14,6 +14,10 @@ bool applyLoopTransformation(FuncOp &f);
 void registerHCLLoopTransformationPass();
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
 
+// HeteroCL Dialect -> LLVM Dialect
+void registerHCLToLLVMLoweringPass();
+std::unique_ptr<mlir::Pass> createHCLToLLVMLoweringPass();
+
 } // namespace hcl
 } // namespace mlir
 

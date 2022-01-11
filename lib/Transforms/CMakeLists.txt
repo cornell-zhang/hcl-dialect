@@ -1,5 +1,7 @@
 file(GLOB globbed *.cpp)
 
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+
 add_mlir_dialect_library(MLIRHCLPasses
     ${globbed}
 
@@ -11,6 +13,7 @@ add_mlir_dialect_library(MLIRHCLPasses
     MLIRHeteroCLTypesIncGen
 
     LINK_LIBS PUBLIC
+    ${conversion_libs}
     MLIRIR
     MLIRPass
     MLIRHeteroCL

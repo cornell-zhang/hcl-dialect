@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s | hcl-opt | FileCheck %s
+// RUN: hcl-opt -jit %s | FileCheck %s
 
 module {
 
@@ -14,6 +14,7 @@ func @matrix_multiply(
     %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
     %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    // CHECK: llvm.func @matrix_multiply(%arg0: !llvm.ptr<f32>, %arg1: !llvm.ptr<f32>, %arg2: i64, %arg3: i64, %arg4: i64, %arg5: i64, %arg6: i64, %arg7: !llvm.ptr<f32>, %arg8: !llvm.ptr<f32>, %arg9: i64, %arg10: i64, %arg11: i64, %arg12: i64, %arg13: i64, %arg14: !llvm.ptr<f32>, %arg15: !llvm.ptr<f32>, %arg16: i64, %arg17: i64, %arg18: i64, %arg19: i64, %arg20: i64) {
 	affine.for %i = 0 to 4 {          
 	  affine.for %j = 0 to 4 {      
 		affine.for %k = 0 to 4 {

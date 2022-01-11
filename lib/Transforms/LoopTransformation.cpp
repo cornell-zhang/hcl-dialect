@@ -1,7 +1,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
-#include "hcl/Transforms/HeteroCLPasses.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -25,6 +25,20 @@ using namespace mlir;
 using namespace hcl;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
+
+//===----------------------------------------------------------------------===//
+// Pass registration
+//===----------------------------------------------------------------------===//
+
+namespace {
+#define GEN_PASS_REGISTRATION
+#include "hcl/Transforms/Passes.h.inc"
+} // end namespace
+
+
+//===----------------------------------------------------------------------===//
+// Loop transformation
+//===----------------------------------------------------------------------===//
 
 namespace {
 
@@ -1506,19 +1520,14 @@ namespace mlir {
 namespace hcl {
 // Register Loop Transformation Pass
 void registerHCLLoopTransformationPass() {
-  PassRegistration<HCLLoopTransformation>();
+  ::registerPasses();
+  mlir::PassRegistration<HCLLoopTransformation>();
 }
 
 // Create A Loop Transformation Pass
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
-
-// bool applyLoopTransformation(FuncOp &f) {
-//   HCLLoopTransformation pass;
-//   pass.applyLoopTransformation(f);
-//   return true;
-// }
 
 } // namespace hcl
 } // namespace mlir

@@ -10,7 +10,7 @@
 #include "mlir-c/Support.h"
 #include "mlir/CAPI/IR.h"
 
-#include "hcl-c/HCLTypes.h"
+#include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl/Bindings/Python/HCLModule.h"
 
 #include <pybind11/pybind11.h>
@@ -26,7 +26,7 @@ namespace {
 /// LoopHandleType.
 class PyLoopHandleType : public PyConcreteType<PyLoopHandleType> {
 public:
-  static constexpr IsAFunctionTy isaFunction = hclTypeIsALoopHandle;
+  static constexpr IsAFunctionTy isaFunction = hclMlirTypeIsALoopHandle;
   static constexpr const char *pyClassName = "LoopHandleType";
   using PyConcreteType::PyConcreteType;
 
@@ -34,7 +34,7 @@ public:
     c.def_static(
         "get",
         [](DefaultingPyMlirContext context) {
-          MlirType t = hclLoopHandleTypeGet(context->get());
+          MlirType t = hclMlirLoopHandleTypeGet(context->get());
           return PyLoopHandleType(context->getRef(), t);
         },
         py::arg("context") = py::none(), "Create a loop handle type.");
@@ -44,7 +44,7 @@ public:
 /// StageHandleType.
 class PyStageHandleType : public PyConcreteType<PyStageHandleType> {
 public:
-  static constexpr IsAFunctionTy isaFunction = hclTypeIsAStageHandle;
+  static constexpr IsAFunctionTy isaFunction = hclMlirTypeIsAStageHandle;
   static constexpr const char *pyClassName = "StageHandleType";
   using PyConcreteType::PyConcreteType;
 
@@ -52,7 +52,7 @@ public:
     c.def_static(
         "get",
         [](DefaultingPyMlirContext context) {
-          MlirType t = hclStageHandleTypeGet(context->get());
+          MlirType t = hclMlirStageHandleTypeGet(context->get());
           return PyStageHandleType(context->getRef(), t);
         },
         py::arg("context") = py::none(), "Create a stage handle type.");

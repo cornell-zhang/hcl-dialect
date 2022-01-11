@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl-c/Dialects.h"
+#include "hcl-c/Dialect/Dialects.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/CAPI/Registration.h"

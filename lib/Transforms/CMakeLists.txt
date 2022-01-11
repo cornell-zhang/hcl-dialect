@@ -9,6 +9,7 @@ add_mlir_dialect_library(MLIRHCLPasses
     DEPENDS
     MLIRHeteroCLOpsIncGen
     MLIRHeteroCLTypesIncGen
+    MLIRHeteroCLPassesIncGen
 
     LINK_LIBS PUBLIC
     MLIRIR

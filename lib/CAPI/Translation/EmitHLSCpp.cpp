@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl-c/EmitHLSCpp.h"
 #include "hcl/Translation/EmitHLSCpp.h"
+#include "hcl-c/Translation/EmitHLSCpp.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/CAPI/Support.h"
 #include "mlir/CAPI/Utils.h"

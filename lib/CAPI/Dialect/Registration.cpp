@@ -4,9 +4,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl-c/Registration.h"
+#include "hcl-c/Dialect/Registration.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/HeteroCLPasses.h"
+#include "hcl/Transforms/Passes.h"
 
 void hclMlirRegisterAllDialects(MlirContext context) {
   mlir::DialectRegistry registry;

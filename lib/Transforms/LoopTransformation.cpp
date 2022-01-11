@@ -1514,11 +1514,11 @@ std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
 
-bool applyLoopTransformation(FuncOp &f) {
-  HCLLoopTransformation pass;
-  pass.applyLoopTransformation(f);
-  return true;
-}
+// bool applyLoopTransformation(FuncOp &f) {
+//   HCLLoopTransformation pass;
+//   pass.applyLoopTransformation(f);
+//   return true;
+// }
 
 } // namespace hcl
 } // namespace mlir

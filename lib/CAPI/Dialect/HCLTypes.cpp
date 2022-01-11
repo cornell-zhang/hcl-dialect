@@ -4,28 +4,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl-c/HCL.h"
-#include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "mlir/CAPI/Registration.h"
 
 using namespace mlir;
 using namespace hcl;
 
-bool mlirTypeIsALoopHandle(MlirType type) {
+bool hclTypeIsALoopHandle(MlirType type) {
   return unwrap(type).isa<hcl::LoopHandleType>();
 }
 
-MlirType mlirLoopHandleTypeGet(MlirContext ctx) {
+MlirType hclLoopHandleTypeGet(MlirContext ctx) {
   return wrap(hcl::LoopHandleType::get(unwrap(ctx)));
 }
 
-bool mlirTypeIsAStageHandle(MlirType type) {
+bool hclTypeIsAStageHandle(MlirType type) {
   return unwrap(type).isa<hcl::StageHandleType>();
 }
 
-MlirType mlirStageHandleTypeGet(MlirContext ctx) {
+MlirType hclStageHandleTypeGet(MlirContext ctx) {
   return wrap(hcl::StageHandleType::get(unwrap(ctx)));
 }
-
-MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(HCL, hcl, hcl::HeteroCLDialect)

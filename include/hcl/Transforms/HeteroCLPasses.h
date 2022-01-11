@@ -1,5 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2020-2021 The HCL-MLIR Authors.
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef HETEROCL_PASSES_H
 #define HETEROCL_PASSES_H
+
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassRegistry.h"
@@ -8,8 +15,6 @@
 
 namespace mlir {
 namespace hcl {
-
-bool applyLoopTransformation(FuncOp &f);
 
 void registerHCLLoopTransformationPass();
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();

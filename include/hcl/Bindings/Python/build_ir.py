@@ -229,7 +229,20 @@ class LoadOp(ExprOp):
     pass
 
 class StoreOp(ExprOp):
-    pass
+
+    def __getitem__(self, indices):
+        ip = indices[0].ip
+        new_indices = []
+        for index in indices:
+            if isinstance(index, IterVar):
+                new_indices.append(index.op)
+            else:
+                new_indices.append(index.op.result)
+        if isinstance(self.op, memref.StoreOp):
+            result = self.op.operands[1]
+        else:
+            result = self.op.result
+        return LoadOp(memref.LoadOp(f32, result, new_indices, loc=loc, ip=ip), ip)
 
 class NegOp(ExprOp):
     pass

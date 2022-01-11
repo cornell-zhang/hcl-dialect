@@ -49,6 +49,8 @@ using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
 LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef stage_name);
 
+int getLoop(AffineForOp &forOp, StringRef loop_name);
+
 bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                SmallVector<AffineForOp, 6> &resForOps,
                                SmallVector<StringRef, 6> &nameArr,

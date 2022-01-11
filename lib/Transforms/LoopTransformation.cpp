@@ -946,7 +946,9 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
 LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   auto target = reuseAtOp.target(); // return a Value type
-  unsigned int axis = reuseAtOp.axis();
+  const auto loop_name =
+      dyn_cast<CreateLoopHandleOp>(reuseAtOp.axis().getDefiningOp())
+          .loop_name();
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
           .stage_name();
@@ -957,6 +959,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, stage_name))) {
     f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
+
+  // 2.1) Find the requested loop and get the axis id
+  AffineForOp reuseLoop = rootForOp;
+  int axis = getLoop(reuseLoop, loop_name);
+  if (axis == -1) {
+    f.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
 
@@ -1051,7 +1061,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto oldAffineMap = op.getAffineMap();
     for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e; ++i) {
       AffineExpr idx;
-      if (i == axis)
+      if (i == (unsigned int)axis)
         // the iteration space now is related to the input tensor
         idx = oldAffineMap.getResult(i) - distance;
       else
@@ -1155,7 +1165,9 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   // 1) Get the schedule
   auto target = bufferAtOp.target(); // return a Value type
-  int axis = bufferAtOp.axis();
+  const auto loop_name =
+      dyn_cast<CreateLoopHandleOp>(bufferAtOp.axis().getDefiningOp())
+          .loop_name();
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(bufferAtOp.stage().getDefiningOp())
           .stage_name();
@@ -1164,6 +1176,14 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, stage_name))) {
     f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
+
+  // 2.1) Find the requested loop and get the axis id
+  AffineForOp bufferLoop = rootForOp;
+  int axis = getLoop(bufferLoop, loop_name);
+  if (axis == -1) {
+    f.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
 

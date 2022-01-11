@@ -30,7 +30,7 @@ module {
             // CHECK:     affine.store %5, %arg2[%arg3, %arg4] : memref<1024x1024xf32>
             // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
-        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0) -> memref<1024xf32>
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %li) -> memref<1024xf32>
         return
     }
     func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
@@ -57,7 +57,7 @@ module {
                 // CHECK: affine.store %5, %arg2[%arg3, %arg4] : memref<1024x1024xf32>
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 1) -> memref<1xf32>
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %lj) -> memref<1xf32>
         return
     }
     // Notice: storing at reduction axis is prohibited
@@ -112,7 +112,7 @@ module {
             // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
         hcl.reorder(%s, %lk, %lj)
-        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 0) -> memref<1024xf32>
+        %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %li) -> memref<1024xf32>
         hcl.pipeline(%s, %lj, 1)
         return
     }
@@ -136,7 +136,7 @@ module {
     //     } { loop_name = "i", stage_name = "s" }
     //     %lj_out, %lj_in = hcl.split(%s, %lj, 2)
     //     hcl.reorder(%s, %lk, %lj_in)
-    //     %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, 1) -> memref<1024xf32>
+    //     %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %lj) -> memref<1024xf32>
     //     hcl.pipeline(%s, %lj_in, 1)
     //     return %C : memref<1024x1024xf32>
     // }

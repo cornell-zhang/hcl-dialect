@@ -277,7 +277,7 @@ def HeteroCL_ReuseAtOp : HeteroCL_Op<"reuse_at">
         * name (string, optional) - The name of the reuse buffer
     }];
 
-    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, UI32Attr:$axis);
+    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
         `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
@@ -300,7 +300,7 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
         * axis (IterVar) - The axis that generates the buffer
     }];
 
-    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, DefaultValuedAttr<I32Attr, "-1">:$axis);
+    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
         `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)

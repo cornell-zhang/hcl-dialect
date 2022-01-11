@@ -26,7 +26,7 @@ module {
             // CHECK:     affine.store %4, %arg1[%arg3, %arg4] : memref<1024x1024xf32>
             // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
-        %buf = hcl.buffer_at(%s, %B: memref<1024x1024xf32>, 0) -> memref<1024xf32>
+        %buf = hcl.buffer_at(%s, %B: memref<1024x1024xf32>, %l1) -> memref<1024xf32>
         return
     }
     // Notice: buffer_at cannot apply to the inner-most non-reduction loop
@@ -45,7 +45,7 @@ module {
     //         } { loop_name = "j" }
     //     } { loop_name = "i", stage_name = "s" }
     //     // expected-error@+1 {{Cannot buffer at the inner-most loop: axis=1 inner-most axis=1}}
-    //     %buf = hcl.buffer_at(%s, %B: memref<1024x1024xf32>, 1) -> memref<1xf32>
+    //     %buf = hcl.buffer_at(%s, %B: memref<1024x1024xf32>, %l2) -> memref<1xf32>
     //     return
     // }
 }

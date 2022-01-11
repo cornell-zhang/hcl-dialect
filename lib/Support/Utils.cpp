@@ -97,6 +97,27 @@ LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
   return failure();
 }
 
+static unsigned getChildLoopNum(Operation *op);
+
+int hcl::getLoop(AffineForOp &forOp, StringRef loop_name) {
+  // return the axis id
+  auto currentLoop = forOp;
+  int cnt = -1;
+  while (true) {
+    cnt++;
+    if (getLoopName(currentLoop) == loop_name) {
+      forOp = currentLoop;
+      return cnt;
+    }
+
+    if (getChildLoopNum(currentLoop) == 1)
+      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
+    else
+      break;
+  }
+  return -1;
+}
+
 bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                     SmallVector<AffineForOp, 6> &resForOps,
                                     SmallVector<StringRef, 6> &nameArr,

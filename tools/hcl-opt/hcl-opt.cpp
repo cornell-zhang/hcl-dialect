@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
   }
 
   if (runJiT) {
-    optPM.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
+    pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
   }
 
   // Run the pass pipeline

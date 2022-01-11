@@ -20,12 +20,46 @@ using namespace mlir;
 using namespace hcl;
 
 namespace {
+class CreateLoopHandleOpLowering : public ConversionPattern {
+public:
+  explicit CreateLoopHandleOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::CreateLoopHandleOp::getOperationName(), 1,
+                          context) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+class CreateStageHandleOpLowering : public ConversionPattern {
+public:
+  explicit CreateStageHandleOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::CreateStageHandleOp::getOperationName(), 1,
+                          context) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 struct HCLToLLVMLoweringPass
     : public PassWrapper<HCLToLLVMLoweringPass, OperationPass<ModuleOp>> {
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<LLVM::LLVMDialect, scf::SCFDialect>();
   }
   void runOnOperation() final;
+  StringRef getArgument() const final { return "hcl-lower-to-llvm"; }
+  StringRef getDescription() const final {
+    return "Lower HeteroCL dialect to LLVM dialect.";
+  }
 };
 } // namespace
 
@@ -56,6 +90,9 @@ void HCLToLLVMLoweringPass::runOnOperation() {
   populateLoopToStdConversionPatterns(patterns);
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
   populateStdToLLVMConversionPatterns(typeConverter, patterns);
+
+  patterns.add<CreateLoopHandleOpLowering>(&getContext());
+  patterns.add<CreateStageHandleOpLowering>(&getContext());
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

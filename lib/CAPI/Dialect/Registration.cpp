@@ -7,6 +7,7 @@
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
+#include "hcl/Conversion/HCLToLLVM.h"
 
 void hclMlirRegisterAllDialects(MlirContext context) {
   mlir::DialectRegistry registry;
@@ -17,4 +18,5 @@ void hclMlirRegisterAllDialects(MlirContext context) {
 
 void hclMlirRegisterAllPasses() {
   mlir::hcl::registerHCLLoopTransformationPass();
+  mlir::hcl::registerHCLToLLVMLoweringPass();
 }

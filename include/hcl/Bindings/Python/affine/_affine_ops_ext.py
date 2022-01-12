@@ -3,29 +3,30 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 try:
-  from mlir.ir import *
+    from mlir.ir import *
 except ImportError as e:
-  raise RuntimeError("Error loading imports from extension module") from e
+    raise RuntimeError("Error loading imports from extension module") from e
 
 from typing import Any, Sequence
 
 
 class AffineForOp:
-  """Specialization for the Affine for op class."""
+    """Specialization for the Affine for op class."""
 
-  def __init__(self,
-               lower_bound,
-               upper_bound,
-               step,
-               lowerBoundMap,
-               upperBoundMap,
-               iter_args: Sequence[Any] = [],
-               name="",
-               stage="",
-               *,
-               loc=None,
-               ip=None):
-    """Creates an Affine `for` operation.
+    def __init__(self,
+                 lower_bound,
+                 upper_bound,
+                 step,
+                 lowerBoundMap,
+                 upperBoundMap,
+                 reduction=None,
+                 iter_args: Sequence[Any] = [],
+                 name="",
+                 stage="",
+                 *,
+                 loc=None,
+                 ip=None):
+        """Creates an Affine `for` operation.
     operation   ::= `affine.for` ssa-id `=` lower-bound `to` upper-bound
                     (`step` integer-literal)? `{` op* `}`
 
@@ -38,41 +39,42 @@ class AffineForOp:
     - `step` is the value to use as loop step.
     - `iter_args` is a list of additional loop-carried arguments.
     """
-    results = [arg.type for arg in iter_args]
-    attributes = {}
-    attributes["step"] = step
-    attributes["lower_bound"] = lowerBoundMap
-    attributes["upper_bound"] = upperBoundMap
-    attributes["loop_name"] = name
-    if stage != "":
-        attributes["stage_name"] = stage
-    if lower_bound == None and upper_bound == None:
-        operands = list(iter_args)
-    else:
-        operands = [lower_bound, upper_bound] + list(iter_args)
-    super().__init__(
-        self.build_generic(
-            regions=1,
-            results=results,
-            operands=operands,
-            attributes=attributes,
-            loc=loc,
-            ip=ip))
-    self.regions[0].blocks.append(IndexType.get(), *results)
+        results = [arg.type for arg in iter_args]
+        attributes = {}
+        attributes["step"] = step
+        attributes["lower_bound"] = lowerBoundMap
+        attributes["upper_bound"] = upperBoundMap
+        attributes["loop_name"] = name
+        if stage != "":
+            attributes["stage_name"] = stage
+        if reduction:
+            attributes["reduction"] = reduction
+        if lower_bound == None and upper_bound == None:
+            operands = list(iter_args)
+        else:
+            operands = [lower_bound, upper_bound] + list(iter_args)
+        super().__init__(
+            self.build_generic(regions=1,
+                               results=results,
+                               operands=operands,
+                               attributes=attributes,
+                               loc=loc,
+                               ip=ip))
+        self.regions[0].blocks.append(IndexType.get(), *results)
 
-  @property
-  def body(self):
-    """Returns the body (block) of the loop."""
-    return self.regions[0].blocks[0]
+    @property
+    def body(self):
+        """Returns the body (block) of the loop."""
+        return self.regions[0].blocks[0]
 
-  @property
-  def induction_variable(self):
-    """Returns the induction variable of the loop."""
-    return self.body.arguments[0]
+    @property
+    def induction_variable(self):
+        """Returns the induction variable of the loop."""
+        return self.body.arguments[0]
 
-  @property
-  def inner_iter_args(self):
-    """Returns the loop-carried arguments usable within the loop.
+    @property
+    def inner_iter_args(self):
+        """Returns the loop-carried arguments usable within the loop.
     To obtain the loop-carried operands, use `iter_args`.
     """
-    return self.body.arguments[1:]
+        return self.body.arguments[1:]

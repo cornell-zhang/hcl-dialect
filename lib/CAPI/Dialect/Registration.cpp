@@ -6,7 +6,7 @@
 
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/Passes.h"
+#include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 
 void hclMlirRegisterAllDialects(MlirContext context) {

@@ -14,7 +14,7 @@
 #include "hcl/Bindings/Python/HCLModule.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/Passes.h"
+#include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"

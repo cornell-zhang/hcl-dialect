@@ -333,31 +333,30 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
     return failure();
   }
 
-  // 3) Traverse all the loops in the stage
+  // 3) Get the maximal perfect nest
+  //    This should be done first to resolve imperfect loops
+  AffineLoopBand nest;
+  getPerfectlyNestedLoops(nest, rootForOp);
+
+  // 4) Traverse all the loops in the stage
   //    Get a mapping from loop name to id
   std::map<std::string, unsigned> oldName2ID;
   SmallVector<std::string> oldLoopNames;
   unsigned int curr_depth = 0;
-  rootForOp.walk([&](AffineForOp forOp) { // from the inner most!
+  for (AffineForOp forOp : nest) {
     std::string loop_name = getLoopName(forOp).str();
     oldName2ID[loop_name] = curr_depth;
     oldLoopNames.push_back(loop_name);
     curr_depth++;
-  });
-  // since .walk() method traverse the nested loops
-  // from the inner-most, the names and mapping should be reversed
-  std::reverse(oldLoopNames.begin(), oldLoopNames.end());
-  for (auto name : oldLoopNames) {
-    oldName2ID[name] = curr_depth - 1 - oldName2ID[name];
   }
 
-  // 4) Traverse all the input arguments that need to be reordered and
+  // 5) Traverse all the input arguments that need to be reordered and
   // construct permMap
   // Possible inputs:
   // a) # arguments = # loops: (i,j,k)->(k,j,i)
   // b) # arguments != # loops: input (k,i), but should be the same as a)
 
-  // 4.1) Map input arguments to the corresponding loop names
+  // 5.1) Map input arguments to the corresponding loop names
   SmallVector<std::string> nameOfLoopsToReorder;
   for (auto loop : loopsToReorder) {
     nameOfLoopsToReorder.push_back(loop.getDefiningOp()
@@ -367,7 +366,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
                                        .str());
   }
 
-  // 4.2) Make Case b) to Case a)
+  // 5.2) Make Case b) to Case a)
   //      i.e. fill in all the missing loops in Case b)
   SmallVector<std::string> nameOfAllLoopsWithNewOrder;
   unsigned int cntInArgs = 0;
@@ -382,7 +381,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
     }
   }
 
-  // 4.3) Traverse the original loop nests and create a new order (permMap) for
+  // 5.3) Traverse the original loop nests and create a new order (permMap) for
   // the loops, where permMap[i] means the ith loop in the original nests will
   // become the permMap[i]-th loop
   unsigned int outerMostIdx = 0;
@@ -398,12 +397,9 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
     }
   }
 
-  // 5) Permute the loops
+  // 6) Permute the loops
   // TODO: imperfect loops
-  // 5.1) Get the maximal perfect nest
-  AffineLoopBand nest;
-  getPerfectlyNestedLoops(nest, rootForOp);
-  // 5.2) Permute if the nest's size is consistent with the specified
+  // Permute if the nest's size is consistent with the specified
   // permutation
   if (nest.size() >= 2 && nest.size() == permMap.size()) {
     if (outerMostIdx != 0)
@@ -418,7 +414,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
     return failure();
   }
 
-  // 6) Rename the stage if the outermost loop moves inward
+  // 7) Rename the stage if the outermost loop moves inward
   if (outerMostIdx != 0) {
     nest[outerMostIdx]->setAttr(
         "stage_name",

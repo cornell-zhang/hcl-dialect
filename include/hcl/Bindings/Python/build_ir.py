@@ -489,7 +489,8 @@ class ASTBuilder():
         data = self.visit(expr.op)
 
         # load register value and sum up
-        value_attr = IntegerAttr.get(IntegerType.get_signless(32), 0)
+        # value_attr should be index type, since it's an index
+        value_attr = IntegerAttr.get(IndexType.get(), 0)
         zero_idx = std.ConstantOp(IndexType.get(),
                                   value_attr,
                                   ip=get_insertion_point())

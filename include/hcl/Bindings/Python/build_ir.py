@@ -369,7 +369,12 @@ class LoadOp(ExprOp):
 
 
 class StoreOp(ExprOp):
-    pass
+    
+    def __init__(self, val, to_tensor, indices, ip=None):
+        super().__init__(memref.StoreOp, ip=ip)
+        self.val = val
+        self.to_tensor = to_tensor
+        self.indices = indices
 
 
 class TensorOp(ExprOp):
@@ -413,9 +418,21 @@ class ASTBuilder():
             return self.visit_sum_op(expr)
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
+        elif isinstance(expr, (int, float)):
+            return self.visit_py_builtin(expr)
         else:  # IterVar
             return expr.op  # BlockArgument
 
+    def visit_py_builtin(self, expr):
+        if isinstance(expr, int):
+            cst = ConstantOp(i32, expr)
+            return self.visit(cst)
+        elif isinstance(expr, float):
+            cst = ConstantOp(f32, expr)
+            return self.visit(cst)
+        else:
+            raise RuntimeError("Not implemented python builtin type")
+            
     def visit_binary_op(self, expr):
         lhs = self.visit(expr.lhs)
         rhs = self.visit(expr.rhs)
@@ -494,7 +511,7 @@ class ASTBuilder():
         ret_val = memref.StoreOp(iter_sum.result,
                                  rv.result, [zero_idx.result],
                                  ip=get_insertion_point())
-        
+
         # set terminator
         AffineYieldOp([], ip=get_insertion_point())
 
@@ -503,9 +520,16 @@ class ASTBuilder():
         return rv
 
 
-def placeholder(shape, name="", ip=None):
+def placeholder(shape, name=""):
     memref_type = MemRefType.get(shape, f32, loc=loc)
-    return TensorOp(shape, memref.AllocOp, memref_type, ip)
+    tensor = TensorOp(shape, memref.AllocOp, memref_type)
+    # not sure if good or bad
+    tensor.op = tensor.op(tensor.memref_type,
+                          None,
+                          None,
+                          None,
+                          ip=get_insertion_point())
+    return tensor
 
 
 def reduce_axis(lb, ub, name=""):

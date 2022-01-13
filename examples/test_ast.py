@@ -1,3 +1,4 @@
+from hcl_mlir.build_ir import set_insertion_point
 import mlir
 from mlir.ir import *
 from mlir.dialects import builtin, std
@@ -5,10 +6,11 @@ from hcl_mlir import *
 
 with Context() as ctx, Location.unknown() as loc:
     module = Module.create()
+    set_insertion_point(InsertionPoint(module.body))
 
-    A = placeholder((1024, 1024), name="A", ip=InsertionPoint(module.body))
-    B = placeholder((1024, 1024), name="B", ip=InsertionPoint(module.body))
-    C = placeholder((1024, 1024), name="C", ip=InsertionPoint(module.body))
+    A = placeholder((1024, 1024), name="A")
+    B = placeholder((1024, 1024), name="B")
+    C = placeholder((1024, 1024), name="C")
     k = reduce_axis(0, 1024, "k")
     z = reduce_axis(0, 1024, "z")
 
@@ -20,8 +22,8 @@ with Context() as ctx, Location.unknown() as loc:
     # func = lambda i, j: sum(A[i, k] * B[k, j], axis=k)
     # func = lambda i, j: A[1, 0]
 
-    for tensor in [A, B, C]:
-        tensor.op = tensor.op(tensor.memref_type, None, None, None, ip=InsertionPoint(module.body))
+    # for tensor in [A, B, C]:
+    #     tensor.op = tensor.op(tensor.memref_type, None, None, None, ip=InsertionPoint(module.body))
 
     li = make_constant_for(0, 1024, step=1, name="i", ip=InsertionPoint(module.body))
     lj = make_constant_for(0, 1024, step=1, name="j", ip=InsertionPoint(li.body))

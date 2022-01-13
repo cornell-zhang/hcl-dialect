@@ -24,9 +24,8 @@ def floating_point_error(op_name):
 
 
 class ExprOp(object):
-    def __init__(self, op, ip=None):
+    def __init__(self, op):
         self.op = op
-        self.ip = ip
 
     @staticmethod
     def generic_op(OpClass, lhs, rhs):
@@ -195,8 +194,8 @@ class IterVar(ExprOp):
 
 
 class ReduceVar(IterVar):
-    def __init__(self, op, ip=None, bound=None, name=""):
-        super(IterVar, self).__init__(op, ip)
+    def __init__(self, op, bound=None, name=""):
+        super(IterVar, self).__init__(op)
         self.name = name
         self.bound = bound
 
@@ -208,96 +207,91 @@ class ReduceVar(IterVar):
 
 
 class ConstantOp(ExprOp):
-    def __init__(self, dtype, val, ip=None):
-        super().__init__(std.ConstantOp, ip=ip)
+    def __init__(self, dtype, val):
+        super().__init__(std.ConstantOp)
         self.val = val
         self.dtype = dtype
 
 
 class BinaryOp(ExprOp):
-    def __init__(self, op, res_type, lhs, rhs, ip=None):
-        super().__init__(op, ip=ip)
+    def __init__(self, op, res_type, lhs, rhs):
+        super().__init__(op)
         self.res_type = res_type
         self.lhs = lhs
         self.rhs = rhs
 
 
 class CmpOp(BinaryOp):
-    def __init__(self, op, res_type, lhs, rhs, arg, ip=None):
-        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, res_type, lhs, rhs, ip=ip)
+    def __init__(self, op, res_type, lhs, rhs, arg):
+        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, res_type, lhs, rhs)
         self.arg = arg
 
 
 class NegOp(ExprOp):
-    def __init__(self, res_type, expr, ip=None):
-        super().__init__({"f": std.NegFOp, "i": std.NegFOp}, ip=ip)  # use the same op
+    def __init__(self, res_type, expr):
+        super().__init__({"f": std.NegFOp, "i": std.NegFOp})  # use the same op
         self.res_type = res_type
         self.expr = expr
 
 
 class AddOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, res_type, lhs, rhs, ip=ip)
+    def __init__(self, res_type, lhs, rhs):
+        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, res_type, lhs, rhs)
 
 
 class SubOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, res_type, lhs, rhs, ip=ip)
+    def __init__(self, res_type, lhs, rhs):
+        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, res_type, lhs, rhs)
 
 
 class MulOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, res_type, lhs, rhs, ip=ip)
+    def __init__(self, res_type, lhs, rhs):
+        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, res_type, lhs, rhs)
 
 
 class DivOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__(
-            {"f": std.DivFOp, "i": std.SignedDivIOp}, res_type, lhs, rhs, ip=ip
-        )
+    def __init__(self, res_type, lhs, rhs):
+        super().__init__({"f": std.DivFOp, "i": std.SignedDivIOp}, res_type, lhs, rhs)
 
 
 class FloorDivOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
+    def __init__(self, res_type, lhs, rhs):
         super().__init__(
             {"f": std.SignedFloorDivIOp, "i": std.SignedFloorDivIOp},  # not supported!
             res_type,
             lhs,
             rhs,
-            ip=ip,
         )
 
 
 class RemOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__(
-            {"f": std.RemFOp, "i": std.SignedRemIOp}, res_type, lhs, rhs, ip=ip
-        )
+    def __init__(self, res_type, lhs, rhs):
+        super().__init__({"f": std.RemFOp, "i": std.SignedRemIOp}, res_type, lhs, rhs)
 
 
 class LeftShiftOp(BinaryOp):
-    def __init__(self, lhs, rhs, ip=None):
-        super().__init__(std.ShiftLeftOp, i32, lhs, rhs, ip=ip)
+    def __init__(self, lhs, rhs):
+        super().__init__(std.ShiftLeftOp, i32, lhs, rhs)
 
 
 class RightShiftOp(BinaryOp):
-    def __init__(self, lhs, rhs, ip=None):
-        super().__init__(std.SignedShiftRightOp, i32, lhs, rhs, ip=ip)
+    def __init__(self, lhs, rhs):
+        super().__init__(std.SignedShiftRightOp, i32, lhs, rhs)
 
 
 class AndOp(BinaryOp):
-    def __init__(self, lhs, rhs, ip=None):
-        super().__init__(std.AndOp, i32, lhs, rhs, ip=ip)
+    def __init__(self, lhs, rhs):
+        super().__init__(std.AndOp, i32, lhs, rhs)
 
 
 class OrOp(BinaryOp):
-    def __init__(self, lhs, rhs, ip=None):
-        super().__init__(std.OrOp, i32, lhs, rhs, ip=ip)
+    def __init__(self, lhs, rhs):
+        super().__init__(std.OrOp, i32, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
-    def __init__(self, lhs, rhs, ip=None):
-        super().__init__(std.XOrOp, i32, lhs, rhs, ip=ip)
+    def __init__(self, lhs, rhs):
+        super().__init__(std.XOrOp, i32, lhs, rhs)
 
 
 class CastOp(ExprOp):
@@ -305,24 +299,24 @@ class CastOp(ExprOp):
 
 
 class LoadOp(ExprOp):
-    def __init__(self, res_type, tensor, indices, ip=None):
-        super().__init__(memref.LoadOp, ip=ip)
+    def __init__(self, res_type, tensor, indices):
+        super().__init__(memref.LoadOp)
         self.res_type = res_type
         self.tensor = tensor
         self.indices = indices
 
 
 class StoreOp(ExprOp):
-    def __init__(self, val, to_tensor, indices, ip=None):
-        super().__init__(memref.StoreOp, ip=ip)
+    def __init__(self, val, to_tensor, indices):
+        super().__init__(memref.StoreOp)
         self.val = val
         self.to_tensor = to_tensor
         self.indices = indices
 
 
 class TensorOp(ExprOp):
-    def __init__(self, shape, op, memref_type, ip=None):
-        super(TensorOp, self).__init__(op, ip)
+    def __init__(self, shape, op, memref_type):
+        super(TensorOp, self).__init__(op)
         self.shape = shape
         self.memref_type = memref_type
 
@@ -341,8 +335,8 @@ class TensorOp(ExprOp):
 
 
 class SumOp(ExprOp):
-    def __init__(self, op, axis, ip=None):
-        super().__init__(op, ip=ip)
+    def __init__(self, op, axis):
+        super().__init__(op)
         self.axis = axis
 
 
@@ -465,7 +459,7 @@ def placeholder(shape, name=""):
 
 
 def reduce_axis(lb, ub, name=""):
-    return ReduceVar(None, ip=None, bound=(lb, ub), name=name)
+    return ReduceVar(None, bound=(lb, ub), name=name)
 
 
 def sum(expr, axis=None):

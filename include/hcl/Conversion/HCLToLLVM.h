@@ -20,6 +20,8 @@ namespace hcl {
 void registerHCLToLLVMLoweringPass();
 std::unique_ptr<mlir::Pass> createHCLToLLVMLoweringPass();
 
+bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context);
+
 } // namespace hcl
 } // namespace mlir
 

@@ -6,12 +6,13 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-#include "hcl/Bindings/Python/HCLModule.h"
 #include "IRModule.h"
-#include "hcl-c/Translation/EmitHLSCpp.h"
-#include "hcl-c/Dialect/Registration.h"
-#include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl-c/Dialect/Dialects.h"
+#include "hcl-c/Dialect/HCLTypes.h"
+#include "hcl-c/Dialect/Registration.h"
+#include "hcl-c/Translation/EmitHLSCpp.h"
+#include "hcl/Bindings/Python/HCLModule.h"
+#include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
@@ -55,6 +56,16 @@ static bool emitHlsCpp(PyModule &mod, py::object fileObject) {
 }
 
 //===----------------------------------------------------------------------===//
+// Lowering APIs
+//===----------------------------------------------------------------------===//
+
+static bool lowerHCLToLLVM(PyModule &module, PyMlirContext &context) {
+  auto mod = unwrap(module.get());
+  auto ctx = unwrap(context.get());
+  return applyHCLToLLVMLoweringPass(mod, *ctx);
+}
+
+//===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
 
@@ -84,4 +95,6 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);
+
+  m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
 }

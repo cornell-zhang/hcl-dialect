@@ -63,11 +63,13 @@ struct HCLToLLVMLoweringPass
 };
 } // namespace
 
-void HCLToLLVMLoweringPass::runOnOperation() {
+namespace mlir {
+namespace hcl {
+bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   // The first thing to define is the conversion target. This will define the
   // final target for this lowering. For this lowering, we are only targeting
   // the LLVM dialect.
-  LLVMConversionTarget target(getContext());
+  LLVMConversionTarget target(context);
   target.addLegalOp<ModuleOp>();
 
   // During this lowering, we will also be lowering the MemRef types, that are
@@ -75,7 +77,7 @@ void HCLToLLVMLoweringPass::runOnOperation() {
   // conversion we use a TypeConverter as part of the lowering. This converter
   // details how one type maps to another. This is necessary now that we will be
   // doing more complicated lowerings, involving loop region arguments.
-  LLVMTypeConverter typeConverter(&getContext());
+  LLVMTypeConverter typeConverter(&context);
 
   // Now that the conversion target has been defined, we need to provide the
   // patterns used for lowering. At this point of the compilation process, we
@@ -85,19 +87,27 @@ void HCLToLLVMLoweringPass::runOnOperation() {
   // lowerings. Transitive lowering, or A->B->C lowering, is when multiple
   // patterns must be applied to fully transform an illegal operation into a
   // set of legal ones.
-  RewritePatternSet patterns(&getContext());
+  RewritePatternSet patterns(&context);
   populateAffineToStdConversionPatterns(patterns);
   populateLoopToStdConversionPatterns(patterns);
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
   populateStdToLLVMConversionPatterns(typeConverter, patterns);
 
-  patterns.add<CreateLoopHandleOpLowering>(&getContext());
-  patterns.add<CreateStageHandleOpLowering>(&getContext());
+  patterns.add<CreateLoopHandleOpLowering>(&context);
+  patterns.add<CreateStageHandleOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.
-  auto module = getOperation();
   if (failed(applyFullConversion(module, target, std::move(patterns))))
+    return false;
+  return true;
+}
+} // namespace hcl
+} // namespace mlir
+
+void HCLToLLVMLoweringPass::runOnOperation() {
+  auto module = getOperation();
+  if (!applyHCLToLLVMLoweringPass(module, getContext()))
     signalPassFailure();
 }
 

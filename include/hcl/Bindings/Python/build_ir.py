@@ -1,34 +1,22 @@
 from mlir.ir import *
 from mlir.dialects import builtin, std, memref
-from .affine import AffineForOp
+from .affine import AffineForOp, AffineYieldOp
 import mlir.ir as ir
 
 ctx = Context()
 loc = Location.unknown(ctx)
 f32 = F32Type.get(ctx)
 i32 = IntegerType.get_signless(32, context=ctx)
+global_ip = None
 
 
-def get_expr_op(expr, ip=None):
-    if not isinstance(expr, ExprOp):
-        if type(expr) == int:
-            expr = ir.IntegerAttr.get(i32, expr)
-            expr = ConstantOp(std.ConstantOp(i32, expr, loc=loc, ip=ip))
-        else:
-            expr = ir.FloatAttr.get(f32, expr)
-            expr = ConstantOp(std.ConstantOp(f32, expr, loc=loc, ip=ip))
-    return expr
+def get_insertion_point():
+    return global_ip
 
 
-# def get_ip(lhs, rhs):
-#     if isinstance(
-#             lhs, ExprOp) and not isinstance(lhs, ReduceVar) and lhs.ip != None:
-#         return lhs.ip
-#     elif isinstance(
-#             rhs, ExprOp) and not isinstance(rhs, ReduceVar) and rhs.ip != None:
-#         return rhs.ip
-#     else:
-#         raise RuntimeError("Cannot find insertion point")
+def set_insertion_point(ip):
+    global global_ip
+    global_ip = ip
 
 
 class ExprOp(object):
@@ -47,207 +35,112 @@ class ExprOp(object):
             return self.op.result
 
     @staticmethod
-    def binary_op(bin_op, lhs, rhs, arg=""):
-        # ip = get_ip(lhs, rhs)
-        ip = None
-        lhs = get_expr_op(lhs, ip)
-        rhs = get_expr_op(rhs, ip)
-        if arg == "":
-            if isinstance(lhs.op, BlockArgument):
-                op = bin_op["i"](i32,
-                                 lhs.get_expr(),
-                                 rhs.get_expr(),
-                                 loc=loc,
-                                 ip=ip)
-            else:
-                op = bin_op["f"](f32,
-                                 lhs.get_expr(),
-                                 rhs.get_expr(),
-                                 loc=loc,
-                                 ip=ip)
+    def generic_op(OpClass, lhs, rhs):
+        if isinstance(lhs.op, BlockArgument):
+            expr = OpClass(i32, lhs, rhs)
+            expr.op = expr.op["i"]
         else:
-            if isinstance(lhs.op, BlockArgument):
-                op = bin_op["i"](i32,
-                                 arg,
-                                 lhs.get_expr(),
-                                 rhs.get_expr(),
-                                 loc=loc,
-                                 ip=ip)
-            else:
-                op = bin_op["f"](f32,
-                                 arg,
-                                 lhs.get_expr(),
-                                 rhs.get_expr(),
-                                 loc=loc,
-                                 ip=ip)
-        return op, ip
+            expr = OpClass(f32, lhs, rhs)
+            expr.op = expr.op["f"]
+        return expr
+
+    @staticmethod
+    def comparison_op(lhs, rhs, arg):
+        # TODO: Fix type
+        if isinstance(lhs.op, BlockArgument):
+            expr = CmpOp(i32, arg, lhs, rhs)
+            expr.op = expr.op["i"]
+        else:
+            expr = CmpOp(f32, arg, lhs, rhs)
+            expr.op = expr.op["f"]
+        return expr
 
     def __add__(self, other):
-        return AddOp(*self.binary_op({
-            "f": std.AddFOp,
-            "i": std.AddIOp
-        }, self, other))
+        return self.generic_op(AddOp, self, other)
 
     def __radd__(self, other):
-        return AddOp(*self.binary_op({
-            "f": std.AddFOp,
-            "i": std.AddIOp
-        }, other, self))
+        return self.generic_op(AddOp, other, self)
 
     def __sub__(self, other):
-        return SubOp(*self.binary_op({
-            "f": std.SubFOp,
-            "i": std.SubIOp
-        }, self, other))
+        return self.generic_op(SubOp, self, other)
 
     def __rsub__(self, other):
-        return SubOp(*self.binary_op({
-            "f": std.SubFOp,
-            "i": std.SubIOp
-        }, other, self))
+        return self.generic_op(SubOp, other, self)
 
     def __mul__(self, other):
-        return MulOp(*self.binary_op({
-            "f": std.MulFOp,
-            "i": std.MulIOp
-        }, self, other))
+        return self.generic_op(MulOp, self, other)
 
     def __rmul__(self, other):
-        return MulOp(*self.binary_op({
-            "f": std.MulFOp,
-            "i": std.MulIOp
-        }, other, self))
+        return self.generic_op(MulOp, other, self)
 
     def __div__(self, other):
-        return DivOp(*self.binary_op({
-            "f": std.DivFOp,
-            "i": std.DivIOp
-        }, self, other))
+        return self.generic_op(DivOp, self, other)
 
     def __rdiv__(self, other):
-        return DivOp(*self.binary_op({
-            "f": std.DivFOp,
-            "i": std.DivIOp
-        }, other, self))
+        return self.generic_op(DivOp, other, self)
 
     def __truediv__(self, other):
-        return DivOp(*self.binary_op({
-            "f": std.DivFOp,
-            "i": std.DivIOp
-        }, self, other))
+        return self.generic_op(DivOp, self, other)
 
     def __rtruediv__(self, other):
-        return DivOp(*self.binary_op({
-            "f": std.DivFOp,
-            "i": std.DivIOp
-        }, other, self))
+        return self.generic_op(DivOp, other, self)
 
     def __floordiv__(self, other):
-        return FloorDivOp(*self.binary_op(
-            {
-                "f": std.SignedFloorDivFOp,
-                "i": std.SignedFloorDivIOp
-            }, other, self))
+        return self.generic_op(FloorDivOp, self, other)
 
     def __rfloordiv__(self, other):
-        return FloorDivOp(*self.binary_op(
-            {
-                "f": std.SignedFloorDivFOp,
-                "i": std.SignedFloorDivIOp
-            }, other, self))
+        return self.generic_op(FloorDivOp, other, self)
 
     def __mod__(self, other):
-        return RemOp(*self.binary_op({
-            "f": std.RemFOp,
-            "i": std.RemIOp
-        }, other, self))
+        return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
         if isinstance(self.op, BlockArgument):
-            op = NegIOp(i32, self.get_expr(), loc=loc)
+            op = NegOp(i32, self, loc=loc)
         else:
-            op = NegFOp(f32, self.get_expr(), loc=loc)
+            op = NegOp(f32, self, loc=loc)
         return op
 
     def __lshift__(self, other):
-        return ShiftOp(
-            *self.binary_op({
-                "f": std.ShiftLeftOp,
-                "i": std.ShiftLeftOp
-            }, self, other))
+        # TODO: emit error when accepting floating points
+        return LeftShiftOp(self, other)
 
     def __rshift__(self, other):
-        return ShiftOp(*self.binary_op(
-            {
-                "f": std.SignedShiftRightOp,
-                "i": std.SignedShiftRightOp
-            }, other, self))
+        # TODO: emit error when accepting floating points
+        return RightShiftOp(self, other)
 
     def __and__(self, other):
         # TODO: emit error when accepting floating points
-        return AndOp(*self.binary_op({
-            "f": std.AndOp,
-            "i": std.AndOp
-        }, self, other))
+        return AndOp(self, other)
 
     def __or__(self, other):
         # TODO: emit error when accepting floating points
-        return OrOp(*self.binary_op({
-            "f": std.OrOp,
-            "i": std.OrOp
-        }, self, other))
+        return OrOp(self, other)
 
     def __xor__(self, other):
         # TODO: emit error when accepting floating points
-        return XOrOp(*self.binary_op({
-            "f": std.XOrOp,
-            "i": std.XOrOp
-        }, self, other))
+        return XOrOp(self, other)
 
     def __invert__(self):
         raise RuntimeError("Not implemented")
 
     def __lt__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="slt"))
+        return self.comparison_op(self, other, arg="slt")
 
     def __le__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="sle"))
+        return self.comparison_op(self, other, arg="sle")
 
     def __eq__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="eq"))
+        return self.comparison_op(self, other, arg="eq")
 
     def __ne__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="ne"))
+        return self.comparison_op(self, other, arg="ne")
 
     def __gt__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="sgt"))
+        return self.comparison_op(self, other, arg="sgt")
 
     def __ge__(self, other):
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="sge"))
+        return self.comparison_op(self, other, arg="sge")
 
     def __getitem__(self, indices):
         raise RuntimeError("Not implemented")
@@ -277,11 +170,7 @@ class ExprOp(object):
         ret : Expr
             The equality expression.
         """
-        return CmpOp(*self.binary_op(
-            {
-                "f": std.CmpFOp,
-                "i": std.CmpIOp
-            }, self, other, arg="eq"))
+        return self.comparison_op(self, other, arg="eq")
 
     def astype(self, dtype):
         """Cast the expression to other type.
@@ -318,99 +207,177 @@ class ReduceVar(IterVar):
         return self.bound[1]
 
 
-class IntAttr(ExprOp):
-    pass
-
-
-class FloatAttr(ExprOp):
-    pass
-
-
 class ConstantOp(ExprOp):
-    pass
+
+    def __init__(self, dtype, val, ip=None):
+        super().__init__(std.ConstantOp, ip=ip)
+        self.val = val
+        self.dtype = dtype
 
 
-class AddOp(ExprOp):
-    pass
+class BinaryOp(ExprOp):
+
+    def __init__(self, op, res_type, lhs, rhs, ip=None):
+        super().__init__(op, ip=ip)
+        self.res_type = res_type
+        self.lhs = lhs
+        self.rhs = rhs
 
 
-class SubOp(ExprOp):
-    pass
+class CmpOp(BinaryOp):
 
-
-class MulOp(ExprOp):
-    pass
-
-
-class DivOp(ExprOp):
-    pass
-
-
-class RemOp(ExprOp):
-    pass
-
-
-class FloorDivOp(ExprOp):
-    pass
-
-
-class ShiftOp(ExprOp):
-    pass
-
-
-class LoadOp(ExprOp):
-    pass
-
-
-class StoreOp(ExprOp):
-
-    def __getitem__(self, indices):
-        # only one dimension
-        if not isinstance(indices, tuple):
-            indices = [indices]
-
-        # format indices
-        new_indices = []
-        for index in indices:
-            if isinstance(index, int):
-                index = ConstantOp(
-                    std.ConstantOp(i32, IntegerAttr.get(i32, index), loc=loc))
-            try:
-                new_indices.append(index.op.result)
-            except:
-                new_indices.append(index.op)
-        return LoadOp(memref.LoadOp(f32, self.op.result, new_indices, loc=loc))
+    def __init__(self, op, res_type, lhs, rhs, arg, ip=None):
+        super().__init__({
+            "f": std.CmpFOp,
+            "i": std.CmpIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
+        self.arg = arg
 
 
 class NegOp(ExprOp):
-    pass
+
+    def __init__(self, res_type, expr, ip=None):
+        super().__init__({"f": std.NegFOp, "i": std.NegIOp}, ip=ip)
+        self.res_type = res_type
+        self.expr = expr
 
 
-class CmpOp(ExprOp):
-    pass
+class AddOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__({
+            "f": std.AddFOp,
+            "i": std.AddIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
 
 
-class AndOp(ExprOp):
-    pass
+class SubOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__({
+            "f": std.SubFOp,
+            "i": std.SubIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
 
 
-class OrOp(ExprOp):
-    pass
+class MulOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__({
+            "f": std.MulFOp,
+            "i": std.MulIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
 
 
-class XOrOp(ExprOp):
-    pass
+class DivOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__({
+            "f": std.DivFOp,
+            "i": std.DivIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
+
+
+class FloorDivOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__(
+            {
+                "f": std.SignedFloorDivFOp,
+                "i": std.SignedFloorDivIOp
+            },
+            res_type,
+            lhs,
+            rhs,
+            ip=ip)
+
+
+class RemOp(BinaryOp):
+
+    def __init__(self, res_type, lhs, rhs, ip=None):
+        super().__init__({
+            "f": std.RemFOp,
+            "i": std.RemIOp
+        },
+                         res_type,
+                         lhs,
+                         rhs,
+                         ip=ip)
+
+
+class LeftShiftOp(BinaryOp):
+
+    def __init__(self, lhs, rhs, ip=None):
+        super().__init__(std.ShiftLeftOp, i32, lhs, rhs, ip=ip)
+
+
+class RightShiftOp(BinaryOp):
+
+    def __init__(self, lhs, rhs, ip=None):
+        super().__init__(std.SignedShiftRightOp, i32, lhs, rhs, ip=ip)
+
+
+class AndOp(BinaryOp):
+
+    def __init__(self, lhs, rhs, ip=None):
+        super().__init__(std.AndOp, i32, lhs, rhs, ip=ip)
+
+
+class OrOp(BinaryOp):
+
+    def __init__(self, lhs, rhs, ip=None):
+        super().__init__(std.OrOp, i32, lhs, rhs, ip=ip)
+
+
+class XOrOp(BinaryOp):
+
+    def __init__(self, lhs, rhs, ip=None):
+        super().__init__(std.XOrOp, i32, lhs, rhs, ip=ip)
 
 
 class CastOp(ExprOp):
     pass
 
 
+class LoadOp(ExprOp):
+
+    def __init__(self, res_type, tensor, indices, ip=None):
+        super().__init__(memref.LoadOp, ip=ip)
+        self.res_type = res_type
+        self.tensor = tensor
+        self.indices = indices
+
+
+class StoreOp(ExprOp):
+    pass
+
+
 class TensorOp(ExprOp):
 
-    def __init__(self, shape, op, ip=None):
+    def __init__(self, shape, op, memref_type, ip=None):
         super(TensorOp, self).__init__(op, ip)
         self.shape = shape
+        self.memref_type = memref_type
 
     def __getitem__(self, indices):
         # only one dimension
@@ -421,20 +388,132 @@ class TensorOp(ExprOp):
         new_indices = []
         for index in indices:
             if isinstance(index, int):
-                index = ConstantOp(
-                    std.ConstantOp(i32, IntegerAttr.get(i32, index), loc=loc))
-            try:
-                new_indices.append(index.op.result)
-            except:
-                new_indices.append(index.op)
-        return LoadOp(memref.LoadOp(f32, self.op.result, new_indices, loc=loc))
+                index = ConstantOp(i32, index)
+            new_indices.append(index)
+        return LoadOp(f32, self, new_indices)
+
+
+class SumOp(ExprOp):
+
+    def __init__(self, op, axis, ip=None):
+        super().__init__(op, ip=ip)
+        self.axis = axis
+
+
+class ASTBuilder():
+
+    def visit(self, expr):
+        """Apply the visitor to an expression."""
+
+        if isinstance(expr, BinaryOp):
+            return self.visit_binary_op(expr)
+        elif isinstance(expr, LoadOp):
+            return self.visit_load_op(expr)
+        elif isinstance(expr, SumOp):
+            return self.visit_sum_op(expr)
+        elif isinstance(expr, ConstantOp):
+            return self.visit_constant_op(expr)
+        else:  # IterVar
+            return expr.op  # BlockArgument
+
+    def visit_binary_op(self, expr):
+        lhs = self.visit(expr.lhs)
+        rhs = self.visit(expr.rhs)
+        if not isinstance(lhs, BlockArgument):
+            lhs = lhs.result
+        if not isinstance(rhs, BlockArgument):
+            rhs = rhs.result
+        return expr.op(expr.res_type, lhs, rhs, ip=get_insertion_point())
+
+    def visit_load_op(self, expr):
+        new_indices = []
+        for index in expr.indices:
+            if isinstance(index, ConstantOp):
+                index = self.visit(index)
+                new_indices.append(index.result)
+            else:
+                try:
+                    new_indices.append(index.op.result)
+                except:
+                    new_indices.append(index.op)
+        return expr.op(expr.res_type,
+                       expr.tensor.op.result,
+                       new_indices,
+                       ip=get_insertion_point())
+
+    def visit_constant_op(self, expr):
+        if isinstance(expr.dtype, IntegerType):
+            value_attr = IntegerAttr.get(IntegerType.get_signless(32),
+                                         expr.val)
+        elif isinstance(expr.dtype, F32Type):
+            value_attr = FloatAttr.get(F32Type.get(), expr.val)
+        else:
+            raise RuntimeError("Type not implemented")
+        return std.ConstantOp(expr.dtype, value_attr, ip=get_insertion_point())
+
+    def visit_sum_op(self, expr):
+        # save insetion point
+        save_ip = get_insertion_point()
+
+        # create a single-element register for summation
+        memref_type = MemRefType.get((1, ), f32)
+        rv = memref.AllocOp(memref_type,
+                            None,
+                            None,
+                            None,
+                            ip=get_insertion_point())
+
+        # create reduction loop
+        reduction_loop = make_constant_for(expr.axis.bound[0],
+                                           expr.axis.bound[1],
+                                           step=1,
+                                           name=expr.axis.name,
+                                           ip=get_insertion_point())
+        # update insertion point
+        set_insertion_point(InsertionPoint(reduction_loop.body))
+        # update reduction variable
+        expr.axis.op = reduction_loop.induction_variable
+
+        # visit subexpressions
+        data = self.visit(expr.op)
+
+        # load register value and sum up
+        value_attr = IntegerAttr.get(IntegerType.get_signless(32), 0)
+        zero_idx = std.ConstantOp(IndexType.get(),
+                                  value_attr,
+                                  ip=get_insertion_point())
+        load = memref.LoadOp(f32,
+                             rv.result, [zero_idx.result],
+                             ip=get_insertion_point())
+        iter_sum = std.AddFOp(f32,
+                              data.result,
+                              load.result,
+                              ip=get_insertion_point())
+
+        # store the result back to register
+        ret_val = memref.StoreOp(iter_sum.result,
+                                 rv.result, [zero_idx.result],
+                                 ip=get_insertion_point())
+        
+        # set terminator
+        AffineYieldOp([], ip=get_insertion_point())
+
+        # restore insertion point
+        set_insertion_point(save_ip)
+        return rv
 
 
 def placeholder(shape, name="", ip=None):
     memref_type = MemRefType.get(shape, f32, loc=loc)
-    return TensorOp(
-        shape, memref.AllocOp(memref_type, None, None, None, loc=loc, ip=ip),
-        ip)
+    return TensorOp(shape, memref.AllocOp, memref_type, ip)
+
+
+def reduce_axis(lb, ub, name=""):
+    return ReduceVar(None, ip=None, bound=(lb, ub), name=name)
+
+
+def sum(expr, axis=None):
+    return SumOp(expr, axis)
 
 
 def make_constant_for(lb,

@@ -25,15 +25,6 @@ class ExprOp(object):
         self.op = op
         self.ip = ip
 
-    def get_expr(self):
-        if isinstance(self.op, BlockArgument):
-            return CastOp(std.IndexCastOp(i32, self.op, ip=self.ip),
-                          self.ip).op.result  # explicitly index cast
-        elif isinstance(self.op, Attribute):
-            return self.op
-        else:
-            return self.op.result
-
     @staticmethod
     def generic_op(OpClass, lhs, rhs):
         if isinstance(lhs.op, BlockArgument):
@@ -369,7 +360,7 @@ class LoadOp(ExprOp):
 
 
 class StoreOp(ExprOp):
-    
+
     def __init__(self, val, to_tensor, indices, ip=None):
         super().__init__(memref.StoreOp, ip=ip)
         self.val = val
@@ -432,7 +423,7 @@ class ASTBuilder():
             return self.visit(cst)
         else:
             raise RuntimeError("Not implemented python builtin type")
-            
+
     def visit_binary_op(self, expr):
         lhs = self.visit(expr.lhs)
         rhs = self.visit(expr.rhs)
@@ -445,14 +436,11 @@ class ASTBuilder():
     def visit_load_op(self, expr):
         new_indices = []
         for index in expr.indices:
-            if isinstance(index, ConstantOp):
-                index = self.visit(index)
-                new_indices.append(index.result)
-            else:
-                try:
-                    new_indices.append(index.op.result)
-                except:
-                    new_indices.append(index.op)
+            op = self.visit(index)
+            try:
+                new_indices.append(op.result)
+            except:
+                new_indices.append(op)
         return expr.op(expr.res_type,
                        expr.tensor.op.result,
                        new_indices,
@@ -481,15 +469,21 @@ class ASTBuilder():
                             ip=get_insertion_point())
 
         # create reduction loop
-        reduction_loop = make_constant_for(expr.axis.bound[0],
-                                           expr.axis.bound[1],
-                                           step=1,
-                                           name=expr.axis.name,
-                                           ip=get_insertion_point())
-        # update insertion point
-        set_insertion_point(InsertionPoint(reduction_loop.body))
-        # update reduction variable
-        expr.axis.op = reduction_loop.induction_variable
+        if not isinstance(expr.axis, list):
+            new_axes = [expr.axis]
+        else:
+            new_axes = expr.axis
+        for axis in new_axes:
+            reduction_loop = make_constant_for(axis.get_lower_bound(),
+                                               axis.get_upper_bound(),
+                                               step=1,
+                                               name=axis.name,
+                                               ip=get_insertion_point())
+            # update insertion point
+            set_insertion_point(InsertionPoint(reduction_loop.body))
+
+            # update reduction variable
+            axis.op = reduction_loop.induction_variable
 
         # visit subexpressions
         data = self.visit(expr.op)

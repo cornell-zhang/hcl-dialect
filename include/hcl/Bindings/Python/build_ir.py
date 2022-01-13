@@ -2,12 +2,23 @@ from mlir.ir import *
 from mlir.dialects import builtin, std, memref
 from .affine import AffineForOp, AffineYieldOp
 import mlir.ir as ir
+from ._mlir_libs._hcl import *
 
-ctx = Context()
-loc = Location.unknown(ctx)
-f32 = F32Type.get(ctx)
-i32 = IntegerType.get_signless(32, context=ctx)
+global_ctx = Context()
+global_loc = Location.unknown(global_ctx)
+f32 = F32Type.get(global_ctx)
+i32 = IntegerType.get_signless(32, context=global_ctx)
+register_dialects(global_ctx)
+
 global_ip = None
+
+
+def get_context():
+    return global_ctx
+
+
+def get_location():
+    return global_loc
 
 
 def get_insertion_point():
@@ -89,9 +100,9 @@ class ExprOp(object):
 
     def __neg__(self):
         if isinstance(self.op, BlockArgument):
-            op = NegOp(i32, self, loc=loc)
+            op = NegOp(i32, self, loc=get_location())
         else:
-            op = NegOp(f32, self, loc=loc)
+            op = NegOp(f32, self, loc=get_location())
         return op
 
     def __lshift__(self, other):
@@ -430,16 +441,11 @@ class ASTBuilder:
         # load register value and sum up
         # value_attr should be index type, since it's an index
         value_attr = IntegerAttr.get(IndexType.get(), 0)
-        zero_idx = std.ConstantOp(IndexType.get(),
-                                  value_attr,
-                                  ip=get_insertion_point())
-        load = memref.LoadOp(f32,
-                             rv.result, [zero_idx.result],
-                             ip=get_insertion_point())
-        iter_sum = std.AddFOp(f32,
-                              data.result,
-                              load.result,
-                              ip=get_insertion_point())
+        zero_idx = std.ConstantOp(IndexType.get(), value_attr, ip=get_insertion_point())
+        load = memref.LoadOp(
+            f32, rv.result, [zero_idx.result], ip=get_insertion_point()
+        )
+        iter_sum = std.AddFOp(f32, data.result, load.result, ip=get_insertion_point())
 
         # store the result back to register
         ret_val = memref.StoreOp(
@@ -455,7 +461,7 @@ class ASTBuilder:
 
 
 def placeholder(shape, name=""):
-    memref_type = MemRefType.get(shape, f32, loc=loc)
+    memref_type = MemRefType.get(shape, f32, loc=get_location())
     tensor = TensorOp(shape, memref.AllocOp, memref_type)
     # not sure if good or bad
     tensor.op = tensor.op(

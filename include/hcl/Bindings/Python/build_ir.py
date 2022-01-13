@@ -20,7 +20,6 @@ def set_insertion_point(ip):
 
 
 class ExprOp(object):
-
     def __init__(self, op, ip=None):
         self.op = op
         self.ip = ip
@@ -141,9 +140,10 @@ class ExprOp(object):
 
     def __nonzero__(self):
         raise RuntimeError(
-            "1) Cannot use and / or / not operator to Expr, " +
-            "2) Cannot compare NumPy numbers with HeteroCL exprs, " +
-            "hint: swap the operands")
+            "1) Cannot use and / or / not operator to Expr, "
+            + "2) Cannot compare NumPy numbers with HeteroCL exprs, "
+            + "hint: swap the operands"
+        )
 
     def __bool__(self):
         return self.__nonzero__()
@@ -181,11 +181,11 @@ class ExprOp(object):
 
 class IterVar(ExprOp):
     """Symbolic variable."""
+
     pass
 
 
 class ReduceVar(IterVar):
-
     def __init__(self, op, ip=None, bound=None, name=""):
         super(IterVar, self).__init__(op, ip)
         self.name = name
@@ -199,7 +199,6 @@ class ReduceVar(IterVar):
 
 
 class ConstantOp(ExprOp):
-
     def __init__(self, dtype, val, ip=None):
         super().__init__(std.ConstantOp, ip=ip)
         self.val = val
@@ -207,7 +206,6 @@ class ConstantOp(ExprOp):
 
 
 class BinaryOp(ExprOp):
-
     def __init__(self, op, res_type, lhs, rhs, ip=None):
         super().__init__(op, ip=ip)
         self.res_type = res_type
@@ -216,21 +214,12 @@ class BinaryOp(ExprOp):
 
 
 class CmpOp(BinaryOp):
-
     def __init__(self, op, res_type, lhs, rhs, arg, ip=None):
-        super().__init__({
-            "f": std.CmpFOp,
-            "i": std.CmpIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, res_type, lhs, rhs, ip=ip)
         self.arg = arg
 
 
 class NegOp(ExprOp):
-
     def __init__(self, res_type, expr, ip=None):
         super().__init__({"f": std.NegFOp, "i": std.NegIOp}, ip=ip)
         self.res_type = res_type
@@ -238,110 +227,64 @@ class NegOp(ExprOp):
 
 
 class AddOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({
-            "f": std.AddFOp,
-            "i": std.AddIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, res_type, lhs, rhs, ip=ip)
 
 
 class SubOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({
-            "f": std.SubFOp,
-            "i": std.SubIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, res_type, lhs, rhs, ip=ip)
 
 
 class MulOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({
-            "f": std.MulFOp,
-            "i": std.MulIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, res_type, lhs, rhs, ip=ip)
 
 
 class DivOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({
-            "f": std.DivFOp,
-            "i": std.DivIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__(
+            {"f": std.DivFOp, "i": std.SignedDivIOp}, res_type, lhs, rhs, ip=ip
+        )
 
 
 class FloorDivOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
         super().__init__(
-            {
-                "f": std.SignedFloorDivFOp,
-                "i": std.SignedFloorDivIOp
-            },
+            {"f": std.FloorDivFOp, "i": std.SignedFloorDivIOp},  # not supported!
             res_type,
             lhs,
             rhs,
-            ip=ip)
+            ip=ip,
+        )
 
 
 class RemOp(BinaryOp):
-
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({
-            "f": std.RemFOp,
-            "i": std.RemIOp
-        },
-                         res_type,
-                         lhs,
-                         rhs,
-                         ip=ip)
+        super().__init__({"f": std.RemFOp, "i": std.RemIOp}, res_type, lhs, rhs, ip=ip)
 
 
 class LeftShiftOp(BinaryOp):
-
     def __init__(self, lhs, rhs, ip=None):
         super().__init__(std.ShiftLeftOp, i32, lhs, rhs, ip=ip)
 
 
 class RightShiftOp(BinaryOp):
-
     def __init__(self, lhs, rhs, ip=None):
         super().__init__(std.SignedShiftRightOp, i32, lhs, rhs, ip=ip)
 
 
 class AndOp(BinaryOp):
-
     def __init__(self, lhs, rhs, ip=None):
         super().__init__(std.AndOp, i32, lhs, rhs, ip=ip)
 
 
 class OrOp(BinaryOp):
-
     def __init__(self, lhs, rhs, ip=None):
         super().__init__(std.OrOp, i32, lhs, rhs, ip=ip)
 
 
 class XOrOp(BinaryOp):
-
     def __init__(self, lhs, rhs, ip=None):
         super().__init__(std.XOrOp, i32, lhs, rhs, ip=ip)
 
@@ -351,7 +294,6 @@ class CastOp(ExprOp):
 
 
 class LoadOp(ExprOp):
-
     def __init__(self, res_type, tensor, indices, ip=None):
         super().__init__(memref.LoadOp, ip=ip)
         self.res_type = res_type
@@ -360,7 +302,6 @@ class LoadOp(ExprOp):
 
 
 class StoreOp(ExprOp):
-
     def __init__(self, val, to_tensor, indices, ip=None):
         super().__init__(memref.StoreOp, ip=ip)
         self.val = val
@@ -369,7 +310,6 @@ class StoreOp(ExprOp):
 
 
 class TensorOp(ExprOp):
-
     def __init__(self, shape, op, memref_type, ip=None):
         super(TensorOp, self).__init__(op, ip)
         self.shape = shape
@@ -390,14 +330,12 @@ class TensorOp(ExprOp):
 
 
 class SumOp(ExprOp):
-
     def __init__(self, op, axis, ip=None):
         super().__init__(op, ip=ip)
         self.axis = axis
 
 
-class ASTBuilder():
-
+class ASTBuilder:
     def visit(self, expr):
         """Apply the visitor to an expression."""
 
@@ -441,15 +379,13 @@ class ASTBuilder():
                 new_indices.append(op.result)
             except:
                 new_indices.append(op)
-        return expr.op(expr.res_type,
-                       expr.tensor.op.result,
-                       new_indices,
-                       ip=get_insertion_point())
+        return expr.op(
+            expr.res_type, expr.tensor.op.result, new_indices, ip=get_insertion_point()
+        )
 
     def visit_constant_op(self, expr):
         if isinstance(expr.dtype, IntegerType):
-            value_attr = IntegerAttr.get(IntegerType.get_signless(32),
-                                         expr.val)
+            value_attr = IntegerAttr.get(IntegerType.get_signless(32), expr.val)
         elif isinstance(expr.dtype, F32Type):
             value_attr = FloatAttr.get(F32Type.get(), expr.val)
         else:
@@ -461,12 +397,8 @@ class ASTBuilder():
         save_ip = get_insertion_point()
 
         # create a single-element register for summation
-        memref_type = MemRefType.get((1, ), f32)
-        rv = memref.AllocOp(memref_type,
-                            None,
-                            None,
-                            None,
-                            ip=get_insertion_point())
+        memref_type = MemRefType.get((1,), f32)
+        rv = memref.AllocOp(memref_type, None, None, None, ip=get_insertion_point())
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -474,11 +406,13 @@ class ASTBuilder():
         else:
             new_axes = expr.axis
         for axis in new_axes:
-            reduction_loop = make_constant_for(axis.get_lower_bound(),
-                                               axis.get_upper_bound(),
-                                               step=1,
-                                               name=axis.name,
-                                               ip=get_insertion_point())
+            reduction_loop = make_constant_for(
+                axis.get_lower_bound(),
+                axis.get_upper_bound(),
+                step=1,
+                name=axis.name,
+                ip=get_insertion_point(),
+            )
             # update insertion point
             set_insertion_point(InsertionPoint(reduction_loop.body))
 
@@ -490,21 +424,16 @@ class ASTBuilder():
 
         # load register value and sum up
         value_attr = IntegerAttr.get(IntegerType.get_signless(32), 0)
-        zero_idx = std.ConstantOp(IndexType.get(),
-                                  value_attr,
-                                  ip=get_insertion_point())
-        load = memref.LoadOp(f32,
-                             rv.result, [zero_idx.result],
-                             ip=get_insertion_point())
-        iter_sum = std.AddFOp(f32,
-                              data.result,
-                              load.result,
-                              ip=get_insertion_point())
+        zero_idx = std.ConstantOp(IndexType.get(), value_attr, ip=get_insertion_point())
+        load = memref.LoadOp(
+            f32, rv.result, [zero_idx.result], ip=get_insertion_point()
+        )
+        iter_sum = std.AddFOp(f32, data.result, load.result, ip=get_insertion_point())
 
         # store the result back to register
-        ret_val = memref.StoreOp(iter_sum.result,
-                                 rv.result, [zero_idx.result],
-                                 ip=get_insertion_point())
+        ret_val = memref.StoreOp(
+            iter_sum.result, rv.result, [zero_idx.result], ip=get_insertion_point()
+        )
 
         # set terminator
         AffineYieldOp([], ip=get_insertion_point())
@@ -518,11 +447,9 @@ def placeholder(shape, name=""):
     memref_type = MemRefType.get(shape, f32, loc=loc)
     tensor = TensorOp(shape, memref.AllocOp, memref_type)
     # not sure if good or bad
-    tensor.op = tensor.op(tensor.memref_type,
-                          None,
-                          None,
-                          None,
-                          ip=get_insertion_point())
+    tensor.op = tensor.op(
+        tensor.memref_type, None, None, None, ip=get_insertion_point()
+    )
     return tensor
 
 
@@ -534,13 +461,7 @@ def sum(expr, axis=None):
     return SumOp(expr, axis)
 
 
-def make_constant_for(lb,
-                      ub,
-                      step=1,
-                      name="",
-                      stage="",
-                      reduction=False,
-                      ip=None):
+def make_constant_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):
     # Construct lower bound
     lbCst = AffineConstantExpr.get(lb)
     lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
@@ -565,6 +486,7 @@ def make_constant_for(lb,
         name=StringAttr.get(name),
         stage=("" if stage == "" else StringAttr.get(stage)),
         reduction=(IntegerAttr.get(i32, 1) if reduction else None),
-        ip=ip)
+        ip=ip,
+    )
 
     return forOp

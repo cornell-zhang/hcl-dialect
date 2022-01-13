@@ -146,6 +146,13 @@ python3 tests/mlir/test_loop.py
 Notice the integration is still in a very early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
 
 
+### Coding Style
+
+We follow [Google Style Guides](https://google.github.io/styleguide/) and use
+* [clang-format](https://clang.llvm.org/docs/ClangFormat.html) for C/C++
+* [black](https://github.com/psf/black) and [pylint](https://pylint.org/) for Python
+
+
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)
 * [Torch-MLIR](https://github.com/llvm/torch-mlir)

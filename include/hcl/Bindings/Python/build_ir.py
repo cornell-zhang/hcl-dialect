@@ -19,6 +19,10 @@ def set_insertion_point(ip):
     global_ip = ip
 
 
+def floating_point_error(op_name):
+    return RuntimeError("{} does not support floating point inputs".format(op_name))
+
+
 class ExprOp(object):
     def __init__(self, op, ip=None):
         self.op = op
@@ -92,23 +96,28 @@ class ExprOp(object):
         return op
 
     def __lshift__(self, other):
-        # TODO: emit error when accepting floating points
+        if isinstance(self, float) or isinstance(other, float):
+            raise floating_point_error("Left shift")
         return LeftShiftOp(self, other)
 
     def __rshift__(self, other):
-        # TODO: emit error when accepting floating points
+        if isinstance(self, float) or isinstance(other, float):
+            raise floating_point_error("Right shift")
         return RightShiftOp(self, other)
 
     def __and__(self, other):
-        # TODO: emit error when accepting floating points
+        if isinstance(self, float) or isinstance(other, float):
+            raise floating_point_error("Bitwise And")
         return AndOp(self, other)
 
     def __or__(self, other):
-        # TODO: emit error when accepting floating points
+        if isinstance(self, float) or isinstance(other, float):
+            raise floating_point_error("Bitwise Or")
         return OrOp(self, other)
 
     def __xor__(self, other):
-        # TODO: emit error when accepting floating points
+        if isinstance(self, float) or isinstance(other, float):
+            raise floating_point_error("Bitwise XOr")
         return XOrOp(self, other)
 
     def __invert__(self):
@@ -221,7 +230,7 @@ class CmpOp(BinaryOp):
 
 class NegOp(ExprOp):
     def __init__(self, res_type, expr, ip=None):
-        super().__init__({"f": std.NegFOp, "i": std.NegIOp}, ip=ip)
+        super().__init__({"f": std.NegFOp, "i": std.NegFOp}, ip=ip)  # use the same op
         self.res_type = res_type
         self.expr = expr
 
@@ -251,7 +260,7 @@ class DivOp(BinaryOp):
 class FloorDivOp(BinaryOp):
     def __init__(self, res_type, lhs, rhs, ip=None):
         super().__init__(
-            {"f": std.FloorDivFOp, "i": std.SignedFloorDivIOp},  # not supported!
+            {"f": std.SignedFloorDivIOp, "i": std.SignedFloorDivIOp},  # not supported!
             res_type,
             lhs,
             rhs,
@@ -261,7 +270,9 @@ class FloorDivOp(BinaryOp):
 
 class RemOp(BinaryOp):
     def __init__(self, res_type, lhs, rhs, ip=None):
-        super().__init__({"f": std.RemFOp, "i": std.RemIOp}, res_type, lhs, rhs, ip=ip)
+        super().__init__(
+            {"f": std.RemFOp, "i": std.SignedRemIOp}, res_type, lhs, rhs, ip=ip
+        )
 
 
 class LeftShiftOp(BinaryOp):

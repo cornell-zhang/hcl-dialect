@@ -782,7 +782,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
 
   // 4) Try to merge two loops
   // TODO: bug: 1) cannot support tensor type
-  //            2) gemm merge result seems incorrect
+  //            2) doesn't support memref.load, memref.store
   SmallVector<Dependency, 4> dependency;
   if (!analyzeDependency(producerFor, consumerFor, dependency)) {
     std::string err_msg =

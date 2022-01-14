@@ -501,34 +501,36 @@ bool hcl::checkDependence(Operation *A, Operation *B) {
   //   return false;
 }
 
-// Gathers all load and store ops in loop nest rooted at 'forOp' into
-// 'loadAndStoreOps'.
-// Copied from
-// https://github.com/llvm/llvm-project/blob/6786d7e4f5b14c4913d17410042fa226fad7187b/mlir/lib/Transforms/Utils/LoopFusionUtils.cpp#L179
 static bool
-gatherLoadsAndStores(AffineForOp forOp,
-                     SmallVectorImpl<Operation *> &loadAndStoreOps) {
+gatherLoadsAndStores(AffineForOp forOp, SmallVectorImpl<Operation *> &loadOps, SmallVectorImpl<Operation *> &storeOps) {
   bool hasIfOp = false;
   forOp.walk([&](Operation *op) {
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      loadAndStoreOps.push_back(op);
+    if (auto load = dyn_cast<AffineReadOpInterface>(op))
+      loadOps.push_back(op);
+    else if (auto load = dyn_cast<memref::LoadOp>(op))
+      loadOps.push_back(op);
+    else if (auto store = dyn_cast<AffineWriteOpInterface>(op))
+      storeOps.push_back(op);
+    else if (auto store = dyn_cast<memref::StoreOp>(op))
+      storeOps.push_back(op);
     else if (isa<AffineIfOp>(op))
       hasIfOp = true;
-  });
+  }); 
   return !hasIfOp;
 }
 
 bool hcl::analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB,
                        SmallVectorImpl<Dependency> &dependency) {
-  // Gather all load and store from 'forOpA' which precedes 'forOpB' in 'block'.
-  SmallVector<Operation *, 4> opsA;
-  if (!gatherLoadsAndStores(forOpA, opsA)) {
+  SmallVector<Operation *, 4> readOpsA;
+  SmallVector<Operation *, 4> writeOpsA;
+  SmallVector<Operation *, 4> readOpsB;
+  SmallVector<Operation *, 4> writeOpsB;
+
+  if (!gatherLoadsAndStores(forOpA, readOpsA, writeOpsA)) {
     return false;
   }
 
-  // Gather all load and store from 'forOpB' which succeeds 'forOpA' in 'block'.
-  SmallVector<Operation *, 4> opsB;
-  if (!gatherLoadsAndStores(forOpB, opsB)) {
+  if (!gatherLoadsAndStores(forOpB, readOpsB, writeOpsB)) {
     return false;
   }
 
@@ -537,18 +539,34 @@ bool hcl::analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB
   DenseSet<Value> OpBReadMemRefs;
   DenseSet<Value> OpBWriteMemRefs;
 
-  for (Operation *op : opsA) {
+  for (Operation *op : readOpsA) {
     if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
       OpAReadMemRefs.insert(loadOp.getMemRef());
-    } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+    } else if (auto loadOp = dyn_cast<memref::LoadOp>(op)) {
+      OpAReadMemRefs.insert(loadOp.getMemRef());
+    }
+  }
+
+  for (Operation *op : writeOpsA) {
+    if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+      OpAWriteMemRefs.insert(storeOp.getMemRef());
+    } else if (auto storeOp = dyn_cast<memref::StoreOp>(op)) {
       OpAWriteMemRefs.insert(storeOp.getMemRef());
     }
   }
 
-  for (Operation *op : opsB) {
+  for (Operation *op : readOpsB) {
     if (auto loadOp = dyn_cast<AffineReadOpInterface>(op)) {
       OpBReadMemRefs.insert(loadOp.getMemRef());
-    } else if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+    } else if (auto loadOp = dyn_cast<memref::LoadOp>(op)) {
+      OpBReadMemRefs.insert(loadOp.getMemRef());
+    }
+  }
+
+  for (Operation *op : writeOpsB) {
+    if (auto storeOp = dyn_cast<AffineWriteOpInterface>(op)) {
+      OpBWriteMemRefs.insert(storeOp.getMemRef());
+    } else if (auto storeOp = dyn_cast<memref::StoreOp>(op)) {
       OpBWriteMemRefs.insert(storeOp.getMemRef());
     }
   }

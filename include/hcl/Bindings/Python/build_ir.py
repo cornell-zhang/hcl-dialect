@@ -395,9 +395,11 @@ class ASTBuilder:
                 new_indices.append(op.result)
             except:
                 new_indices.append(op)
-        return expr.op(
-            expr.res_type, expr.tensor.op.result, new_indices, ip=get_insertion_point()
-        )
+        try:
+            tensor = expr.tensor.op.result
+        except:  # BlockArgument
+            tensor = expr.tensor.op
+        return expr.op(expr.res_type, tensor, new_indices, ip=get_insertion_point())
 
     def visit_constant_op(self, expr):
         if isinstance(expr.dtype, IntegerType):
@@ -458,24 +460,6 @@ class ASTBuilder:
         # restore insertion point
         set_insertion_point(save_ip)
         return rv
-
-
-def placeholder(shape, name=""):
-    memref_type = MemRefType.get(shape, f32, loc=get_location())
-    tensor = TensorOp(shape, memref.AllocOp, memref_type)
-    # not sure if good or bad
-    tensor.op = tensor.op(
-        tensor.memref_type, None, None, None, ip=get_insertion_point()
-    )
-    return tensor
-
-
-def reduce_axis(lb, ub, name=""):
-    return ReduceVar(None, bound=(lb, ub), name=name)
-
-
-def sum(expr, axis=None):
-    return SumOp(expr, axis)
 
 
 def make_constant_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):

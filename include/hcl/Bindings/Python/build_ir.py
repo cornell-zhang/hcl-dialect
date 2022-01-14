@@ -1,16 +1,15 @@
-from mlir.ir import *
-from mlir.dialects import builtin, std, memref
-from .affine import AffineForOp, AffineYieldOp
 import mlir.ir as ir
+from mlir.dialects import builtin, memref, std
+from mlir.ir import *
+
 from ._mlir_libs._hcl import *
+from .affine import AffineForOp, AffineYieldOp
 
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
 f32 = F32Type.get(global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
 register_dialects(global_ctx)
-
-global_ip = None
 
 
 def get_context():
@@ -21,13 +20,26 @@ def get_location():
     return global_loc
 
 
-def get_insertion_point():
-    return global_ip
+class HCLMLIRInsertionPoint(object):
+    def __init__(self):
+        self.ip_stack = []
+
+    def clear(self):
+        self.ip_stack = []
+
+    def get(self):
+        return self.ip_stack[-1]
+
+    def save(self, ip):
+        if not isinstance(ip, InsertionPoint):
+            ip = InsertionPoint(ip)
+        self.ip_stack.append(ip)
+
+    def restore(self):
+        return self.ip_stack.pop()
 
 
-def set_insertion_point(ip):
-    global global_ip
-    global_ip = ip
+GlobalInsertionPoint = HCLMLIRInsertionPoint()
 
 
 def floating_point_error(op_name):
@@ -385,7 +397,7 @@ class ASTBuilder:
             lhs = lhs.result
         if not isinstance(rhs, BlockArgument):
             rhs = rhs.result
-        return expr.op(expr.res_type, lhs, rhs, ip=get_insertion_point())
+        return expr.op(expr.res_type, lhs, rhs, ip=GlobalInsertionPoint.get())
 
     def visit_load_op(self, expr):
         new_indices = []
@@ -399,7 +411,7 @@ class ASTBuilder:
             tensor = expr.tensor.op.result
         except:  # BlockArgument
             tensor = expr.tensor.op
-        return expr.op(expr.res_type, tensor, new_indices, ip=get_insertion_point())
+        return expr.op(expr.res_type, tensor, new_indices, ip=GlobalInsertionPoint.get())
 
     def visit_constant_op(self, expr):
         if isinstance(expr.dtype, IntegerType):
@@ -408,15 +420,15 @@ class ASTBuilder:
             value_attr = FloatAttr.get(F32Type.get(), expr.val)
         else:
             raise RuntimeError("Type not implemented")
-        return std.ConstantOp(expr.dtype, value_attr, ip=get_insertion_point())
+        return std.ConstantOp(expr.dtype, value_attr, ip=GlobalInsertionPoint.get())
 
     def visit_sum_op(self, expr):
         # save insetion point
-        save_ip = get_insertion_point()
+        save_ip = GlobalInsertionPoint.get()
 
         # create a single-element register for summation
         memref_type = MemRefType.get((1,), f32)
-        rv = memref.AllocOp(memref_type, None, None, None, ip=get_insertion_point())
+        rv = memref.AllocOp(memref_type, None, None, None, ip=GlobalInsertionPoint.get())
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -429,10 +441,10 @@ class ASTBuilder:
                 axis.get_upper_bound(),
                 step=1,
                 name=axis.name,
-                ip=get_insertion_point(),
+                ip=GlobalInsertionPoint.get(),
             )
             # update insertion point
-            set_insertion_point(InsertionPoint(reduction_loop.body))
+            GlobalInsertionPoint.save(reduction_loop.body)
 
             # update reduction variable
             axis.op = reduction_loop.induction_variable
@@ -443,22 +455,22 @@ class ASTBuilder:
         # load register value and sum up
         # value_attr should be index type, since it's an index
         value_attr = IntegerAttr.get(IndexType.get(), 0)
-        zero_idx = std.ConstantOp(IndexType.get(), value_attr, ip=get_insertion_point())
+        zero_idx = std.ConstantOp(IndexType.get(), value_attr, ip=GlobalInsertionPoint.get())
         load = memref.LoadOp(
-            f32, rv.result, [zero_idx.result], ip=get_insertion_point()
+            f32, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
-        iter_sum = std.AddFOp(f32, data.result, load.result, ip=get_insertion_point())
+        iter_sum = std.AddFOp(f32, data.result, load.result, ip=GlobalInsertionPoint.get())
 
         # store the result back to register
         ret_val = memref.StoreOp(
-            iter_sum.result, rv.result, [zero_idx.result], ip=get_insertion_point()
+            iter_sum.result, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
 
         # set terminator
-        AffineYieldOp([], ip=get_insertion_point())
+        AffineYieldOp([], ip=GlobalInsertionPoint.get())
 
         # restore insertion point
-        set_insertion_point(save_ip)
+        GlobalInsertionPoint.restore()
         return rv
 
 

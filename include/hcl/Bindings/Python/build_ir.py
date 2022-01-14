@@ -338,10 +338,18 @@ class StoreOp(ExprOp):
 
 
 class TensorOp(ExprOp):
-    def __init__(self, shape, op, memref_type):
+    def __init__(self, shape, op, memref_type, name=None):
         super(TensorOp, self).__init__(op)
         self.shape = shape
         self.memref_type = memref_type
+        self.name = name
+
+    def set_axis(self, _axis):
+        self._axis = _axis
+
+    @property
+    def axis(self):
+        return self._axis
 
     def __getitem__(self, indices):
         # only one dimension

@@ -170,36 +170,6 @@ void gatherProducerConsumerMemrefs(ArrayRef<Operation *> srcOps,
                                    ArrayRef<Operation *> dstOps,
                                    DenseSet<Value> &producerConsumerMemrefs);
 
-/// Encapsulates a memref load or store access information.
-struct MemRefAccess {
-  Value memref;
-  Operation *opInst;
-  SmallVector<Value, 4> indices;
-
-  /// Constructs a MemRefAccess from a load or store operation.
-  // TODO: add accessors to standard op's load, store, DMA op's to return
-  // MemRefAccess, i.e., loadOp->getAccess(), dmaOp->getRead/WriteAccess.
-  explicit MemRefAccess(Operation *opInst);
-
-  // Returns the rank of the memref associated with this access.
-  unsigned getRank() const;
-  // Returns true if this access is of a store op.
-  bool isStore() const;
-
-  /// Populates 'accessMap' with composition of AffineApplyOps reachable from
-  /// 'indices'.
-  void getAccessMap(AffineValueMap *accessMap) const;
-
-  /// Equal if both affine accesses can be proved to be equivalent at compile
-  /// time (considering the memrefs, their respective affine access maps  and
-  /// operands). The equality of access functions + operands is checked by
-  /// subtracting fully composed value maps, and then simplifying the difference
-  /// using the expression flattener.
-  /// TODO: this does not account for aliasing of memrefs.
-  bool operator==(const MemRefAccess &rhs) const;
-  bool operator!=(const MemRefAccess &rhs) const { return !(*this == rhs); }
-};
-
 } // namespace hcl
 } // namespace mlir
 

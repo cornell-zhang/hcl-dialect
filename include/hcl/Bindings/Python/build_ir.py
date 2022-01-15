@@ -1,3 +1,9 @@
+# ===----------------------------------------------------------------------=== #
+#
+# Copyright 2021-2022 The HCL-MLIR Authors.
+#
+# ===----------------------------------------------------------------------=== #
+
 import mlir.ir as ir
 from mlir.dialects import builtin, memref, std
 from mlir.ir import *
@@ -9,6 +15,8 @@ global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
 f32 = F32Type.get(global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
+idx_type = IndexType.get(context=global_ctx)
+
 register_dialects(global_ctx)
 
 
@@ -18,6 +26,48 @@ def get_context():
 
 def get_location():
     return global_loc
+
+
+def is_floating_point_type(dtype):
+    return isinstance(dtype, (F16Type, F32Type, F64Type))
+
+
+def is_integer_type(dtype):
+    return isinstance(dtype, IntegerType)
+
+
+def get_mlir_type(dtype):
+    if is_integer_type(dtype) or is_floating_point_type(dtype):
+        return dtype
+    elif isinstance(dtype, str):
+        with get_context() as ctx:
+            if dtype[0:3] == "int":
+                return IntegerType.get_signless(int(dtype[3:]))
+            elif dtype[0:4] == "uint":
+                return IntegerType.get_signless(int(dtype[4:]))
+            elif dtype[0:5] == "float":
+                if dtype[5:] == "16":
+                    return F16Type.get()
+                elif dtype == "32":
+                    return F32Type.get()
+                elif dtype == "64":
+                    return F64Type.get()
+                else:
+                    raise RuntimeError("Not supported floating point type")
+            elif dtype[0:5] == "fixed":
+                strs = dtype[5:].split("_")
+                width = IntegerAttr.get(i32, int(strs[0]))
+                frac = IntegerAttr.get(i32, int(strs[1]))
+                return FixedType.get(width, frac)
+            elif dtype[0:6] == "ufixed":
+                strs = dtype[6:].split("_")
+                width = IntegerAttr.get(i32, int(strs[0]))
+                frac = IntegerAttr.get(i32, int(strs[1]))
+                return UFixedType.get(width, frac)
+            else:
+                raise RuntimeError("Unrecognized data type")
+    else:
+        raise RuntimeError("Unrecognized data type format")
 
 
 class HCLMLIRInsertionPoint(object):
@@ -46,29 +96,51 @@ def floating_point_error(op_name):
     return RuntimeError("{} does not support floating point inputs".format(op_name))
 
 
+def get_hcl_op(expr):
+    if isinstance(expr, (int, float)):
+        if isinstance(expr, int):
+            return ConstantOp(i32, expr)
+        elif isinstance(expr, float):
+            return ConstantOp(f32, expr)
+    else:
+        return expr
+
+
 class ExprOp(object):
-    def __init__(self, op):
+    def __init__(self, op, dtype=None):
         self.op = op
+        self.dtype = dtype
 
     @staticmethod
     def generic_op(OpClass, lhs, rhs):
-        if isinstance(lhs.op, BlockArgument):
+        lhs = get_hcl_op(lhs)
+        rhs = get_hcl_op(rhs)
+        if lhs.dtype != rhs.dtype:
+            raise RuntimeError("Types of LHS and RHS should be the same")
+        dtype = lhs.dtype
+        if isinstance(dtype, IntegerType):
             expr = OpClass(i32, lhs, rhs)
             expr.op = expr.op["i"]
-        else:
+        elif isinstance(dtype, FloatType):
             expr = OpClass(f32, lhs, rhs)
             expr.op = expr.op["f"]
+        else:
+            raise RuntimeError("Unsupported types")
         return expr
 
     @staticmethod
     def comparison_op(lhs, rhs, arg):
-        # TODO: Fix type
-        if isinstance(lhs.op, BlockArgument):
+        if lhs.op.dtype != rhs.op.dtype:
+            raise RuntimeError("Types of LHS and RHS should be the same")
+        dtype = lhs.op.dtype
+        if isinstance(dtype, IntegerType):
             expr = CmpOp(i32, arg, lhs, rhs)
             expr.op = expr.op["i"]
-        else:
+        elif isinstance(dtype, FloatType):
             expr = CmpOp(f32, arg, lhs, rhs)
             expr.op = expr.op["f"]
+        else:
+            raise RuntimeError("Unsupported types")
         return expr
 
     def __add__(self, other):
@@ -112,9 +184,9 @@ class ExprOp(object):
 
     def __neg__(self):
         if isinstance(self.op, BlockArgument):
-            op = NegOp(i32, self, loc=get_location())
+            op = NegOp(self.dtype, self, loc=get_location())
         else:
-            op = NegOp(f32, self, loc=get_location())
+            op = NegOp(self.dtype, self, loc=get_location())
         return op
 
     def __lshift__(self, other):
@@ -210,15 +282,27 @@ class ExprOp(object):
         raise RuntimeError("Not implemented")
 
 
-class IterVar(ExprOp):
-    """Symbolic variable."""
+#################################################
+#
+# AST leaf nodes
+#
+#################################################
 
-    pass
+
+class IterVar(ExprOp):
+    """loop induction variable (BlockArgument)"""
+
+    def __init__(self, op):
+        super().__init__(op, dtype=i32)
 
 
 class ReduceVar(IterVar):
+    """reduce_axis
+    induction variable of reduction loop
+    """
+
     def __init__(self, op, bound=None, name=""):
-        super(IterVar, self).__init__(op)
+        super().__init__(op)
         self.name = name
         self.bound = bound
 
@@ -233,63 +317,106 @@ class ConstantOp(ExprOp):
     def __init__(self, dtype, val):
         super().__init__(std.ConstantOp)
         self.val = val
-        self.dtype = dtype
+        self.dtype = get_mlir_type(dtype)
+
+
+class TensorOp(ExprOp):
+    def __init__(self, shape, op, dtype, name=None):
+        super().__init__(op)
+        self.shape = shape
+        self.dtype = get_mlir_type(dtype)
+        self.name = name
+
+    def build(self):
+        memref_type = self.get_memref_type()
+        self.op = self.op(memref_type, None, None, None, ip=GlobalInsertionPoint.get())
+        return self.op
+
+    def get_memref_type(self):
+        return MemRefType.get(self.shape, self.dtype, loc=get_location())
+
+    def set_axis(self, _axis):
+        self._axis = _axis
+
+    @property
+    def axis(self):
+        return self._axis
+
+    def __getitem__(self, indices):
+        # only one dimension
+        if not isinstance(indices, tuple):
+            indices = [indices]
+
+        # format indices
+        new_indices = []
+        for index in indices:
+            if isinstance(index, int):
+                index = ConstantOp(idx_type, index)
+            new_indices.append(index)
+        return LoadOp(self.dtype, self, new_indices)
+
+
+#################################################
+#
+# AST inner nodes
+#
+#################################################
 
 
 class BinaryOp(ExprOp):
-    def __init__(self, op, res_type, lhs, rhs):
+    def __init__(self, op, dtype, lhs, rhs):
         super().__init__(op)
-        self.res_type = res_type
+        self.dtype = dtype
         self.lhs = lhs
         self.rhs = rhs
 
 
 class CmpOp(BinaryOp):
-    def __init__(self, op, res_type, lhs, rhs, arg):
-        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, res_type, lhs, rhs)
+    def __init__(self, op, dtype, lhs, rhs, arg):
+        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, dtype, lhs, rhs)
         self.arg = arg
 
 
 class NegOp(ExprOp):
-    def __init__(self, res_type, expr):
+    def __init__(self, dtype, expr):
         super().__init__({"f": std.NegFOp, "i": std.NegFOp})  # use the same op
-        self.res_type = res_type
+        self.dtype = dtype
         self.expr = expr
 
 
 class AddOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
-        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, res_type, lhs, rhs)
+    def __init__(self, dtype, lhs, rhs):
+        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, dtype, lhs, rhs)
 
 
 class SubOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
-        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, res_type, lhs, rhs)
+    def __init__(self, dtype, lhs, rhs):
+        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, dtype, lhs, rhs)
 
 
 class MulOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
-        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, res_type, lhs, rhs)
+    def __init__(self, dtype, lhs, rhs):
+        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, dtype, lhs, rhs)
 
 
 class DivOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
-        super().__init__({"f": std.DivFOp, "i": std.SignedDivIOp}, res_type, lhs, rhs)
+    def __init__(self, dtype, lhs, rhs):
+        super().__init__({"f": std.DivFOp, "i": std.SignedDivIOp}, dtype, lhs, rhs)
 
 
 class FloorDivOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs):
         super().__init__(
             {"f": std.SignedFloorDivIOp, "i": std.SignedFloorDivIOp},  # not supported!
-            res_type,
+            dtype,
             lhs,
             rhs,
         )
 
 
 class RemOp(BinaryOp):
-    def __init__(self, res_type, lhs, rhs):
-        super().__init__({"f": std.RemFOp, "i": std.SignedRemIOp}, res_type, lhs, rhs)
+    def __init__(self, dtype, lhs, rhs):
+        super().__init__({"f": std.RemFOp, "i": std.SignedRemIOp}, dtype, lhs, rhs)
 
 
 class LeftShiftOp(BinaryOp):
@@ -322,9 +449,8 @@ class CastOp(ExprOp):
 
 
 class LoadOp(ExprOp):
-    def __init__(self, res_type, tensor, indices):
-        super().__init__(memref.LoadOp)
-        self.res_type = res_type
+    def __init__(self, dtype, tensor, indices):
+        super().__init__(memref.LoadOp, dtype)
         self.tensor = tensor
         self.indices = indices
 
@@ -337,37 +463,9 @@ class StoreOp(ExprOp):
         self.indices = indices
 
 
-class TensorOp(ExprOp):
-    def __init__(self, shape, op, memref_type, name=None):
-        super(TensorOp, self).__init__(op)
-        self.shape = shape
-        self.memref_type = memref_type
-        self.name = name
-
-    def set_axis(self, _axis):
-        self._axis = _axis
-
-    @property
-    def axis(self):
-        return self._axis
-
-    def __getitem__(self, indices):
-        # only one dimension
-        if not isinstance(indices, tuple):
-            indices = [indices]
-
-        # format indices
-        new_indices = []
-        for index in indices:
-            if isinstance(index, int):
-                index = ConstantOp(i32, index)
-            new_indices.append(index)
-        return LoadOp(f32, self, new_indices)
-
-
 class SumOp(ExprOp):
-    def __init__(self, op, axis):
-        super().__init__(op)
+    def __init__(self, op, axis, dtype):
+        super().__init__(op, dtype=get_mlir_type(dtype))
         self.axis = axis
 
 
@@ -383,20 +481,8 @@ class ASTBuilder:
             return self.visit_sum_op(expr)
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
-        elif isinstance(expr, (int, float)):
-            return self.visit_py_builtin(expr)
         else:  # IterVar
             return expr.op  # BlockArgument
-
-    def visit_py_builtin(self, expr):
-        if isinstance(expr, int):
-            cst = ConstantOp(i32, expr)
-            return self.visit(cst)
-        elif isinstance(expr, float):
-            cst = ConstantOp(f32, expr)
-            return self.visit(cst)
-        else:
-            raise RuntimeError("Not implemented python builtin type")
 
     def visit_binary_op(self, expr):
         lhs = self.visit(expr.lhs)
@@ -405,7 +491,7 @@ class ASTBuilder:
             lhs = lhs.result
         if not isinstance(rhs, BlockArgument):
             rhs = rhs.result
-        return expr.op(expr.res_type, lhs, rhs, ip=GlobalInsertionPoint.get())
+        return expr.op(expr.dtype, lhs, rhs, ip=GlobalInsertionPoint.get())
 
     def visit_load_op(self, expr):
         new_indices = []
@@ -419,13 +505,13 @@ class ASTBuilder:
             tensor = expr.tensor.op.result
         except:  # BlockArgument
             tensor = expr.tensor.op
-        return expr.op(expr.res_type, tensor, new_indices, ip=GlobalInsertionPoint.get())
+        return expr.op(expr.dtype, tensor, new_indices, ip=GlobalInsertionPoint.get())
 
     def visit_constant_op(self, expr):
         if isinstance(expr.dtype, IntegerType):
-            value_attr = IntegerAttr.get(IntegerType.get_signless(32), expr.val)
+            value_attr = IntegerAttr.get(i32, expr.val)
         elif isinstance(expr.dtype, F32Type):
-            value_attr = FloatAttr.get(F32Type.get(), expr.val)
+            value_attr = FloatAttr.get(f32, expr.val)
         else:
             raise RuntimeError("Type not implemented")
         return std.ConstantOp(expr.dtype, value_attr, ip=GlobalInsertionPoint.get())
@@ -435,8 +521,11 @@ class ASTBuilder:
         save_ip = GlobalInsertionPoint.get()
 
         # create a single-element register for summation
-        memref_type = MemRefType.get((1,), f32)
-        rv = memref.AllocOp(memref_type, None, None, None, ip=GlobalInsertionPoint.get())
+        dtype = expr.dtype
+        memref_type = MemRefType.get((1,), dtype)
+        rv = memref.AllocOp(
+            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+        )
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -461,16 +550,24 @@ class ASTBuilder:
         data = self.visit(expr.op)
 
         # load register value and sum up
-        # value_attr should be index type, since it's an index
-        value_attr = IntegerAttr.get(IndexType.get(), 0)
-        zero_idx = std.ConstantOp(IndexType.get(), value_attr, ip=GlobalInsertionPoint.get())
-        load = memref.LoadOp(
-            f32, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+        zero_idx = std.ConstantOp(
+            idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
         )
-        iter_sum = std.AddFOp(f32, data.result, load.result, ip=GlobalInsertionPoint.get())
+        load = memref.LoadOp(
+            dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+        )
+        if is_floating_point_type(dtype):
+            add_op = std.AddFOp
+        elif is_integer_type(dtype):
+            add_op = std.AddIOp
+        else:
+            raise RuntimeError("Unsupported type")
+        iter_sum = add_op(
+            dtype, data.result, load.result, ip=GlobalInsertionPoint.get()
+        )
 
         # store the result back to register
-        ret_val = memref.StoreOp(
+        memref.StoreOp(
             iter_sum.result, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
 
@@ -494,7 +591,6 @@ def make_constant_for(lb, ub, step=1, name="", stage="", reduction=False, ip=Non
     ubMapAttr = AffineMapAttr.get(ubMap)
 
     # Construct step
-    i32 = IntegerType.get_signless(32)
     step = IntegerAttr.get(i32, step)
 
     # Create AffineForOp

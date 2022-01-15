@@ -48,9 +48,9 @@ def get_mlir_type(dtype):
             elif dtype[0:5] == "float":
                 if dtype[5:] == "16":
                     return F16Type.get()
-                elif dtype == "32":
+                elif dtype[5:] == "32":
                     return F32Type.get()
-                elif dtype == "64":
+                elif dtype[5:] == "64":
                     return F64Type.get()
                 else:
                     raise RuntimeError("Not supported floating point type")
@@ -118,11 +118,11 @@ class ExprOp(object):
         if lhs.dtype != rhs.dtype:
             raise RuntimeError("Types of LHS and RHS should be the same")
         dtype = lhs.dtype
-        if isinstance(dtype, IntegerType):
-            expr = OpClass(i32, lhs, rhs)
+        if is_integer_type(dtype):
+            expr = OpClass(dtype, lhs, rhs)
             expr.op = expr.op["i"]
-        elif isinstance(dtype, FloatType):
-            expr = OpClass(f32, lhs, rhs)
+        elif is_floating_point_type(dtype):
+            expr = OpClass(dtype, lhs, rhs)
             expr.op = expr.op["f"]
         else:
             raise RuntimeError("Unsupported types")
@@ -133,10 +133,10 @@ class ExprOp(object):
         if lhs.op.dtype != rhs.op.dtype:
             raise RuntimeError("Types of LHS and RHS should be the same")
         dtype = lhs.op.dtype
-        if isinstance(dtype, IntegerType):
+        if is_integer_type(dtype):
             expr = CmpOp(i32, arg, lhs, rhs)
             expr.op = expr.op["i"]
-        elif isinstance(dtype, FloatType):
+        elif is_floating_point_type(dtype):
             expr = CmpOp(f32, arg, lhs, rhs)
             expr.op = expr.op["f"]
         else:
@@ -562,6 +562,12 @@ class ASTBuilder:
             add_op = std.AddIOp
         else:
             raise RuntimeError("Unsupported type")
+        if dtype != data.result.type:
+            raise RuntimeError(
+                "Reduction variable should have the same type with the data. Got {} and {}".format(
+                    dtype, data.result.type
+                )
+            )
         iter_sum = add_op(
             dtype, data.result, load.result, ip=GlobalInsertionPoint.get()
         )

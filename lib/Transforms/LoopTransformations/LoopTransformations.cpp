@@ -11,6 +11,7 @@
 #include "hcl/Support/Utils.h"
 #include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
+#include "hcl/Support/LoopFusionUtils.h"
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -803,11 +804,11 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   }
 
   ComputationSliceState sliceUnion;
-  FusionResult result = canFuseLoops(producerFor, consumerFor, requested_depth,
+  FusionResult result = mlir::hcl::canFuseLoops(producerFor, consumerFor, requested_depth,
                                      &sliceUnion, strategy);
   std::string err_msg;
   if (result.value == FusionResult::Success) {
-    fuseLoops(producerFor, consumerFor, sliceUnion);
+    mlir::hcl::fuseLoops(producerFor, consumerFor, sliceUnion);
     producerFor.erase();
     return success();
   } else if (result.value == FusionResult::FailPrecondition) {

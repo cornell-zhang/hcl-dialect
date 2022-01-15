@@ -501,8 +501,9 @@ bool hcl::checkDependence(Operation *A, Operation *B) {
   //   return false;
 }
 
-static bool
-gatherLoadsAndStores(AffineForOp forOp, SmallVectorImpl<Operation *> &loadOps, SmallVectorImpl<Operation *> &storeOps) {
+static bool gatherLoadOpsAndStoreOps(AffineForOp forOp,
+                                 SmallVectorImpl<Operation *> &loadOps,
+                                 SmallVectorImpl<Operation *> &storeOps) {
   bool hasIfOp = false;
   forOp.walk([&](Operation *op) {
     if (auto load = dyn_cast<AffineReadOpInterface>(op))
@@ -515,22 +516,23 @@ gatherLoadsAndStores(AffineForOp forOp, SmallVectorImpl<Operation *> &loadOps, S
       storeOps.push_back(op);
     else if (isa<AffineIfOp>(op))
       hasIfOp = true;
-  }); 
+  });
   return !hasIfOp;
 }
 
-bool hcl::analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB,
-                       SmallVectorImpl<Dependency> &dependency) {
+bool hcl::analyzeDependency(const AffineForOp &forOpA,
+                            const AffineForOp &forOpB,
+                            SmallVectorImpl<Dependency> &dependency) {
   SmallVector<Operation *, 4> readOpsA;
   SmallVector<Operation *, 4> writeOpsA;
   SmallVector<Operation *, 4> readOpsB;
   SmallVector<Operation *, 4> writeOpsB;
 
-  if (!gatherLoadsAndStores(forOpA, readOpsA, writeOpsA)) {
+  if (!gatherLoadOpsAndStoreOps(forOpA, readOpsA, writeOpsA)) {
     return false;
   }
 
-  if (!gatherLoadsAndStores(forOpB, readOpsB, writeOpsB)) {
+  if (!gatherLoadOpsAndStoreOps(forOpB, readOpsB, writeOpsB)) {
     return false;
   }
 

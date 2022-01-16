@@ -30,7 +30,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "hcl/Conversion/HCLToLLVM.h"
-#include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
+#include "hcl/Transforms/LoopTransformations.h"
 
 #include <iostream>
 

@@ -3,13 +3,13 @@
 // Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
-#include "../PassDetail.h"
-#include "hcl/Transforms/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+#include "hcl/Transforms/ReconcileUnrealizedCasts.h"
+#include "PassDetail.h"
+#include "hcl/Transforms/Passes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "hcl/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace hcl;

@@ -7,8 +7,8 @@
 #ifndef HCL_TRANSFORMS_PASSES_H
 #define HCL_TRANSFORMS_PASSES_H
 
-#include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
-#include "hcl/Transforms/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+#include "hcl/Transforms/LoopTransformations.h"
+#include "hcl/Transforms/ReconcileUnrealizedCasts.h"
 
 namespace mlir {
 namespace hcl {

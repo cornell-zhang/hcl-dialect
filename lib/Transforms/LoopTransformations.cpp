@@ -4,12 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "../PassDetail.h"
+#include "PassDetail.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
-#include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
+#include "hcl/Transforms/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Analysis/Utils.h"

@@ -132,7 +132,8 @@ git checkout hcl-mlir
 # LLVM_CONFIG = $BUILD_DIR/bin/llvm-config
 # ...
 
-# build frontend
+# build frontend (for TVM IR)
+# notice: no need to build if you use HCL-MLIR as IR
 make -j
 
 # export library
@@ -140,13 +141,23 @@ export HCL_HOME=$(pwd)
 export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 
 # run tests
-python3 tests/mlir/test_loop.py
+python3 tests/mlir/test_gemm.py
+```
+
+We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/chhzh123/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.
+
+```sh
+# run original TVM flow (v1)
+HCLIR=tvm python3 tests/mlir/test_gemm.py
+
+# run HCL-MLIR flow (v2)
+HCLIR=mlir python3 tests/mlir/test_gemm.py
 ```
 
 Notice the integration is still in a very early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
 
 
-### Coding Style
+## Coding Style
 
 We follow [Google Style Guides](https://google.github.io/styleguide/) and use
 * [clang-format](https://clang.llvm.org/docs/ClangFormat.html) for C/C++

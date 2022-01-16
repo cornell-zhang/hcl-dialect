@@ -11,7 +11,6 @@
 #include "hcl/Support/Utils.h"
 #include "hcl/Transforms/LoopTransformations/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
-#include "hcl/Support/LoopFusionUtils.h"
 
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -44,7 +43,6 @@ namespace {
 #define GEN_PASS_CLASSES
 #include "hcl/Transforms/Passes.h.inc"
 } // end namespace
-
 
 //===----------------------------------------------------------------------===//
 // Loop transformation
@@ -804,11 +802,11 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   }
 
   ComputationSliceState sliceUnion;
-  FusionResult result = mlir::hcl::canFuseLoops(producerFor, consumerFor, requested_depth,
+  FusionResult result = canFuseLoops(producerFor, consumerFor, requested_depth,
                                      &sliceUnion, strategy);
   std::string err_msg;
   if (result.value == FusionResult::Success) {
-    mlir::hcl::fuseLoops(producerFor, consumerFor, sliceUnion);
+    fuseLoops(producerFor, consumerFor, sliceUnion);
     producerFor.erase();
     return success();
   } else if (result.value == FusionResult::FailPrecondition) {

@@ -20,6 +20,22 @@ idx_type = IndexType.get(context=global_ctx)
 register_dialects(global_ctx)
 
 
+class HCLFlags(object):
+    def __init__(self):
+        self.BUILD_INPLACE = False
+
+    def enable_build_inplace(self):
+        self.BUILD_INPLACE = True
+
+    def disable_build_inplace(self):
+        self.BUILD_INPLACE = False
+
+
+flags = HCLFlags()
+enable_build_inplace = flags.enable_build_inplace
+disable_build_inplace = flags.disable_build_inplace
+
+
 def get_context():
     return global_ctx
 
@@ -110,37 +126,29 @@ class ExprOp(object):
     def __init__(self, op, dtype=None):
         self.op = op
         self.dtype = dtype
+        self.built_op = None
+
+    @property
+    def result(self):
+        if isinstance(self.op, BlockArgument):
+            return self.op
+        else:
+            return self.built_op.result
 
     @staticmethod
-    def generic_op(OpClass, lhs, rhs):
+    def generic_op(OpClass, lhs, rhs, arg=None):
+        # turn py builtin op to hcl op
         lhs = get_hcl_op(lhs)
         rhs = get_hcl_op(rhs)
+        # strict type testing
         if lhs.dtype != rhs.dtype:
             raise RuntimeError("Types of LHS and RHS should be the same")
+        # create AST node based on different types
         dtype = lhs.dtype
-        if is_integer_type(dtype):
+        if arg == None:
             expr = OpClass(dtype, lhs, rhs)
-            expr.op = expr.op["i"]
-        elif is_floating_point_type(dtype):
-            expr = OpClass(dtype, lhs, rhs)
-            expr.op = expr.op["f"]
         else:
-            raise RuntimeError("Unsupported types")
-        return expr
-
-    @staticmethod
-    def comparison_op(lhs, rhs, arg):
-        if lhs.op.dtype != rhs.op.dtype:
-            raise RuntimeError("Types of LHS and RHS should be the same")
-        dtype = lhs.op.dtype
-        if is_integer_type(dtype):
-            expr = CmpOp(i32, arg, lhs, rhs)
-            expr.op = expr.op["i"]
-        elif is_floating_point_type(dtype):
-            expr = CmpOp(f32, arg, lhs, rhs)
-            expr.op = expr.op["f"]
-        else:
-            raise RuntimeError("Unsupported types")
+            expr = OpClass(dtype, arg, lhs, rhs)
         return expr
 
     def __add__(self, other):
@@ -183,11 +191,9 @@ class ExprOp(object):
         return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
-        if isinstance(self.op, BlockArgument):
-            op = NegOp(self.dtype, self, loc=get_location())
-        else:
-            op = NegOp(self.dtype, self, loc=get_location())
-        return op
+        # TODO: need to be tested
+        expr = NegOp(self.dtype, self)
+        return expr
 
     def __lshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
@@ -218,22 +224,22 @@ class ExprOp(object):
         raise RuntimeError("Not implemented")
 
     def __lt__(self, other):
-        return self.comparison_op(self, other, arg="slt")
+        return self.generic_op(self, other, arg="slt")
 
     def __le__(self, other):
-        return self.comparison_op(self, other, arg="sle")
+        return self.generic_op(self, other, arg="sle")
 
     def __eq__(self, other):
-        return self.comparison_op(self, other, arg="eq")
+        return self.generic_op(self, other, arg="eq")
 
     def __ne__(self, other):
-        return self.comparison_op(self, other, arg="ne")
+        return self.generic_op(self, other, arg="ne")
 
     def __gt__(self, other):
-        return self.comparison_op(self, other, arg="sgt")
+        return self.generic_op(self, other, arg="sgt")
 
     def __ge__(self, other):
-        return self.comparison_op(self, other, arg="sge")
+        return self.generic_op(self, other, arg="sge")
 
     def __getitem__(self, indices):
         raise RuntimeError("Not implemented")
@@ -264,7 +270,7 @@ class ExprOp(object):
         ret : Expr
             The equality expression.
         """
-        return self.comparison_op(self, other, arg="eq")
+        return self.generic_op(self, other, arg="eq")
 
     def astype(self, dtype):
         """Cast the expression to other type.
@@ -294,6 +300,11 @@ class IterVar(ExprOp):
 
     def __init__(self, op):
         super().__init__(op, dtype=i32)
+        self.built_op = op
+
+    def update_op(self, op):
+        self.op = op
+        self.built_op = op
 
 
 class ReduceVar(IterVar):
@@ -306,10 +317,12 @@ class ReduceVar(IterVar):
         self.name = name
         self.bound = bound
 
-    def get_lower_bound(self):
+    @property
+    def lower_bound(self):
         return self.bound[0]
 
-    def get_upper_bound(self):
+    @property
+    def upper_bound(self):
         return self.bound[1]
 
 
@@ -318,10 +331,23 @@ class ConstantOp(ExprOp):
         super().__init__(std.ConstantOp)
         self.val = val
         self.dtype = get_mlir_type(dtype)
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        if isinstance(self.dtype, IntegerType):
+            value_attr = IntegerAttr.get(i32, self.val)
+        elif isinstance(self.dtype, F32Type):
+            value_attr = FloatAttr.get(f32, self.val)
+        else:
+            raise RuntimeError("Type error")
+        self.built_op = self.op(self.dtype, value_attr, ip=GlobalInsertionPoint.get())
+        return self.built_op
 
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):
+        # op can be BlockArgument or AllocOp.result
         super().__init__(op)
         self.shape = shape
         self.dtype = get_mlir_type(dtype)
@@ -329,8 +355,10 @@ class TensorOp(ExprOp):
 
     def build(self):
         memref_type = self.get_memref_type()
-        self.op = self.op(memref_type, None, None, None, ip=GlobalInsertionPoint.get())
-        return self.op
+        self.built_op = self.op(
+            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+        )
+        return self.built_op
 
     def get_memref_type(self):
         return MemRefType.get(self.shape, self.dtype, loc=get_location())
@@ -353,10 +381,12 @@ class TensorOp(ExprOp):
             if isinstance(index, int):
                 index = ConstantOp(idx_type, index)
             new_indices.append(index)
-        return LoadOp(self.dtype, self, new_indices)
+        load = LoadOp(self.dtype, self, new_indices)
+        if flags.BUILD_INPLACE:
+            load.build()
+        return load
 
     def __setitem__(self, indices, expr):
-        print(expr, self, indices)
         return StoreOp(expr, self, indices)
 
 
@@ -373,12 +403,39 @@ class BinaryOp(ExprOp):
         self.dtype = dtype
         self.lhs = lhs
         self.rhs = rhs
+        if isinstance(op, dict):
+            if is_integer_type(dtype):
+                self.op = op["i"]
+            elif is_floating_point_type(dtype):
+                self.op = op["f"]
+            else:
+                raise RuntimeError("Unsupported types")
+        else:
+            self.op = op
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype, self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
+        )
+        return self.built_op
 
 
 class CmpOp(BinaryOp):
     def __init__(self, op, dtype, lhs, rhs, arg):
-        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, dtype, lhs, rhs)
         self.arg = arg
+        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, dtype, lhs, rhs)
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype,
+            self.arg,
+            self.lhs.result,
+            self.rhs.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
 
 
 class NegOp(ExprOp):
@@ -386,6 +443,12 @@ class NegOp(ExprOp):
         super().__init__({"f": std.NegFOp, "i": std.NegFOp})  # use the same op
         self.dtype = dtype
         self.expr = expr
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(self.dtype, self.expr, ip=GlobalInsertionPoint.get())
+        return self.built_op
 
 
 class AddOp(BinaryOp):
@@ -458,6 +521,15 @@ class LoadOp(ExprOp):
         self.tensor = tensor
         self.indices = indices
 
+    def build(self):
+        new_indices = []
+        for index in self.indices:
+            new_indices.append(index.result)
+        self.built_op = self.op(
+            self.dtype, self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
+        )
+        return self.built_op
+
 
 class StoreOp(ExprOp):
     def __init__(self, val, to_tensor, indices):
@@ -465,9 +537,24 @@ class StoreOp(ExprOp):
         self.val = val
         self.to_tensor = to_tensor
         self.indices = indices
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        new_indices = []
+        for index in self.indices:
+            new_indices.append(index.result)
+        self.built_op = self.op(
+            self.val.result,
+            self.to_tensor.result,
+            new_indices,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
 
 
 class SumOp(ExprOp):
+    # cannot build inplace!!!
     def __init__(self, op, axis, dtype):
         super().__init__(op, dtype=get_mlir_type(dtype))
         self.axis = axis
@@ -488,7 +575,7 @@ class ASTBuilder:
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
         else:  # IterVar
-            return expr.op  # BlockArgument
+            return expr.built_op  # BlockArgument
 
     def visit_binary_op(self, expr):
         lhs = self.visit(expr.lhs)
@@ -497,7 +584,7 @@ class ASTBuilder:
             lhs = lhs.result
         if not isinstance(rhs, BlockArgument):
             rhs = rhs.result
-        return expr.op(expr.dtype, lhs, rhs, ip=GlobalInsertionPoint.get())
+        return expr.build()
 
     def visit_load_op(self, expr):
         new_indices = []
@@ -505,25 +592,16 @@ class ASTBuilder:
             op = self.visit(index)
             try:
                 new_indices.append(op.result)
-            except:
+            except:  # BlockArgument
                 new_indices.append(op)
-        try:
-            tensor = expr.tensor.op.result
-        except:  # BlockArgument
-            tensor = expr.tensor.op
-        return expr.op(expr.dtype, tensor, new_indices, ip=GlobalInsertionPoint.get())
+        tensor = expr.tensor.result
+        return expr.build()
 
     def visit_store_op(self, expr):
-        return expr.op(expr.val, expr.to_tensor, expr.indices)
+        return expr.build()
 
     def visit_constant_op(self, expr):
-        if isinstance(expr.dtype, IntegerType):
-            value_attr = IntegerAttr.get(i32, expr.val)
-        elif isinstance(expr.dtype, F32Type):
-            value_attr = FloatAttr.get(f32, expr.val)
-        else:
-            raise RuntimeError("Type not implemented")
-        return std.ConstantOp(expr.dtype, value_attr, ip=GlobalInsertionPoint.get())
+        return expr.build()
 
     def visit_sum_op(self, expr):
         # save insetion point
@@ -543,8 +621,8 @@ class ASTBuilder:
             new_axes = expr.axis
         for axis in new_axes:
             reduction_loop = make_constant_for(
-                axis.get_lower_bound(),
-                axis.get_upper_bound(),
+                axis.lower_bound,
+                axis.upper_bound,
                 step=1,
                 name=axis.name,
                 ip=GlobalInsertionPoint.get(),
@@ -553,7 +631,7 @@ class ASTBuilder:
             GlobalInsertionPoint.save(reduction_loop.body)
 
             # update reduction variable
-            axis.op = reduction_loop.induction_variable
+            axis.update_op(reduction_loop.induction_variable)
 
         # visit subexpressions
         data = self.visit(expr.op)

@@ -355,6 +355,10 @@ class TensorOp(ExprOp):
             new_indices.append(index)
         return LoadOp(self.dtype, self, new_indices)
 
+    def __setitem__(self, indices, expr):
+        print(expr, self, indices)
+        return StoreOp(expr, self, indices)
+
 
 #################################################
 #
@@ -477,6 +481,8 @@ class ASTBuilder:
             return self.visit_binary_op(expr)
         elif isinstance(expr, LoadOp):
             return self.visit_load_op(expr)
+        elif isinstance(expr, StoreOp):
+            return self.visit_store_op(expr)
         elif isinstance(expr, SumOp):
             return self.visit_sum_op(expr)
         elif isinstance(expr, ConstantOp):
@@ -506,6 +512,9 @@ class ASTBuilder:
         except:  # BlockArgument
             tensor = expr.tensor.op
         return expr.op(expr.dtype, tensor, new_indices, ip=GlobalInsertionPoint.get())
+
+    def visit_store_op(self, expr):
+        return expr.op(expr.val, expr.to_tensor, expr.indices)
 
     def visit_constant_op(self, expr):
         if isinstance(expr.dtype, IntegerType):

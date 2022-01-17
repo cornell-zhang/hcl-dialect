@@ -41,11 +41,12 @@ declare_mlir_dialect_python_bindings(
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT HCLMLIRPythonSources.Dialects
   ROOT_DIR "${HCL_MLIR_PYTHON_ROOT_DIR}"
-  TD_FILE affine/AffineOps.td
+  #TD_FILE affine/AffineOps.td
   SOURCES
     affine/__init__.py
     affine/_ods_common.py
     affine/_affine_ops_ext.py
+    affine/_affine_ops_gen.py
   DIALECT_NAME affine
 )
 

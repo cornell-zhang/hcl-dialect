@@ -4,12 +4,11 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-import mlir.ir as ir
-from mlir.dialects import builtin, memref, std
+from mlir.dialects import memref, std
 from mlir.ir import *
 
 from ._mlir_libs._hcl import *
-from .affine import AffineForOp, AffineYieldOp
+from . import affine
 
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
@@ -517,7 +516,7 @@ class CastOp(ExprOp):
 
 class LoadOp(ExprOp):
     def __init__(self, dtype, tensor, indices):
-        super().__init__(memref.LoadOp, dtype)
+        super().__init__(affine.AffineLoadOp, dtype)
         self.tensor = tensor
         self.indices = indices
 
@@ -533,7 +532,7 @@ class LoadOp(ExprOp):
 
 class StoreOp(ExprOp):
     def __init__(self, val, to_tensor, indices):
-        super().__init__(memref.StoreOp)
+        super().__init__(affine.AffineStoreOp)
         self.val = val
         self.to_tensor = to_tensor
         self.indices = indices
@@ -640,7 +639,7 @@ class ASTBuilder:
         zero_idx = std.ConstantOp(
             idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
         )
-        load = memref.LoadOp(
+        load = affine.AffineLoadOp(
             dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         if is_floating_point_type(dtype):
@@ -660,12 +659,12 @@ class ASTBuilder:
         )
 
         # store the result back to register
-        memref.StoreOp(
+        affine.AffineStoreOp(
             iter_sum.result, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
 
         # set terminator
-        AffineYieldOp([], ip=GlobalInsertionPoint.get())
+        affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
 
         # restore insertion point
         GlobalInsertionPoint.restore()
@@ -687,7 +686,7 @@ def make_constant_for(lb, ub, step=1, name="", stage="", reduction=False, ip=Non
     step = IntegerAttr.get(i32, step)
 
     # Create AffineForOp
-    forOp = AffineForOp(
+    forOp = affine.AffineForOp(
         None,
         None,
         step,

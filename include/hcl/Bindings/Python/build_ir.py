@@ -413,7 +413,9 @@ class UnaryOp(ExprOp):
             self.build()
 
     def build(self):
-        self.built_op = self.op(self.dtype, self.val.result, ip=GlobalInsertionPoint.get())
+        self.built_op = self.op(
+            self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+        )
         return self.built_op
 
 
@@ -534,9 +536,11 @@ class MathLogOp(UnaryOp):
     def __init__(self, val):
         super().__init__(math.LogOp, f32, val)
 
+
 class MathLog2Op(UnaryOp):
     def __init__(self, val):
         super().__init__(math.Log2Op, f32, val)
+
 
 class MathLog10Op(UnaryOp):
     def __init__(self, val):
@@ -561,6 +565,7 @@ class MathCosOp(UnaryOp):
 class MathTanhOp(UnaryOp):
     def __init__(self, val):
         super().__init__(math.TanhOp, f32, val)
+
 
 class CastOp(ExprOp):
     pass
@@ -673,7 +678,7 @@ class ASTBuilder:
         else:
             new_axes = expr.axis
         for axis in new_axes:
-            reduction_loop = make_constant_for(
+            reduction_loop = make_affine_for(
                 axis.lower_bound,
                 axis.upper_bound,
                 step=1,
@@ -725,24 +730,38 @@ class ASTBuilder:
         return rv
 
 
-def make_constant_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):
+def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):
     # Construct lower bound
-    lbCst = AffineConstantExpr.get(lb)
-    lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
+    if isinstance(lb, int):
+        lbCst = AffineConstantExpr.get(lb)
+        lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
+        lb_expr = None
+    else:
+        d0 = AffineDimExpr.get(0)
+        lbMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
+        lb_expr = lb.op
     lbMapAttr = AffineMapAttr.get(lbMap)
 
     # Construct upper bound
-    ubCst = AffineConstantExpr.get(ub)
-    ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
+    if isinstance(ub, int):
+        ubCst = AffineConstantExpr.get(ub)
+        ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
+        ub_expr = None
+    else:
+        d0 = AffineDimExpr.get(0)
+        ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
+        ub_expr = ub.op
     ubMapAttr = AffineMapAttr.get(ubMap)
 
     # Construct step
+    if not isinstance(step, int):
+        raise RuntimeError("Not supported")
     step = IntegerAttr.get(i32, step)
 
     # Create AffineForOp
     forOp = affine.AffineForOp(
-        None,
-        None,
+        lb_expr,
+        ub_expr,
         step,
         lbMapAttr,
         ubMapAttr,

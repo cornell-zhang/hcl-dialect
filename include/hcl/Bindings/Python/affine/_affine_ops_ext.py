@@ -53,6 +53,10 @@ class AffineForOp:
             attributes["reduction"] = reduction
         if lower_bound == None and upper_bound == None:
             operands = list(iter_args)
+        elif lower_bound != None:
+            operands = [lower_bound] + list(iter_args)
+        elif upper_bound != None:
+            operands = [upper_bound] + list(iter_args)
         else:
             operands = [lower_bound, upper_bound] + list(iter_args)
         super().__init__(

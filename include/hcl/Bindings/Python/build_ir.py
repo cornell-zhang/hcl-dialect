@@ -4,7 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from mlir.dialects import memref, std
+from mlir.dialects import memref, std, math
 from mlir.ir import *
 
 from ._mlir_libs._hcl import *
@@ -190,7 +190,6 @@ class ExprOp(object):
         return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
-        # TODO: need to be tested
         expr = NegOp(self.dtype, self)
         return expr
 
@@ -396,6 +395,28 @@ class TensorOp(ExprOp):
 #################################################
 
 
+class UnaryOp(ExprOp):
+    def __init__(self, op, dtype, val):
+        super().__init__(op)
+        self.dtype = dtype
+        self.val = val
+        if isinstance(op, dict):
+            if is_integer_type(dtype):
+                self.op = op["i"]
+            elif is_floating_point_type(dtype):
+                self.op = op["f"]
+            else:
+                raise RuntimeError("Unsupported types")
+        else:
+            self.op = op
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(self.dtype, self.val.result, ip=GlobalInsertionPoint.get())
+        return self.built_op
+
+
 class BinaryOp(ExprOp):
     def __init__(self, op, dtype, lhs, rhs):
         super().__init__(op)
@@ -434,19 +455,6 @@ class CmpOp(BinaryOp):
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),
         )
-        return self.built_op
-
-
-class NegOp(ExprOp):
-    def __init__(self, dtype, expr):
-        super().__init__({"f": std.NegFOp, "i": std.NegFOp})  # use the same op
-        self.dtype = dtype
-        self.expr = expr
-        if flags.BUILD_INPLACE:
-            self.build()
-
-    def build(self):
-        self.built_op = self.op(self.dtype, self.expr, ip=GlobalInsertionPoint.get())
         return self.built_op
 
 
@@ -510,6 +518,50 @@ class XOrOp(BinaryOp):
         super().__init__(std.XOrOp, i32, lhs, rhs)
 
 
+class NegOp(UnaryOp):
+    def __init__(self, dtype, val):
+        super().__init__(
+            {"f": std.NegFOp, "i": std.NegFOp}, dtype, val
+        )  # use the same op
+
+
+class MathExpOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.ExpOp, f32, val)
+
+
+class MathLogOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.LogOp, f32, val)
+
+class MathLog2Op(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.Log2Op, f32, val)
+
+class MathLog10Op(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.Log10Op, f32, val)
+
+
+class MathSqrtOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.SqrtOp, f32, val)
+
+
+class MathSinOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.SinOp, f32, val)
+
+
+class MathCosOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.CosOp, f32, val)
+
+
+class MathTanhOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(math.TanhOp, f32, val)
+
 class CastOp(ExprOp):
     pass
 
@@ -563,7 +615,9 @@ class ASTBuilder:
     def visit(self, expr):
         """Apply the visitor to an expression."""
 
-        if isinstance(expr, BinaryOp):
+        if isinstance(expr, UnaryOp):
+            return self.visit_unary_op(expr)
+        elif isinstance(expr, BinaryOp):
             return self.visit_binary_op(expr)
         elif isinstance(expr, LoadOp):
             return self.visit_load_op(expr)
@@ -576,13 +630,13 @@ class ASTBuilder:
         else:  # IterVar
             return expr.built_op  # BlockArgument
 
+    def visit_unary_op(self, expr):
+        self.visit(expr.val)
+        return expr.build()
+
     def visit_binary_op(self, expr):
-        lhs = self.visit(expr.lhs)
-        rhs = self.visit(expr.rhs)
-        if not isinstance(lhs, BlockArgument):
-            lhs = lhs.result
-        if not isinstance(rhs, BlockArgument):
-            rhs = rhs.result
+        self.visit(expr.lhs)
+        self.visit(expr.rhs)
         return expr.build()
 
     def visit_load_op(self, expr):

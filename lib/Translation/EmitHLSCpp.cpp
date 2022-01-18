@@ -436,6 +436,10 @@ public:
   bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedFloorDivIOp op) {
+    return emitter.emitBinary(op, "/"), true;
+  }
   bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.

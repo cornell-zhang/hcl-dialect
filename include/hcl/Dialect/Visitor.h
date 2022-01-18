@@ -44,25 +44,26 @@ public:
             memref::ViewOp, memref::SubViewOp, AtomicRMWOp, GenericAtomicRMWOp,
             AtomicYieldOp,
             // Tensor-related statements.
-            tensor::ExtractOp, tensor::InsertOp,
-            memref::TensorLoadOp, memref::TensorStoreOp, memref::BufferCastOp,
-            SplatOp, memref::DimOp, RankOp,
+            tensor::ExtractOp, tensor::InsertOp, memref::TensorLoadOp,
+            memref::TensorStoreOp, memref::BufferCastOp, SplatOp, memref::DimOp,
+            RankOp,
             // Unary expressions.
             math::CosOp, math::SinOp, math::TanhOp, math::SqrtOp, math::RsqrtOp,
             math::ExpOp, math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
             NegFOp,
             // Float binary expressions.
-            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
+            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp, SignedDivIOp,
+            SignedFloorDivIOp,
             // Integer binary expressions.
             CmpIOp, AddIOp, SubIOp, MulIOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp,
             // HCL operations.
-            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp
-            >([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -158,6 +159,8 @@ public:
   HANDLE(AddIOp);
   HANDLE(SubIOp);
   HANDLE(MulIOp);
+  HANDLE(SignedDivIOp);
+  HANDLE(SignedFloorDivIOp);
 
   // Special operations.
   HANDLE(CallOp);

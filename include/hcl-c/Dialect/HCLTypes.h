@@ -22,9 +22,13 @@ MLIR_CAPI_EXPORTED MlirType hclMlirStageHandleTypeGet(MlirContext ctx);
 
 MLIR_CAPI_EXPORTED bool hclMlirTypeIsAFixedType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType hclMlirFixedTypeGet(MlirContext ctx, size_t width, size_t frac);
+MLIR_CAPI_EXPORTED unsigned hclMlirFixedTypeGetWidth(MlirType type);
+MLIR_CAPI_EXPORTED unsigned hclMlirFixedTypeGetFrac(MlirType type);
 
 MLIR_CAPI_EXPORTED bool hclMlirTypeIsAUFixedType(MlirType type);
 MLIR_CAPI_EXPORTED MlirType hclMlirUFixedTypeGet(MlirContext ctx, size_t width, size_t frac);
+MLIR_CAPI_EXPORTED unsigned hclMlirUFixedTypeGetWidth(MlirType type);
+MLIR_CAPI_EXPORTED unsigned hclMlirUFixedTypeGetFrac(MlirType type);
 
 #ifdef __cplusplus
 }

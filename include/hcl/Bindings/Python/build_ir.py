@@ -161,25 +161,52 @@ def cast_types(lhs, rhs):
     """
     ltype = lhs.dtype
     rtype = rhs.dtype
-    print(
-        "Types of {} ({}) and {} ({}) are different. Explictly cast {} to {}.".format(
-            lhs, ltype, rhs, rtype, rtype, ltype
-        )
-    )
     # 1) If one operand is long double (omitted)
     # 2) Otherwise, if one operand is double
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
-        return CastOp(rhs, f64)
+        res_type = f64
     # 3) Otherwise, if one operand is float
     elif isinstance(ltype, F32Type):
         # integer type to float (the only real type possible is float, which remains as-is)
-        return CastOp(rhs, f32)
+        res_type = f32
     # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
     elif isinstance(ltype, IntegerType):
-        return CastOp(rhs, ltype)
+        res_type = ltype
+    # 5) Fixed types
+    elif is_fixed_type(ltype):
+        # TODO: UFixed type
+        if is_integer_type(rtype):
+            res_type = FixedType.get(rtype.width, ltype.frac, global_ctx)
+        else:
+            raise RuntimeError("Type conversion not implemented")
     else:
         raise RuntimeError("Type conversion failed")
+    print(
+        "Warning: Types of {} ({}) and {} ({}) are different. Explictly cast {} to {}.".format(
+            lhs, ltype, rhs, rtype, rtype, res_type
+        )
+    )
+    return CastOp(rhs, res_type)
+
+
+def regularize_fixed_type(lhs, rhs):
+    if not is_fixed_type(lhs.dtype) or not is_fixed_type(rhs.dtype):
+        raise RuntimeError("Should be all fixed types")
+    if not lhs.dtype.frac == rhs.dtype.frac:
+        raise RuntimeError("Should have the same frac")
+    lwidth = lhs.dtype.width
+    rwidth = rhs.dtype.width
+    if lwidth < rwidth:
+        res_type = FixedType.get(rwidth, lhs.dtype.frac, global_ctx)
+        cast = CastOp(lhs, res_type)
+        return cast, rhs
+    elif lwidth > rwidth:
+        res_type = FixedType.get(lwidth, rhs.dtype.frac, global_ctx)
+        cast = CastOp(rhs, res_type)
+        return lhs, cast
+    else:
+        return lhs, rhs
 
 
 class ExprOp(object):
@@ -213,6 +240,8 @@ class ExprOp(object):
             lhs = cast_types(rhs, lhs)
         else:  # lrank > rrank
             rhs = cast_types(lhs, rhs)
+        if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
+            lhs, rhs = regularize_fixed_type(lhs, rhs)
 
         # create AST node based on different types
         dtype = lhs.dtype

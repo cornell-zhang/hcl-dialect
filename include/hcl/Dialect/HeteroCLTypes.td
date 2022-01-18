@@ -10,6 +10,7 @@
 #define HCL_TYPES
 
 include "hcl/Dialect/HeteroCLDialect.td"
+include "mlir/IR/BuiltinTypeInterfaces.td"
 
 // // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
 // https://github.com/llvm/torch-mlir/blob/main/include/torch-mlir/Dialect/Torch/IR/TorchTypes.td#L50
@@ -23,7 +24,7 @@ def StageHandle : HeteroCL_Type<"StageHandle"> {
   let mnemonic = "StageHandle";
 }
 
-def Fixed : HeteroCL_Type<"Fixed"> {
+def Fixed : HeteroCL_Type<"Fixed", [MemRefElementTypeInterface]> {
   let summary = "fixed point";
   let mnemonic = "Fixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
@@ -47,7 +48,7 @@ def Fixed : HeteroCL_Type<"Fixed"> {
   }];
 }
 
-def UFixed : HeteroCL_Type<"UFixed"> {
+def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   let summary = "unsigned fixed point";
   let mnemonic = "UFixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);

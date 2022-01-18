@@ -20,6 +20,12 @@ MLIR_CAPI_EXPORTED MlirType hclMlirLoopHandleTypeGet(MlirContext ctx);
 MLIR_CAPI_EXPORTED bool hclMlirTypeIsAStageHandle(MlirType type);
 MLIR_CAPI_EXPORTED MlirType hclMlirStageHandleTypeGet(MlirContext ctx);
 
+MLIR_CAPI_EXPORTED bool hclMlirTypeIsAFixedType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType hclMlirFixedTypeGet(MlirContext ctx, size_t width, size_t frac);
+
+MLIR_CAPI_EXPORTED bool hclMlirTypeIsAUFixedType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType hclMlirUFixedTypeGet(MlirContext ctx, size_t width, size_t frac);
+
 #ifdef __cplusplus
 }
 #endif

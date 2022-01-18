@@ -73,14 +73,10 @@ def get_mlir_type(dtype):
                     raise RuntimeError("Not supported floating point type")
             elif dtype[0:5] == "fixed":
                 strs = dtype[5:].split("_")
-                width = IntegerAttr.get(i32, int(strs[0]))
-                frac = IntegerAttr.get(i32, int(strs[1]))
-                return FixedType.get(width, frac)
+                return FixedType.get(int(strs[0]), int(strs[1]), ctx)
             elif dtype[0:6] == "ufixed":
                 strs = dtype[6:].split("_")
-                width = IntegerAttr.get(i32, int(strs[0]))
-                frac = IntegerAttr.get(i32, int(strs[1]))
-                return UFixedType.get(width, frac)
+                return UFixedType.get(int(strs[0]), int(strs[1]), ctx)
             else:
                 raise RuntimeError("Unrecognized data type")
     else:

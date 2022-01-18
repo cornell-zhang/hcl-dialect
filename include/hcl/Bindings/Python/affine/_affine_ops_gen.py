@@ -32,6 +32,18 @@ class AffineForOp(_ods_ir.OpView):
 
 @_ods_cext.register_operation(_Dialect)
 @_ods_extend_opview_class(_ods_ext_module)
+class AffineIfOp(_ods_ir.OpView):
+  OPERATION_NAME = "affine.if"
+
+  _ODS_REGIONS = (2, True)
+
+  @builtins.property
+  def results_(self):
+    _ods_variadic_group_length = len(self.operation.results) - 1 + 1
+    return self.operation.results[0:0 + _ods_variadic_group_length]
+
+@_ods_cext.register_operation(_Dialect)
+@_ods_extend_opview_class(_ods_ext_module)
 class AffineLoadOp(_ods_ir.OpView):
   OPERATION_NAME = "affine.load"
 

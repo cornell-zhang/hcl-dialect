@@ -122,3 +122,31 @@ class AffineStoreOp:
     def indices(self):
         _ods_variadic_group_length = len(self.operation.operands) - 3 + 1
         return self.operation.operands[2 : 2 + _ods_variadic_group_length]
+
+
+class AffineIfOp:
+    def __init__(self, cond, set_operands, *, loc=None, ip=None):
+        operands = []
+        results = []
+        operands.extend(set_operands)
+        attributes = {}
+        attributes["condition"] = cond
+        super().__init__(
+            self.build_generic(
+                attributes=attributes,
+                results=results,
+                operands=operands,
+                loc=loc,
+                ip=ip,
+            )
+        )
+        self.regions[0].blocks.append(IndexType.get(), *results)
+        self.regions[1].blocks.append(IndexType.get(), *results)
+
+    @property
+    def then_block(self):
+        return self.regions[0].blocks[0]
+
+    @property
+    def else_block(self):
+        return self.regions[1].blocks[0]

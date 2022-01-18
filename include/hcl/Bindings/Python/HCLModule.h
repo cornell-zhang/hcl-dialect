@@ -7,6 +7,7 @@ namespace mlir {
 namespace python {
 
 void populateHCLIRTypes(pybind11::module &m);
+void populateHCLAttributes(pybind11::module &m);
 
 } // namespace python
 } // namespace mlir

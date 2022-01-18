@@ -9,6 +9,7 @@
 #include "IRModule.h"
 #include "hcl-c/Dialect/Dialects.h"
 #include "hcl-c/Dialect/HCLTypes.h"
+#include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl-c/Translation/EmitHLSCpp.h"
 #include "hcl/Bindings/Python/HCLModule.h"
@@ -89,6 +90,7 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Type construction APIs.
   populateHCLIRTypes(m);
+  populateHCLAttributes(m);
 
   // Loop transform APIs.
   m.def("loop_transformation", &loopTransformation);

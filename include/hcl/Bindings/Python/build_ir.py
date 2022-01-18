@@ -13,7 +13,9 @@ from . import affine
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
 f32 = F32Type.get(global_ctx)
+bool = IntegerType.get_signless(1, context=global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
+i64 = IntegerType.get_signless(64, context=global_ctx)
 idx_type = IndexType.get(context=global_ctx)
 
 register_dialects(global_ctx)
@@ -147,7 +149,7 @@ class ExprOp(object):
         if arg == None:
             expr = OpClass(dtype, lhs, rhs)
         else:
-            expr = OpClass(dtype, arg, lhs, rhs)
+            expr = OpClass(lhs, rhs, arg)
         return expr
 
     def __add__(self, other):
@@ -222,22 +224,22 @@ class ExprOp(object):
         raise RuntimeError("Not implemented")
 
     def __lt__(self, other):
-        return self.generic_op(self, other, arg="slt")
+        return self.generic_op(CmpOp, self, other, arg="slt")
 
     def __le__(self, other):
-        return self.generic_op(self, other, arg="sle")
+        return self.generic_op(CmpOp, self, other, arg="sle")
 
     def __eq__(self, other):
-        return self.generic_op(self, other, arg="eq")
+        return self.generic_op(CmpOp, self, other, arg="eq")
 
     def __ne__(self, other):
-        return self.generic_op(self, other, arg="ne")
+        return self.generic_op(CmpOp, self, other, arg="ne")
 
     def __gt__(self, other):
-        return self.generic_op(self, other, arg="sgt")
+        return self.generic_op(CmpOp, self, other, arg="sgt")
 
     def __ge__(self, other):
-        return self.generic_op(self, other, arg="sge")
+        return self.generic_op(CmpOp, self, other, arg="sge")
 
     def __getitem__(self, indices):
         raise RuntimeError("Not implemented")
@@ -445,14 +447,34 @@ class BinaryOp(ExprOp):
 
 
 class CmpOp(BinaryOp):
-    def __init__(self, op, dtype, lhs, rhs, arg):
+    def __init__(self, lhs, rhs, arg):
         self.arg = arg
-        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, dtype, lhs, rhs)
+        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, bool, lhs, rhs)
 
     def build(self):
+        if self.arg == "eq":
+            attr = 0
+        elif self.arg == "ne":
+            attr = 1
+        elif self.arg == "slt":
+            attr = 2
+        elif self.arg == "sle":
+            attr = 3
+        elif self.arg == "sgt":
+            attr = 4
+        elif self.arg == "sge":
+            attr = 5
+        elif self.arg == "ult":
+            attr = 6
+        elif self.arg == "ule":
+            attr = 7
+        elif self.arg == "ugt":
+            attr = 8
+        elif self.arg == "uge":
+            attr = 9
         self.built_op = self.op(
             self.dtype,
-            self.arg,
+            IntegerAttr.get(i64, attr),
             self.lhs.result,
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),
@@ -772,3 +794,14 @@ def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None)
     )
 
     return forOp
+
+
+def make_if(cond, ip=None):
+    d0 = AffineDimExpr.get(0)
+    c1 = AffineConstantExpr.get(1)
+    if_cond_set = IntegerSet.get(1, 0, [d0 - c1], [True])  # d0 - 1 == 0
+    attr = IntegerSetAttr.get(if_cond_set)
+    set_operands = [cond.result]
+
+    if_op = affine.AffineIfOp(attr, set_operands, ip=ip)
+    return if_op

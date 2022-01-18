@@ -4,7 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from mlir.dialects import math, memref, std
+from mlir.dialects import builtin, math, memref, std
 from mlir.ir import *
 
 from . import affine
@@ -14,6 +14,7 @@ from ._mlir_libs._hcl import *
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
 f32 = F32Type.get(global_ctx)
+f64 = F64Type.get(global_ctx)
 bool = IntegerType.get_signless(1, context=global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
 i64 = IntegerType.get_signless(64, context=global_ctx)
@@ -124,6 +125,63 @@ def get_hcl_op(expr):
         return expr
 
 
+def get_type_rank(dtype):
+    if is_integer_type(dtype):
+        base = 0
+        width = dtype.width
+        if width > 64:
+            raise RuntimeError("Cannot support integer width larger than 64")
+        base += width
+        return base
+    elif is_fixed_type(dtype):
+        base = 100
+        width = dtype.width
+        frac = dtype.frac
+        base += width
+        return base
+    elif is_floating_point_type(dtype):
+        base = 1000
+        if isinstance(dtype, F16Type):
+            base += 1
+        elif isinstance(dtype, F32Type):
+            base += 2
+        elif isinstance(dtype, F64Type):
+            base += 3
+        else:
+            raise RuntimeError("Type error: {}".format(dtype))
+        return base
+    else:
+        raise RuntimeError("Type error: {}".format(dtype))
+
+
+def cast_types(lhs, rhs):
+    """
+    Implementation based on
+    https://en.cppreference.com/w/c/language/conversion
+    """
+    ltype = lhs.dtype
+    rtype = rhs.dtype
+    print(
+        "Types of {} ({}) and {} ({}) are different. Explictly cast {} to {}.".format(
+            lhs, ltype, rhs, rtype, rtype, ltype
+        )
+    )
+    # 1) If one operand is long double (omitted)
+    # 2) Otherwise, if one operand is double
+    if isinstance(ltype, F64Type):
+        # integer or real floating type to double
+        return CastOp(rhs, f64)
+    # 3) Otherwise, if one operand is float
+    elif isinstance(ltype, F32Type):
+        # integer type to float (the only real type possible is float, which remains as-is)
+        return CastOp(rhs, f32)
+    # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
+    elif isinstance(ltype, IntegerType):
+        return CastOp(rhs, ltype)
+    else:
+        raise RuntimeError("Type conversion failed")
+
+
 class ExprOp(object):
     def __init__(self, op, dtype=None):
         self.op = op
@@ -142,9 +200,20 @@ class ExprOp(object):
         # turn py builtin op to hcl op
         lhs = get_hcl_op(lhs)
         rhs = get_hcl_op(rhs)
-        # strict type testing
-        if lhs.dtype != rhs.dtype:
-            raise RuntimeError("Types of LHS and RHS should be the same")
+
+        # type checking & conversion
+        # get_type_rank has the valid type checking
+        lrank = get_type_rank(lhs.dtype)
+        rrank = get_type_rank(rhs.dtype)
+        # types are the same, no need to cast
+        if lrank == rrank:
+            pass
+        # always ensure the first op has higher ranking
+        elif lrank < rrank:
+            lhs = cast_types(rhs, lhs)
+        else:  # lrank > rrank
+            rhs = cast_types(lhs, rhs)
+
         # create AST node based on different types
         dtype = lhs.dtype
         if arg == None:
@@ -617,7 +686,18 @@ class MathTanhOp(UnaryOp):
 
 
 class CastOp(ExprOp):
-    pass
+    def __init__(self, val, res_type=None):
+        # dtype is the result type
+        super().__init__(builtin.UnrealizedConversionCastOp, res_type)
+        self.val = val
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
+        )
+        return self.built_op
 
 
 class LoadOp(ExprOp):
@@ -625,6 +705,8 @@ class LoadOp(ExprOp):
         super().__init__(affine.AffineLoadOp, dtype)
         self.tensor = tensor
         self.indices = indices
+        if flags.BUILD_INPLACE:
+            self.build()
 
     def build(self):
         new_indices = []

@@ -59,6 +59,7 @@ public:
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp,
+            UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp,
             hcl::AddFixedOp, hcl::SubFixedOp, hcl::MulFixedOp>(
@@ -173,6 +174,7 @@ public:
   HANDLE(SIToFPOp);
   HANDLE(FPToUIOp);
   HANDLE(FPToSIOp);
+  HANDLE(UnrealizedConversionCastOp);
 
   // HCL operations
   HANDLE(hcl::CreateLoopHandleOp);

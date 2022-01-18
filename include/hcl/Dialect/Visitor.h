@@ -60,7 +60,8 @@ public:
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp,
             // HCL operations.
-            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp>(
+            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp,
+            hcl::AddFixedOp, hcl::SubFixedOp, hcl::MulFixedOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -176,6 +177,11 @@ public:
   // HCL operations
   HANDLE(hcl::CreateLoopHandleOp);
   HANDLE(hcl::CreateStageHandleOp);
+
+  // Fixed point operations
+  HANDLE(hcl::AddFixedOp);
+  HANDLE(hcl::SubFixedOp);
+  HANDLE(hcl::MulFixedOp);
 
 #undef HANDLE
 };

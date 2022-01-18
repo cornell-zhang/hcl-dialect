@@ -482,6 +482,11 @@ public:
   bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
   bool visitOp(hcl::CreateStageHandleOp op) { return true; }
 
+  /// Fixed points
+  bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
+
 private:
   ModuleEmitter &emitter;
 };

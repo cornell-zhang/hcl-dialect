@@ -4,11 +4,12 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from mlir.dialects import memref, std, math
+from mlir.dialects import math, memref, std
 from mlir.ir import *
 
-from ._mlir_libs._hcl import *
 from . import affine
+from ._hcl_ops_gen import *
+from ._mlir_libs._hcl import *
 
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
@@ -53,8 +54,12 @@ def is_integer_type(dtype):
     return isinstance(dtype, IntegerType)
 
 
+def is_fixed_type(dtype):
+    return isinstance(dtype, (FixedType, UFixedType))
+
+
 def get_mlir_type(dtype):
-    if is_integer_type(dtype) or is_floating_point_type(dtype):
+    if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype):
         return dtype
     elif isinstance(dtype, str):
         with get_context() as ctx:
@@ -400,9 +405,11 @@ class UnaryOp(ExprOp):
         self.val = val
         if isinstance(op, dict):
             if is_integer_type(dtype):
-                self.op = op["i"]
+                self.op = op["int"]
             elif is_floating_point_type(dtype):
-                self.op = op["f"]
+                self.op = op["float"]
+            elif is_fixed_type(dtype):
+                self.op = op["fixed"]
             else:
                 raise RuntimeError("Unsupported types")
         else:
@@ -425,9 +432,11 @@ class BinaryOp(ExprOp):
         self.rhs = rhs
         if isinstance(op, dict):
             if is_integer_type(dtype):
-                self.op = op["i"]
+                self.op = op["int"]
             elif is_floating_point_type(dtype):
-                self.op = op["f"]
+                self.op = op["float"]
+            elif is_fixed_type(dtype):
+                self.op = op["fixed"]
             else:
                 raise RuntimeError("Unsupported types")
         else:
@@ -445,7 +454,7 @@ class BinaryOp(ExprOp):
 class CmpOp(BinaryOp):
     def __init__(self, lhs, rhs, arg):
         self.arg = arg
-        super().__init__({"f": std.CmpFOp, "i": std.CmpIOp}, bool, lhs, rhs)
+        super().__init__({"float": std.CmpFOp, "int": std.CmpIOp}, bool, lhs, rhs)
 
     def build(self):
         if self.arg == "eq":
@@ -480,28 +489,48 @@ class CmpOp(BinaryOp):
 
 class AddOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"f": std.AddFOp, "i": std.AddIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": std.AddFOp, "int": std.AddIOp, "fixed": AddFixedOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class SubOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"f": std.SubFOp, "i": std.SubIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": std.SubFOp, "int": std.SubIOp, "fixed": SubFixedOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class MulOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"f": std.MulFOp, "i": std.MulIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": std.MulFOp, "int": std.MulIOp, "fixed": MulFixedOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"f": std.DivFOp, "i": std.SignedDivIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": std.DivFOp, "int": std.SignedDivIOp}, dtype, lhs, rhs
+        )
 
 
 class FloorDivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"f": std.SignedFloorDivIOp, "i": std.SignedFloorDivIOp},  # not supported!
+            {
+                "float": std.SignedFloorDivIOp,
+                "int": std.SignedFloorDivIOp,
+            },  # not supported!
             dtype,
             lhs,
             rhs,
@@ -510,7 +539,9 @@ class FloorDivOp(BinaryOp):
 
 class RemOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"f": std.RemFOp, "i": std.SignedRemIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": std.RemFOp, "int": std.SignedRemIOp}, dtype, lhs, rhs
+        )
 
 
 class LeftShiftOp(BinaryOp):
@@ -541,7 +572,7 @@ class XOrOp(BinaryOp):
 class NegOp(UnaryOp):
     def __init__(self, dtype, val):
         super().__init__(
-            {"f": std.NegFOp, "i": std.NegFOp}, dtype, val
+            {"float": std.NegFOp, "int": std.NegFOp}, dtype, val
         )  # use the same op
 
 
@@ -723,6 +754,8 @@ class ASTBuilder:
             add_op = std.AddFOp
         elif is_integer_type(dtype):
             add_op = std.AddIOp
+        elif is_fixed_type(dtype):
+            add_op = AddFixedOp
         else:
             raise RuntimeError("Unsupported type")
         if dtype != data.result.type:

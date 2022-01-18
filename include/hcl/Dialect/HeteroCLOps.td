@@ -307,4 +307,26 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     }];
 }
 
+// Fixed-point operators
+class FixedBinaryOp<string mnemonic, list<OpTrait> traits = []> :
+    Op<HeteroCL_Dialect, mnemonic, traits # [NoSideEffect,
+        SameOperandsAndResultType] #
+        ElementwiseMappable.traits>,
+    Arguments<(ins Fixed:$lhs, Fixed:$rhs)> {
+
+  let results = (outs AnyType:$result);
+}
+
+def AddFixedOp : FixedBinaryOp<"add_fixed"> {
+  let summary = "fixed point addition operation";
+}
+
+def SubFixedOp : FixedBinaryOp<"sub_fixed"> {
+  let summary = "fixed point subtraction operation";
+}
+
+def MulFixedOp : FixedBinaryOp<"mul_fixed"> {
+  let summary = "fixed point mulplication operation";
+}
+
 #endif // HCL_OPS

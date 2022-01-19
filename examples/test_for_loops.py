@@ -4,6 +4,7 @@ import hcl_mlir
 import hcl_mlir.affine as affine
 
 with Context() as ctx, Location.unknown():
+    hcl_mlir.register_dialects(ctx)
     module = Module.create()
     f32 = F32Type.get()
     i32 = IntegerType.get_signless(32)
@@ -11,6 +12,12 @@ with Context() as ctx, Location.unknown():
     memref_type = MemRefType.get((1024, 1024), f32)
 
     with InsertionPoint(module.body):
+        hcl_mlir.CreateLoopHandleOp(hcl_mlir.LoopHandleType.get(ctx),
+                                    StringAttr.get("i"))
+        hcl_mlir.CreateLoopHandleOp(hcl_mlir.LoopHandleType.get(ctx),
+                                    StringAttr.get("j"))
+        hcl_mlir.CreateLoopHandleOp(hcl_mlir.LoopHandleType.get(ctx),
+                                    StringAttr.get("k"))
 
         @builtin.FuncOp.from_py_func(memref_type, memref_type, memref_type)
         def gemm(A, B, C):

@@ -40,6 +40,7 @@ enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
+
 def get_context():
     return global_ctx
 
@@ -768,6 +769,24 @@ class StoreOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
+
+
+class CallOp(ExprOp):
+    def __init__(self, dtype, func_name, inputs):
+        # here we only accept one result
+        super().__init__(std.CallOp, dtype)
+        self.func_name = func_name
+        self.inputs = inputs
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            [self.dtype],
+            FlatSymbolRefAttr.get(self.func_name),
+            self.inputs,
+            ip=GlobalInsertionPoint.get(),
+        )
 
 
 class SumOp(ExprOp):

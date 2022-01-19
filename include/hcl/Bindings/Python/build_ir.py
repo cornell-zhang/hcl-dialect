@@ -26,6 +26,7 @@ register_dialects(global_ctx)
 class HCLFlags(object):
     def __init__(self):
         self.BUILD_INPLACE = False
+        self.EXTRACT_FUNCTION = False
 
     def enable_build_inplace(self):
         self.BUILD_INPLACE = True
@@ -37,7 +38,7 @@ class HCLFlags(object):
 flags = HCLFlags()
 enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
-
+EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
 def get_context():
     return global_ctx

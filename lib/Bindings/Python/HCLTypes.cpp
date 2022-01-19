@@ -74,6 +74,14 @@ public:
           return PyFixedType(context->getRef(), t);
         },
         py::arg("width"), py::arg("frac"), py::arg("context") = py::none(), "Create a fixed type.");
+    c.def_property_readonly(
+        "width",
+        [](PyFixedType &self) { return hclMlirFixedTypeGetWidth(self); },
+        "Returns the width of the fixed point type");
+    c.def_property_readonly(
+        "frac",
+        [](PyFixedType &self) { return hclMlirFixedTypeGetFrac(self); },
+        "Returns the fraction of the fixed point type");
   }
 };
 
@@ -92,6 +100,14 @@ public:
           return PyUFixedType(context->getRef(), t);
         },
         py::arg("width"), py::arg("frac"), py::arg("context") = py::none(), "Create a ufixed type.");
+    c.def_property_readonly(
+        "width",
+        [](PyUFixedType &self) { return hclMlirUFixedTypeGetWidth(self); },
+        "Returns the width of the unsigned fixed point type");
+    c.def_property_readonly(
+        "frac",
+        [](PyUFixedType &self) { return hclMlirUFixedTypeGetFrac(self); },
+        "Returns the fraction of the unsigned fixed point type");
   }
 };
 

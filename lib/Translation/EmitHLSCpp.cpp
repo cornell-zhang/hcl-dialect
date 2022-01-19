@@ -250,6 +250,7 @@ public:
   void emitSelect(SelectOp op);
   void emitConstant(ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
+  void emitGeneralCast(UnrealizedConversionCastOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -477,10 +478,18 @@ public:
   bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
   bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
   bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
+  bool visitOp(UnrealizedConversionCastOp op) {
+    return emitter.emitGeneralCast(op), true;
+  }
 
   /// HCL operations.
   bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
   bool visitOp(hcl::CreateStageHandleOp op) { return true; }
+
+  /// Fixed points
+  bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -1226,6 +1235,15 @@ template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
   emitValue(op.getResult());
   os << " = ";
   emitValue(op.getOperand());
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitGeneralCast(UnrealizedConversionCastOp op) {
+  indent();
+  emitValue(op.getResult(0));
+  os << " = ";
+  emitValue(op.getOperand(0));
   os << ";";
   emitInfoAndNewLine(op);
 }

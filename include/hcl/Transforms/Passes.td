@@ -12,7 +12,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def LoopTransformation : Pass<"loop-opt", "FuncOp"> {
+def LoopTransformation : Pass<"loop-opt", "ModuleOp"> {
   let summary = "Loop transformation pass";
   let constructor = "mlir::hcl::createHCLLoopTransformationPass()";
   let dependentDialects = ["hcl::HeteroCLDialect"];

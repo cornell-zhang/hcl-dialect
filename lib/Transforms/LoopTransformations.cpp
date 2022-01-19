@@ -27,6 +27,7 @@
 #include "mlir/Transforms/RegionUtils.h"
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
 
@@ -1430,58 +1431,28 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-bool applyLoopTransformation(FuncOp &f) {
-  SmallVector<Operation *, 10> opToRemove;
-  // schedule should preverse orders, thus traverse one by one
-  // the following shows the dispatching logic
-  for (Operation &op : f.getOps()) {
-    if (auto new_op = dyn_cast<SplitOp>(op)) {
-      if (failed(runSplitting(f, new_op)))
+bool isHCLOp(Operation &op) {
+  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
+                   FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
+                   ToOp>(op);
+}
+
+template <class HCLOp>
+bool runSchedule(
+    ModuleOp &mod, HCLOp &op,
+    std::function<LogicalResult(FuncOp &, HCLOp &)> schedule_func) {
+  const auto stage_name =
+      dyn_cast<CreateStageHandleOp>(op.stage().getDefiningOp())
+          .stage_name()
+          .str();
+  for (FuncOp f : mod.getOps<FuncOp>())
+    if (f.getName().str() == "Stage_" + stage_name)
+      if (failed(schedule_func(f, op)))
         return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<TileOp>(op)) {
-      if (failed(runTiling(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
-      if (failed(runReordering(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
-      if (failed(runUnrolling(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
-      if (failed(runPipelining(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
-      if (failed(runParallel(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-      if (failed(runFusing(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
-      if (failed(runComputeAt(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-      if (failed(runPartition(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
-      if (failed(runReuseAt(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
-      if (failed(runBufferAt(f, new_op)))
-        return false;
-      opToRemove.push_back(&op);
-    }
-  }
-  // remove schedule operations (from back to front) & legacy loop handles
+  return true;
+}
+
+void eraseScheduleOp(SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
   std::set<Operation *> handleToRemove;
   for (Operation *op : opToRemove) {
@@ -1500,6 +1471,105 @@ bool applyLoopTransformation(FuncOp &f) {
   for (Operation *op : handleToRemove) {
     op->erase();
   }
+}
+
+bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
+  SmallVector<Operation *, 10> opToRemove;
+  // schedule should preverse orders, thus traverse one by one
+  // the following shows the dispatching logic
+  for (Operation &op : f.getOps()) {
+    if (isHCLOp(op)) {
+      if (auto new_op = dyn_cast<SplitOp>(op)) {
+        if (failed(runSplitting(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<TileOp>(op)) {
+        if (failed(runTiling(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
+        if (failed(runReordering(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
+        if (failed(runUnrolling(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
+        if (failed(runPipelining(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
+        if (failed(runParallel(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<FuseOp>(op)) {
+        if (failed(runFusing(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
+        if (failed(runComputeAt(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+        if (failed(runPartition(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
+        if (failed(runReuseAt(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
+        if (failed(runBufferAt(f, new_op)))
+          return false;
+      }
+      opToRemove.push_back(&op);
+    }
+  }
+  // remove schedule operations (from back to front) & legacy loop handles
+  eraseScheduleOp(opToRemove);
+  return true;
+}
+
+bool applyLoopTransformation(ModuleOp &mod) {
+  SmallVector<Operation *, 10> opToRemove;
+  // schedule should preverse orders, thus traverse one by one
+  // the following shows the dispatching logic
+  bool isFoundTopFunc = false;
+  for (FuncOp top_func : mod.getOps<FuncOp>()) {
+    // find the top function
+    if (top_func->hasAttr("top")) {
+      isFoundTopFunc = true;
+      for (Operation &op : top_func.getOps()) {
+        if (isHCLOp(op)) {
+          if (auto new_op = dyn_cast<SplitOp>(op)) {
+            runSchedule<SplitOp>(mod, new_op, &runSplitting);
+          } else if (auto new_op = dyn_cast<TileOp>(op)) {
+            runSchedule<TileOp>(mod, new_op, &runTiling);
+          } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
+            runSchedule<ReorderOp>(mod, new_op, &runReordering);
+          } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
+            runSchedule<UnrollOp>(mod, new_op, &runUnrolling);
+          } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
+            runSchedule<PipelineOp>(mod, new_op, &runPipelining);
+          } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
+            runSchedule<ParallelOp>(mod, new_op, &runParallel);
+          } else if (auto new_op = dyn_cast<FuseOp>(op)) {
+            runSchedule<FuseOp>(mod, new_op, &runFusing);
+          } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
+            // runSchedule<ComputeAtOp>(mod, new_op, &runComputeAt);
+          } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+            bool isDone = false;
+            for (FuncOp f : mod.getOps<FuncOp>())
+              if (!failed(runPartition(f, new_op)))
+                isDone = true;
+          } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
+            runSchedule<ReuseAtOp>(mod, new_op, &runReuseAt);
+          } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
+            runSchedule<BufferAtOp>(mod, new_op, &runBufferAt);
+          }
+          opToRemove.push_back(&op);
+        }
+      }
+    }
+  }
+  if (!isFoundTopFunc) { // fallback
+    for (FuncOp f : mod.getOps<FuncOp>()) {
+      applyLoopTransformationOnSingleFunction(f);
+    }
+  }
+  // remove schedule operations (from back to front) & legacy loop handles
+  eraseScheduleOp(opToRemove);
   return true;
 }
 
@@ -1512,8 +1582,8 @@ struct HCLLoopTransformation
     : public LoopTransformationBase<HCLLoopTransformation> {
 
   void runOnOperation() override {
-    auto func = getOperation();
-    if (!applyLoopTransformation(func))
+    auto mod = getOperation();
+    if (!applyLoopTransformation(mod))
       return signalPassFailure();
   }
 };

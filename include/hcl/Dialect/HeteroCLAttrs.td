@@ -20,18 +20,29 @@ def PartitionKindEnum: I32EnumAttr<"PartitionKindEnum",
         "An example partition enum",
         [CompletePartition,BlockPartition,CyclicPartition]> {
     let cppNamespace = "mlir::hcl";
-    let stringToSymbolFnName = "ConvertToEnum";
-    let symbolToStringFnName = "ConvertToString";
+    let stringToSymbolFnName = "ConvertToPartitionEnum";
+    let symbolToStringFnName = "ConvertToPartitionString";
 }
 
-def LoopAttr : HeteroCL_Attr<"LoopAttr"> {
-  let mnemonic = "LoopAttr";
-  let parameters = (ins "hcl::LoopHandleType":$loopName);
+def CPUDevice: I32EnumAttrCase<"CPUDevice", 0>;
+def FPGADevice: I32EnumAttrCase<"FPGADevice", 1>;
+
+def DeviceEnum: I32EnumAttr<"DeviceEnum",
+        "A device enum",
+        [CPUDevice, FPGADevice]> {
+    let cppNamespace = "mlir::hcl";
+    let stringToSymbolFnName = "ConvertToDeviceEnum";
+    let symbolToStringFnName = "ConvertToDeviceString";
+}
+
+def FooAttr : HeteroCL_Attr<"FooAttr"> {
+  let mnemonic = "FooAttr";
+  let parameters = (ins );
   let printer = [{
-    $_printer << "LoopAttr";
+    $_printer << "FooAttr";
   }];
   let parser = [{
-    return get($_ctxt, hcl::LoopHandleType::get($_ctxt));
+    return get($_ctxt);
   }];
 }
 

@@ -1431,6 +1431,13 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
+LogicalResult runTo(FuncOp &f, ToOp &toOp) {
+  // 1) Get the schedule
+  auto memref = toOp.target(); // return a Value type
+  auto device = toOp.device();
+  return success();
+}
+
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
@@ -1512,6 +1519,9 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
       } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
         if (failed(runBufferAt(f, new_op)))
           return false;
+      } else if (auto new_op = dyn_cast<ToOp>(op)) {
+        if (failed(runTo(f, new_op)))
+          return false;
       }
       opToRemove.push_back(&op);
     }
@@ -1557,6 +1567,8 @@ bool applyLoopTransformation(ModuleOp &mod) {
             runSchedule<ReuseAtOp>(mod, new_op, &runReuseAt);
           } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
             runSchedule<BufferAtOp>(mod, new_op, &runBufferAt);
+          } else if (auto new_op = dyn_cast<ToOp>(op)) {
+            // runSchedule<ToOp>(mod, new_op, &runTo);
           }
           opToRemove.push_back(&op);
         }

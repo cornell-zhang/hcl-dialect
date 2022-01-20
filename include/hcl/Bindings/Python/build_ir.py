@@ -851,6 +851,27 @@ class ASTBuilder:
         rv = memref.AllocOp(
             memref_type, None, None, None, ip=GlobalInsertionPoint.get()
         )
+        # intialize the single-element register to zero
+        zero_idx = std.ConstantOp(
+            idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
+        )
+        if is_floating_point_type(dtype):
+            zero_value = std.ConstantOp(
+                dtype, FloatAttr.get(dtype, 0), ip=GlobalInsertionPoint.get()
+            )
+        elif is_integer_type(dtype) or is_fixed_type(dtype):
+            zero_value = std.ConstantOp(
+                dtype, IntegerAttr.get(dtype, 0), ip=GlobalInsertionPoint.get()
+            )
+        else:
+            raise RuntimeError("Unrecognized data type in reduction sum op")
+
+        affine.AffineStoreOp(
+            zero_value.result,
+            rv.result,
+            [zero_idx.result],
+            ip=GlobalInsertionPoint.get(),
+        )
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -875,9 +896,6 @@ class ASTBuilder:
         data = self.visit(expr.op)
 
         # load register value and sum up
-        zero_idx = std.ConstantOp(
-            idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
-        )
         load = affine.AffineLoadOp(
             dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )

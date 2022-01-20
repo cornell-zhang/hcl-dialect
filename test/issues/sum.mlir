@@ -1,11 +1,16 @@
 module  {
-memref.global "private" @gv0 : memref<2xf32> = dense<[1.0, 4.0]>
+memref.global "private" @gv0 : memref<2xf32> = dense<[1.0, 2.0]>
   func @top(%arg0: memref<2xf32>) -> memref<1xf32> {
     //%0 = hcl.create_stage_handle "sum" : !hcl.StageHandle
     %1 = memref.alloc() : memref<1xf32>
     //%2 = hcl.create_loop_handle "_" : !hcl.LoopHandle
     affine.for %arg1 = 0 to 1 {
       %3 = memref.alloc() : memref<1xf32>
+      %c3_0 = constant 0 : index
+      %c3 = constant 0.0 : f32
+      affine.store %c3, %3[%c3_0] : memref<1xf32>
+      %U3 = memref.cast %3 : memref<1xf32> to memref<*xf32>
+      call @print_memref_f32(%U3) : (memref<*xf32>) -> ()
       affine.for %arg2 = 0 to 2 {
         %5 = affine.load %arg0[%arg2] : memref<2xf32>
         %c0_0 = constant 0 : index

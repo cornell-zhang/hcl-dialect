@@ -1461,23 +1461,13 @@ bool runSchedule(
   return true;
 }
 
-void eraseScheduleOp(SmallVector<Operation *, 10> &opToRemove) {
+void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
-  std::set<Operation *> handleToRemove;
-  for (Operation *op : opToRemove) {
-    if (auto new_op = dyn_cast<SplitOp>(op)) {
-      handleToRemove.insert(new_op.loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<TileOp>(op)) {
-      handleToRemove.insert(new_op.x_loop().getDefiningOp());
-      handleToRemove.insert(new_op.y_loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-      for (auto loop : new_op.loops()) {
-        handleToRemove.insert(loop.getDefiningOp());
-      }
-    }
-    op->erase();
+  for (Operation &op : f.getOps()) {
+    if (llvm::isa<hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp>(op))
+      opToRemove.push_back(&op);
   }
-  for (Operation *op : handleToRemove) {
+  for (Operation *op : opToRemove) {
     op->erase();
   }
 }
@@ -1534,7 +1524,7 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
     }
   }
   // remove schedule operations (from back to front) & legacy loop handles
-  eraseScheduleOp(opToRemove);
+  eraseScheduleOp(f, opToRemove);
   return true;
 }
 
@@ -1590,6 +1580,7 @@ bool applyLoopTransformation(ModuleOp &mod) {
           opToRemove.push_back(&op);
         }
       }
+      eraseScheduleOp(top_func, opToRemove);
     }
   }
   if (!isFoundTopFunc) { // fallback
@@ -1597,8 +1588,6 @@ bool applyLoopTransformation(ModuleOp &mod) {
       applyLoopTransformationOnSingleFunction(f);
     }
   }
-  // remove schedule operations (from back to front) & legacy loop handles
-  eraseScheduleOp(opToRemove);
   return true;
 }
 

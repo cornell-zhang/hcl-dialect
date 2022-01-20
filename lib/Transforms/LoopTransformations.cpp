@@ -826,10 +826,29 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   return failure();
 }
 
+bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
+  if (!target.getDefiningOp()) { // in func args
+    bool isFound = false;
+    for (auto arg : f.getArguments()) {
+      if (target == arg) { // found the corresponding array
+        ret_array = arg;
+        isFound = true;
+        break;
+      }
+    }
+    if (!isFound) {
+      return true;
+    }
+  } else {
+    ret_array = target;
+  }
+  return false;
+}
+
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
+LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // 1) Get the schedule
-  auto memref = partitionOp.target(); // return a Value type
+  // auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
   unsigned int target_dim = partitionOp.dim();
   auto optional_factor = partitionOp.factor();
@@ -845,24 +864,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
   }
 
   // 2) Find the requested array
-  Value array;
-  if (!memref.getDefiningOp()) { // in func args
-    bool isFound = false;
-    for (auto arg : f.getArguments()) {
-      if (memref == arg) { // found the corresponding array
-        array = arg;
-        isFound = true;
-        break;
-      }
-    }
-    if (!isFound) {
-      partitionOp.emitError(
-          "Cannot find the requested array to be partitioned");
-      return failure();
-    }
-  } else {
-    array = memref;
-  }
+  // has been done in findArray
 
   // 3) Construct new memory layout map
   auto builder = Builder(array.getContext());
@@ -1511,8 +1513,13 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
         if (failed(runComputeAt(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-        if (failed(runPartition(f, new_op)))
+        Value array;
+        if (findArray(f, new_op.target(), array)) {
+          if (failed(runPartition(f, new_op, array)))
+            return false;
+        } else {
           return false;
+        }
       } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
         if (failed(runReuseAt(f, new_op)))
           return false;
@@ -1559,16 +1566,26 @@ bool applyLoopTransformation(ModuleOp &mod) {
           } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
             // runSchedule<ComputeAtOp>(mod, new_op, &runComputeAt);
           } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+            Value array;
             bool isDone = false;
-            for (FuncOp f : mod.getOps<FuncOp>())
-              if (!failed(runPartition(f, new_op)))
-                isDone = true;
+            for (FuncOp f : mod.getOps<FuncOp>()) {
+              if (findArray(f, new_op.target(), array)) {
+                if (failed(runPartition(f, new_op, array))) {
+                  return false;
+                } else {
+                  isDone = true;
+                  break;
+                }
+              }
+            }
+            if (!isDone)
+              return false;
           } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
             runSchedule<ReuseAtOp>(mod, new_op, &runReuseAt);
           } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
             runSchedule<BufferAtOp>(mod, new_op, &runBufferAt);
           } else if (auto new_op = dyn_cast<ToOp>(op)) {
-            // runSchedule<ToOp>(mod, new_op, &runTo);
+            // TODO
           }
           opToRemove.push_back(&op);
         }

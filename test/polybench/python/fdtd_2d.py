@@ -60,9 +60,9 @@ import numpy as np
 import math as mt
 
 
-def fdtd_2d_golden(Nx, Ny, Tmax, ex, ey, hz, fict, DATA_TYPE):
+def fdtd_2d_golden(Nx, Ny, Tmax, ex, ey, hz, fict):
 
-    dtype = NDATA_TYPE_DICT[DATA_TYPE.lower()]
+    dtype = float
 
     for t in range(Tmax):
         for j in range(Ny):

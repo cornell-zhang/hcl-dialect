@@ -1566,9 +1566,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  // if (auto funcDirect = getFuncDirective(func))
-  //   if (funcDirect.getTopFunc())
-  os << "/// This is top function.\n";
+  if (func->hasAttr("top"))
+    os << "/// This is top function.\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";

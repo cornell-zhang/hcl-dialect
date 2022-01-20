@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HETEROCL_TRANSFORMS_LOOPTRANSFORMATIONS_LOOPTRANSFORMATIONS_H
-#define HETEROCL_TRANSFORMS_LOOPTRANSFORMATIONS_LOOPTRANSFORMATIONS_H
+#ifndef HETEROCL_LOOPTRANSFORMATIONS_H
+#define HETEROCL_LOOPTRANSFORMATIONS_H
 
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/Pass/Pass.h"
@@ -19,9 +19,9 @@ namespace hcl {
 void registerHCLLoopTransformationPass();
 std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
 
-bool applyLoopTransformation(FuncOp &f);
+bool applyLoopTransformation(ModuleOp &f);
 
 } // namespace hcl
 } // namespace mlir
 
-#endif // HETEROCL_TRANSFORMS_LOOPTRANSFORMATIONS_LOOPTRANSFORMATIONS_H
+#endif // HETEROCL_LOOPTRANSFORMATIONS_H

@@ -37,12 +37,10 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(PyOperation &op) {
+static bool loopTransformation(PyModule &pymod) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op.get()));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyLoopTransformation(func);
+  auto mod = unwrap(pymod.get());
+  return applyLoopTransformation(mod);
 }
 
 //===----------------------------------------------------------------------===//

@@ -854,17 +854,17 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (!attr || attr.cast<StringAttr>().getValue().str() != "stream") {
-    auto affineMap = op.getAffineMap();
-    AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                    op.getMapOperands());
-    for (auto index : affineMap.getResults()) {
-      os << "[";
-      affineEmitter.emitAffineExpr(index);
-      os << "]";
-    }
-  } else {
-    os << ".read()";
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
+  auto affineMap = op.getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op.getMapOperands());
+  for (auto index : affineMap.getResults()) {
+    os << "[";
+    affineEmitter.emitAffineExpr(index);
+    os << "]";
   }
   os << ";";
   emitInfoAndNewLine(op);
@@ -875,22 +875,22 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (!attr || attr.cast<StringAttr>().getValue().str() != "stream") {
-    auto affineMap = op.getAffineMap();
-    AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                    op.getMapOperands());
-    for (auto index : affineMap.getResults()) {
-      os << "[";
-      affineEmitter.emitAffineExpr(index);
-      os << "]";
-    }
-    os << " = ";
-    emitValue(op.getValueToStore());
-  } else {
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
     os << ".write(";
     emitValue(op.getValueToStore());
-    os << ")";
+    os << "); // ";
+    emitValue(memref); // comment
   }
+  auto affineMap = op.getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op.getMapOperands());
+  for (auto index : affineMap.getResults()) {
+    os << "[";
+    affineEmitter.emitAffineExpr(index);
+    os << "]";
+  }
+  os << " = ";
+  emitValue(op.getValueToStore());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1028,14 +1028,14 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (!attr || attr.cast<StringAttr>().getValue().str() != "stream") {
-    for (auto index : op.getIndices()) {
-      os << "[";
-      emitValue(index);
-      os << "]";
-    }
-  } else {
-    os << ".read()";
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
+  for (auto index : op.getIndices()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
   }
   os << ";";
   emitInfoAndNewLine(op);
@@ -1046,19 +1046,19 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (!attr || attr.cast<StringAttr>().getValue().str() != "stream") {
-    for (auto index : op.getIndices()) {
-      os << "[";
-      emitValue(index);
-      os << "]";
-    }
-    os << " = ";
-    emitValue(op.getValueToStore());
-  } else {
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
     os << ".write(";
     emitValue(op.getValueToStore());
-    os << ")";
+    os << "); // ";
+    emitValue(memref); // comment
   }
+  for (auto index : op.getIndices()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
+  }
+  os << " = ";
+  emitValue(op.getValueToStore());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1345,11 +1345,7 @@ void ModuleEmitter::emitArrayDecl(Value array) {
   auto arrayType = array.getType().cast<ShapedType>();
   if (arrayType.hasStaticShape()) {
     auto attr = array.getType().dyn_cast<MemRefType>().getMemorySpace();
-    if (!attr || attr.cast<StringAttr>().getValue().str() != "stream") {
-      emitValue(array);
-      for (auto &shape : arrayType.getShape())
-        os << "[" << shape << "]";
-    } else {
+    if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
       // Value has been declared before or is a constant number.
       if (isDeclared(array)) {
         os << getName(array);
@@ -1361,6 +1357,16 @@ void ModuleEmitter::emitArrayDecl(Value array) {
 
       // Add the new value to nameTable and emit its name.
       os << addName(array, /*isPtr=*/false);
+      // Add original array declaration as comment
+      os << " /* ";
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
+      os << " */";
+    } else {
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
     }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true);

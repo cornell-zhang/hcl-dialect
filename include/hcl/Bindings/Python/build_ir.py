@@ -782,7 +782,7 @@ class CallOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(
-            [self.dtype],
+            [self.dtype] if self.dtype != None else [],
             FlatSymbolRefAttr.get(self.func_name),
             self.inputs,
             ip=GlobalInsertionPoint.get(),

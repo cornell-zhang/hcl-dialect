@@ -851,7 +851,13 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
@@ -866,7 +872,15 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
 
 void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   indent();
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".write(";
+    emitValue(op.getValueToStore());
+    os << "); // ";
+    emitValue(memref); // comment
+  }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
@@ -1011,7 +1025,13 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
   for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
@@ -1023,7 +1043,15 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
 
 void ModuleEmitter::emitStore(memref::StoreOp op) {
   indent();
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".write(";
+    emitValue(op.getValueToStore());
+    os << "); // ";
+    emitValue(memref); // comment
+  }
   for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
@@ -1065,6 +1093,7 @@ void ModuleEmitter::emitTensorInsert(tensor::InsertOp op) {
 
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
+  // TODO: stream interface for tensor?
   auto rank = emitNestedLoopHead(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
@@ -1076,6 +1105,7 @@ void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
 }
 
 void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
+  // TODO: stream interface for tensor?
   auto rank = emitNestedLoopHead(op.getOperand(0));
   indent();
   emitValue(op.getOperand(1), rank);
@@ -1314,9 +1344,30 @@ void ModuleEmitter::emitArrayDecl(Value array) {
 
   auto arrayType = array.getType().cast<ShapedType>();
   if (arrayType.hasStaticShape()) {
-    emitValue(array);
-    for (auto &shape : arrayType.getShape())
-      os << "[" << shape << "]";
+    auto attr = array.getType().dyn_cast<MemRefType>().getMemorySpace();
+    if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+      // Value has been declared before or is a constant number.
+      if (isDeclared(array)) {
+        os << getName(array);
+        return;
+      }
+
+      // print stream type
+      os << "hls::stream< " << getTypeName(array) << " > ";
+
+      // Add the new value to nameTable and emit its name.
+      os << addName(array, /*isPtr=*/false);
+      // Add original array declaration as comment
+      os << " /* ";
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
+      os << " */";
+    } else {
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
+    }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true);
 }
@@ -1554,6 +1605,10 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 
   //   // An empty line.
   //   os << "\n";
+  if (func->hasAttr("dataflow")) {
+    indent();
+    os << "#pragma HLS dataflow\n";
+  }
 
   // Emit other pragmas for function ports.
   for (auto &port : portList)

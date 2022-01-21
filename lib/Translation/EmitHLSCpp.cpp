@@ -1605,6 +1605,10 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 
   //   // An empty line.
   //   os << "\n";
+  if (func->hasAttr("dataflow")) {
+    indent();
+    os << "#pragma HLS dataflow\n";
+  }
 
   // Emit other pragmas for function ports.
   for (auto &port : portList)

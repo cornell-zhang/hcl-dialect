@@ -19,6 +19,7 @@
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/FunctionSupport.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopFusionUtils.h"
@@ -828,21 +829,17 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
 
 bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
   if (!target.getDefiningOp()) { // in func args
-    bool isFound = false;
     for (auto arg : f.getArguments()) {
       if (target == arg) { // found the corresponding array
         ret_array = arg;
-        isFound = true;
-        break;
+        return true;
       }
     }
-    if (!isFound) {
-      return true;
-    }
+    return false;
   } else {
     ret_array = target;
+    return true;
   }
-  return false;
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
@@ -1433,10 +1430,49 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-LogicalResult runTo(FuncOp &f, ToOp &toOp) {
-  // 1) Get the schedule
-  auto memref = toOp.target(); // return a Value type
-  auto device = toOp.device();
+LogicalResult runToStage(std::map<std::string, FuncOp> &funcMap,
+                         Value &arrayToStream) {
+  // Construct new array type (add stream attribute)
+  auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
+  auto newType = MemRefType::get(
+      arrayType.getShape(), arrayType.getElementType(),
+      arrayType.getAffineMaps(),
+      StringAttr::get(arrayToStream.getDefiningOp()->getContext(), "stream"));
+
+  // Set new type in the top function
+  arrayToStream.setType(newType);
+
+  // Set new types in stage functions
+  for (auto user : arrayToStream.getUsers()) {
+    // first locate the CallOp
+    if (auto callOp = dyn_cast<CallOp>(user)) {
+      // get stage function
+      auto stage = funcMap[callOp.getCallee().str().substr(6)];
+      for (unsigned argIdx = 0, e = user->getNumOperands(); argIdx < e;
+           ++argIdx) {
+        // find the corresponding array
+        if (callOp.getArgOperands()[argIdx] == arrayToStream) {
+          // first change argument type
+          stage.getArgument(argIdx).setType(newType);
+          // get new function input types
+          llvm::SmallVector<mlir::Type> inputTypes;
+          for (auto indexedArg :
+               llvm::enumerate(stage.front().getArgumentTypes())) {
+            if (indexedArg.index() != argIdx) {
+              inputTypes.push_back(indexedArg.value());
+            } else {
+              inputTypes.push_back(newType);
+            }
+          }
+          auto resultTypes = stage.front().getTerminator()->getOperandTypes();
+          // update function signature
+          stage.setType(
+              FunctionType::get(stage.getContext(), inputTypes, resultTypes));
+          break;
+        }
+      }
+    }
+  }
   return success();
 }
 
@@ -1448,17 +1484,17 @@ bool isHCLOp(Operation &op) {
 
 template <class HCLOp>
 bool runSchedule(
-    ModuleOp &mod, HCLOp &op,
+    std::map<std::string, FuncOp> &funcMap, HCLOp &op,
     std::function<LogicalResult(FuncOp &, HCLOp &)> schedule_func) {
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(op.stage().getDefiningOp())
           .stage_name()
           .str();
-  for (FuncOp f : mod.getOps<FuncOp>())
-    if (f.getName().str() == "Stage_" + stage_name)
-      if (failed(schedule_func(f, op)))
-        return false;
-  return true;
+  if (funcMap.count(stage_name) > 0) {
+    if (!failed(schedule_func(funcMap["stage_name"], op)))
+      return true;
+  }
+  return false;
 }
 
 void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
@@ -1517,8 +1553,8 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
         if (failed(runBufferAt(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<ToOp>(op)) {
-        if (failed(runTo(f, new_op)))
-          return false;
+        // if (failed(runToStage(f, new_op)))
+        //   return false;
       }
       opToRemove.push_back(&op);
     }
@@ -1529,64 +1565,77 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
 }
 
 bool applyLoopTransformation(ModuleOp &mod) {
-  SmallVector<Operation *, 10> opToRemove;
-  // schedule should preverse orders, thus traverse one by one
-  // the following shows the dispatching logic
   bool isFoundTopFunc = false;
-  for (FuncOp top_func : mod.getOps<FuncOp>()) {
-    // find the top function
-    if (top_func->hasAttr("top")) {
+  // create name->function mapping
+  for (FuncOp func : mod.getOps<FuncOp>()) {
+    if (func->hasAttr("top")) {
       isFoundTopFunc = true;
-      for (Operation &op : top_func.getOps()) {
-        if (isHCLOp(op)) {
-          if (auto new_op = dyn_cast<SplitOp>(op)) {
-            runSchedule<SplitOp>(mod, new_op, &runSplitting);
-          } else if (auto new_op = dyn_cast<TileOp>(op)) {
-            runSchedule<TileOp>(mod, new_op, &runTiling);
-          } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
-            runSchedule<ReorderOp>(mod, new_op, &runReordering);
-          } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
-            runSchedule<UnrollOp>(mod, new_op, &runUnrolling);
-          } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
-            runSchedule<PipelineOp>(mod, new_op, &runPipelining);
-          } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
-            runSchedule<ParallelOp>(mod, new_op, &runParallel);
-          } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-            runSchedule<FuseOp>(mod, new_op, &runFusing);
-          } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
-            // runSchedule<ComputeAtOp>(mod, new_op, &runComputeAt);
-          } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-            Value array;
-            bool isDone = false;
-            for (FuncOp f : mod.getOps<FuncOp>()) {
-              if (findArray(f, new_op.target(), array)) {
-                if (failed(runPartition(f, new_op, array))) {
-                  return false;
-                } else {
-                  isDone = true;
-                  break;
-                }
-              }
-            }
-            if (!isDone)
-              return false;
-          } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
-            runSchedule<ReuseAtOp>(mod, new_op, &runReuseAt);
-          } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
-            runSchedule<BufferAtOp>(mod, new_op, &runBufferAt);
-          } else if (auto new_op = dyn_cast<ToOp>(op)) {
-            // TODO
-          }
-          opToRemove.push_back(&op);
-        }
-      }
-      eraseScheduleOp(top_func, opToRemove);
+      break;
     }
   }
+
+  // apply schedule
   if (!isFoundTopFunc) { // fallback
     for (FuncOp f : mod.getOps<FuncOp>()) {
       applyLoopTransformationOnSingleFunction(f);
     }
+  } else {
+    std::map<std::string, FuncOp> funcMap;
+    for (FuncOp func : mod.getOps<FuncOp>()) {
+      if (func->hasAttr("top"))
+        funcMap["top"] = func;
+      else
+        funcMap[func.getName().str().substr(6)] = func; // Stage_xxx
+    }
+    FuncOp top_func = funcMap["top"];
+    SmallVector<Operation *, 10> opToRemove;
+    for (Operation &op : top_func.getOps()) {
+      if (isHCLOp(op)) {
+        if (auto new_op = dyn_cast<SplitOp>(op)) {
+          runSchedule<SplitOp>(funcMap, new_op, &runSplitting);
+        } else if (auto new_op = dyn_cast<TileOp>(op)) {
+          runSchedule<TileOp>(funcMap, new_op, &runTiling);
+        } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
+          runSchedule<ReorderOp>(funcMap, new_op, &runReordering);
+        } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
+          runSchedule<UnrollOp>(funcMap, new_op, &runUnrolling);
+        } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
+          runSchedule<PipelineOp>(funcMap, new_op, &runPipelining);
+        } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
+          runSchedule<ParallelOp>(funcMap, new_op, &runParallel);
+        } else if (auto new_op = dyn_cast<FuseOp>(op)) {
+          runSchedule<FuseOp>(funcMap, new_op, &runFusing);
+        } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
+          // runSchedule<ComputeAtOp>(funcMap, new_op, &runComputeAt);
+        } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+          Value array;
+          bool isDone = false;
+          for (FuncOp f : mod.getOps<FuncOp>()) {
+            if (findArray(f, new_op.target(), array)) {
+              if (failed(runPartition(f, new_op, array))) {
+                return false;
+              } else {
+                isDone = true;
+                break;
+              }
+            }
+          }
+          if (!isDone)
+            return false;
+        } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
+          runSchedule<ReuseAtOp>(funcMap, new_op, &runReuseAt);
+        } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
+          runSchedule<BufferAtOp>(funcMap, new_op, &runBufferAt);
+        } else if (auto new_op = dyn_cast<ToOp>(op)) {
+          Value array;
+          if (!findArray(top_func, new_op.target(), array) ||
+              failed(runToStage(funcMap, array)))
+            return false;
+        }
+        opToRemove.push_back(&op);
+      }
+    }
+    eraseScheduleOp(top_func, opToRemove);
   }
   return true;
 }

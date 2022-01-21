@@ -146,24 +146,23 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   // 6) Sink AffineApply Operations
   auto fstApply = *(tiledNest[0].getOps<AffineApplyOp>().begin());
   auto sndApply = *(tiledNest[1].getOps<AffineApplyOp>().begin());
-  bool isDone = false;
-  rootForOp->walk([&](AffineForOp forOp) { // from the innermost
-    if (isDone)
-      return;
-    sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
-    // definition should come before reference
-    bool isDominance = true;
-    for (auto user : sndApply->getUsers()) {
-      DominanceInfo domInfo;
-      if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
-        isDominance = false;
-        break;
-      }
-    }
-    if (isDominance)
-      isDone = true;
-  });
-  if (isDone && ubMap.isConstant())
+  WalkResult result = rootForOp->walk(
+      [&](AffineForOp forOp) -> WalkResult { // from the innermost
+        sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+        // definition should come before reference
+        bool isDominance = true;
+        for (auto user : sndApply->getUsers()) {
+          DominanceInfo domInfo;
+          if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
+            isDominance = false;
+            break;
+          }
+        }
+        if (isDominance)
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      });
+  if (result.wasInterrupted() && ubMap.isConstant())
     fstApply->moveBefore(sndApply);
 
   // 7) Add names to new loops
@@ -211,19 +210,18 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   }
 
   // 3) Find the requested loops
-  bool isFound = false;
   bool isOuterMost = false;
   SmallVector<StringRef, 6> nameArr;
   nameArr.push_back(x_loop);
   nameArr.push_back(y_loop);
   AffineLoopBand band;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, band, nameArr))
-      isFound = true;
-    return;
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (findContiguousNestedLoops(forOp, band, nameArr))
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     tileOp.emitError("Cannot find contiguous nested loops starting from Loop ")
         << x_loop.str();
     return failure();
@@ -273,24 +271,24 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   for (int i = 1; i >= 0; --i) { // from inner to outer
     auto fstApply = *(tiledNest[i].getOps<AffineApplyOp>().begin());
     auto sndApply = *(tiledNest[i + 2].getOps<AffineApplyOp>().begin());
-    bool isDone = false;
-    rootForOp->walk([&](AffineForOp forOp) { // from the innermost
-      if (isDone)
-        return;
-      sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
-      // definition should come before reference
-      bool isDominance = true;
-      for (auto user : sndApply->getUsers()) {
-        DominanceInfo domInfo;
-        if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
-          isDominance = false;
-          break;
-        }
-      }
-      if (isDominance)
-        isDone = true;
-    });
-    if (isDone && tiledNest[i + 2].getUpperBound().getMap().isConstant())
+    WalkResult result = rootForOp->walk(
+        [&](AffineForOp forOp) -> WalkResult { // from the innermost
+          sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+          // definition should come before reference
+          bool isDominance = true;
+          for (auto user : sndApply->getUsers()) {
+            DominanceInfo domInfo;
+            if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
+              isDominance = false;
+              break;
+            }
+          }
+          if (isDominance)
+            return WalkResult::interrupt();
+          return WalkResult::advance();
+        });
+    if (result.wasInterrupted() &&
+        tiledNest[i + 2].getUpperBound().getMap().isConstant())
       fstApply->moveBefore(sndApply);
   }
 
@@ -450,17 +448,17 @@ LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{(int)factor};
       setIntAttr(band, attr_arr, "unroll");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     unrollOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -485,17 +483,17 @@ LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{1};
       setIntAttr(band, attr_arr, "parallel");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     parallelOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -527,17 +525,17 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{(int)ii};
       setIntAttr(band, attr_arr, "pipeline_ii");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     pipelineOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -639,11 +637,10 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
   secondOutermostLoop.erase();
 
   // 5. Sink AffineApply operations
-  bool isDone = false;
   std::reverse(opToSink.begin(), opToSink.end());
-  loops[0]->walk([&](AffineForOp forOp) { // from the innermost
-    if (forOp == loops[0] || isDone)
-      return;
+  loops[0]->walk([&](AffineForOp forOp) -> WalkResult { // from the innermost
+    if (forOp == loops[0])
+      return WalkResult::advance();
     bool isDominance = true;
     for (auto applyOp : opToSink) {
       applyOp->moveBefore(&(*forOp.getBody()->getOperations().begin()));
@@ -657,7 +654,8 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
       }
     }
     if (isDominance)
-      isDone = true;
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   return success();
 }
@@ -689,16 +687,15 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   }
 
   // 3) Find the requested loops
-  bool isFound = false;
   bool isOuterMost = false;
   AffineLoopBand band;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, band, nameArr))
-      isFound = true;
-    return;
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (findContiguousNestedLoops(forOp, band, nameArr))
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     fuseOp.emitError("Cannot find contiguous nested loops starting from Loop ")
         << nameArr[0].str()
         << ". Please specify the loop to be fused from outermost to innermost.";

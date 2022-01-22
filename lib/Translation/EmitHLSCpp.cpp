@@ -645,16 +645,21 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
 /// Affine statement emitters.
 void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent();
+  auto iterVar = op.getInductionVar();
   if (op->hasAttr("loop_name")) { // loop label
     auto loop_name =
         op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
-    os << "l_" << loop_name << ": ";
+    os << "l_" << loop_name << "_";
+    os << addName(iterVar, false);
+    os << ": ";
   }
   os << "for (";
-  auto iterVar = op.getInductionVar();
 
   // Emit lower bound.
+  if (op->hasAttr("loop_name")) {
+    os << getTypeName(iterVar) << " ";
+  }
   emitValue(iterVar);
   os << " = ";
   auto lowerMap = op.getLowerBoundMap();

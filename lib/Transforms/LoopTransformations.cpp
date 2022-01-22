@@ -1633,6 +1633,12 @@ bool applyLoopTransformation(ModuleOp &mod) {
       }
     }
     eraseScheduleOp(top_func, opToRemove);
+    // move forward stage functions to avoid backward definition
+    for (auto item : funcMap) {
+      if (item.first != "top") {
+        item.second->moveBefore(top_func);
+      }
+    }
   }
   return true;
 }

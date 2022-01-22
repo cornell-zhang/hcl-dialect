@@ -258,7 +258,7 @@ public:
 private:
   /// C++ component emitters.
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
-  void emitArrayDecl(Value array);
+  void emitArrayDecl(Value array, bool isFunc = false);
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
@@ -1344,7 +1344,7 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
     os << "[iv" << i << "]";
 }
 
-void ModuleEmitter::emitArrayDecl(Value array) {
+void ModuleEmitter::emitArrayDecl(Value array, bool isFunc) {
   assert(!isDeclared(array) && "has been declared before.");
 
   auto arrayType = array.getType().cast<ShapedType>();
@@ -1359,6 +1359,9 @@ void ModuleEmitter::emitArrayDecl(Value array) {
 
       // print stream type
       os << "hls::stream< " << getTypeName(array) << " > ";
+      if (isFunc) {
+        os << "&"; // pass by reference
+      }
 
       // Add the new value to nameTable and emit its name.
       os << addName(array, /*isPtr=*/false);
@@ -1544,6 +1547,20 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   //   os << "\n";
   // }
 
+  // streaming
+  auto attr = type.getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    indent();
+    os << "#pragma HLS stream variable=";
+    emitValue(memref);
+    os << " depth=";
+    // a conversative estimation
+    int mul = 1;
+    for (auto shape : memref.getType().cast<ShapedType>().getShape())
+      mul *= shape;
+    os << mul << "\n";
+  }
+
   // Emit an empty line.
   if (emitPragmaFlag)
     os << "\n";
@@ -1641,7 +1658,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   for (auto &arg : func.getArguments()) {
     indent();
     if (arg.getType().isa<ShapedType>())
-      emitArrayDecl(arg);
+      emitArrayDecl(arg, true);
     else
       emitValue(arg);
 
@@ -1660,7 +1677,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
         // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
         // index, index. However, typically this should not happen.
         if (result.getType().isa<ShapedType>())
-          emitArrayDecl(result);
+          emitArrayDecl(result, true);
         else
           // In Vivado HLS, pointer indicates the value is an output.
           emitValue(result, /*rank=*/0, /*isPtr=*/true);

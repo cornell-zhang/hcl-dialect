@@ -9,19 +9,17 @@ module {
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
         affine.for %i = 0 to 10 {
             affine.for %j = 0 to 8 {
-                // CHECK: %4 = affine.load %3[1] : memref<3xf32>
-                // CHECK: affine.store %4, %3[0] : memref<3xf32>
-                // CHECK: %5 = affine.load %3[2] : memref<3xf32>
-                // CHECK: affine.store %5, %3[1] : memref<3xf32>
-                // CHECK: %6 = affine.load %arg0[%arg2, %arg3] : memref<10x10xf32>
-                // CHECK: affine.store %6, %3[2] : memref<3xf32>
+                // CHECK: %[[VAR1:.*]] = affine.load %[[VAR:.*]][1] : memref<3xf32>
+                // CHECK: affine.store %[[VAR1]], %[[VAR]][0] : memref<3xf32>
+                // CHECK: %[[VAR2:.*]] = affine.load %[[VAR]][2] : memref<3xf32>
+                // CHECK: affine.store %[[VAR2]], %[[VAR]][1] : memref<3xf32>
+                // CHECK: %[[VAR3:.*]] = affine.load {{.*}}[{{.*}}, {{.*}}] : memref<10x10xf32>
+                // CHECK: affine.store %[[VAR3]], %[[VAR]][2] : memref<3xf32>
                 // CHECK: affine.if #set0(%arg3) {
-                // CHECK:   %7 = affine.load %3[0] : memref<3xf32>
-                // CHECK:   %8 = affine.load %3[1] : memref<3xf32>
-                // CHECK:   %9 = affine.load %3[2] : memref<3xf32>
-                // CHECK:   %10 = addf %7, %8 : f32
-                // CHECK:   %11 = addf %10, %9 : f32
-                // CHECK:   affine.store %11, %arg1[%arg2, %arg3 - 2] : memref<10x8xf32>
+                // CHECK:   {{.*}} = affine.load %[[VAR]][0] : memref<3xf32>
+                // CHECK:   {{.*}} = affine.load %[[VAR]][1] : memref<3xf32>
+                // CHECK:   {{.*}} = affine.load %[[VAR]][2] : memref<3xf32>
+                // CHECK:   affine.store {{.*}}, {{.*}}[{{.*}}, {{.*}} - 2] : memref<10x8xf32>
                 // CHECK: }
                 %tmp = affine.load %A[%i, %j] : memref<10x10xf32>
                 %tmp1 = affine.load %A[%i, %j+1] : memref<10x10xf32>

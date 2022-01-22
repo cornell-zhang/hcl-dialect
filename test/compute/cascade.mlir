@@ -42,14 +42,6 @@ module {
                 // CHECK: affine.for %[[ARG5:.*]] = 0 to 2 {
                 // CHECK: affine.for %[[ARG6:.*]] = 0 to 4 {
                 affine.for %k = 0 to 512 {
-                    // CHECK: %8 = affine.apply #map0(%[[ARG2]])
-                    // CHECK: %9 = affine.apply #map1(%8, %[[ARG3]])
-                    // CHECK: %10 = affine.apply #map2(%9)
-                    // CHECK: %11 = affine.apply #map1(%10, %[[ARG5]])
-                    // CHECK: %12 = affine.apply #map3(%arg7)
-                    // CHECK: %13 = affine.apply #map1(%12, %[[ARG6]])
-                    // CHECK: %14 = affine.apply #map4(%arg3)
-                    // CHECK: %15 = affine.apply #map1(%14, %[[ARG1]])
                     %a = tensor.extract %A[%i, %k] : tensor<1024x512xf32>
                     %b = tensor.extract %B[%k, %j] : tensor<512x1024xf32>
                     %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>

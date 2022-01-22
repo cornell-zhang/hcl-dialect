@@ -1,3 +1,6 @@
+// RUN: hcl-opt -jit %s | FileCheck %s
+
+// CHECK: module {
 module  {
 memref.global "private" @gv0 : memref<2xf32> = dense<[1.0, 2.0]>
   func @top(%arg0: memref<2xf32>) -> memref<1xf32> {

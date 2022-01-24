@@ -1706,7 +1706,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
-  os << R"XXX(
+  std::string device_header = R"XXX(
 //===------------------------------------------------------------*- C++ -*-===//
 //
 // Automatically generated file for High-level Synthesis (HLS).
@@ -1722,6 +1722,47 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 #include <stdint.h>
 using namespace std;
 )XXX";
+
+  std::string host_header = R"XXX(
+//===------------------------------------------------------------*- C++ -*-===//
+//
+// Automatically generated file for host
+//
+//===----------------------------------------------------------------------===//
+// standard C/C++ headers
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <time.h>
+
+// vivado hls headers
+#include "kernel.h"
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_stream.h>
+
+#include <ap_axi_sdata.h>
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_math.h>
+#include <hls_stream.h>
+#include <math.h>
+#include <stdint.h>
+
+)XXX";
+
+  bool isHost = false;
+  for (auto op : module.getOps<FuncOp>()) {
+    if (op.getName() == "main")
+      isHost = true;
+  }
+
+  if (isHost) {
+    os << host_header;
+  } else {
+    os << device_header;
+  }
 
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op))

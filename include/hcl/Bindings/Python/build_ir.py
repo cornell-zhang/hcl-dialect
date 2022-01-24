@@ -60,8 +60,12 @@ def is_integer_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (FixedType, UFixedType))
 
+
 def is_hcl_mlir_type(dtype):
-    return is_floating_point_type(dtype) or is_integer_type(dtype) or is_fixed_type(dtype)
+    return (
+        is_floating_point_type(dtype) or is_integer_type(dtype) or is_fixed_type(dtype)
+    )
+
 
 def get_mlir_type(dtype):
     if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype):
@@ -71,6 +75,7 @@ def get_mlir_type(dtype):
             if dtype[0:3] == "int":
                 return IntegerType.get_signless(int(dtype[3:]))
             elif dtype[0:4] == "uint":
+                # TODO: Support signedness
                 return IntegerType.get_signless(int(dtype[4:]))
             elif dtype[0:5] == "float":
                 if dtype[5:] == "16":
@@ -91,6 +96,35 @@ def get_mlir_type(dtype):
                 raise RuntimeError("Unrecognized data type")
     else:
         raise RuntimeError("Unrecognized data type format")
+
+
+def print_mlir_type(dtype):
+    if is_floating_point_type(dtype):
+        if dtype.width == 32:
+            return "float"
+        elif dtype.width == 64:
+            return "double"
+        else:
+            raise RuntimeError("Not supported data type")
+    elif is_integer_type(dtype):
+        # TODO: Support signedness
+        if dtype.width == 32:
+            return "int"
+        elif dtype.width == 64:
+            return "long int"
+        elif dtype.width == 1:
+            return "bool"
+        else:
+            return "ap_int<{}>".format(dtype.width)
+    elif is_fixed_type(dtype):
+        if isinstance(dtype, FixedType):
+            return "ap_fixed<{}, {}>".format(dtype.width, dtype.frac)
+        elif isinstance(dtype, UFixedType):
+            return "ap_ufixed<{}, {}>".format(dtype.width, dtype.frac)
+        else:
+            raise RuntimeError("Not supported data type")
+    else:
+        raise RuntimeError("Not supported data type")
 
 
 class HCLMLIRInsertionPoint(object):

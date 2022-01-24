@@ -269,6 +269,7 @@ private:
   void emitArrayDirectives(Value memref);
   void emitFunctionDirectives(FuncOp func, ArrayRef<Value> portList);
   void emitFunction(FuncOp func);
+  void emitHostFunction(FuncOp func);
 };
 } // namespace
 
@@ -1704,6 +1705,26 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "\n";
 }
 
+void ModuleEmitter::emitHostFunction(FuncOp func) {
+  if (func.getBlocks().size() != 1)
+    emitError(func, "has zero or more than one basic blocks.");
+
+  os << "/// This is top function.\n";
+
+  // Emit function signature.
+  os << "int main(int argc, char **argv) {\n";
+  addIndent();
+
+  emitBlock(func.front());
+
+  os << "return 0;\n";
+  reduceIndent();
+  os << "}\n";
+
+  // An empty line.
+  os << "\n";
+}
+
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
   std::string device_header = R"XXX(
@@ -1760,15 +1781,19 @@ using namespace std;
 
   if (isHost) {
     os << host_header;
+    for (auto op : module.getOps<FuncOp>()) {
+      // suppose only have one main function
+      emitHostFunction(op);
+      break;
+    }
   } else {
     os << device_header;
-  }
-
-  for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op))
-      emitFunction(func);
-    else
-      emitError(&op, "is unsupported operation.");
+    for (auto &op : *module.getBody()) {
+      if (auto func = dyn_cast<FuncOp>(op))
+        emitFunction(func);
+      else
+        emitError(&op, "is unsupported operation.");
+    }
   }
 }
 

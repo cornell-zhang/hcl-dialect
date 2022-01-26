@@ -19,6 +19,7 @@
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/FunctionSupport.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopFusionUtils.h"
@@ -145,24 +146,23 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   // 6) Sink AffineApply Operations
   auto fstApply = *(tiledNest[0].getOps<AffineApplyOp>().begin());
   auto sndApply = *(tiledNest[1].getOps<AffineApplyOp>().begin());
-  bool isDone = false;
-  rootForOp->walk([&](AffineForOp forOp) { // from the innermost
-    if (isDone)
-      return;
-    sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
-    // definition should come before reference
-    bool isDominance = true;
-    for (auto user : sndApply->getUsers()) {
-      DominanceInfo domInfo;
-      if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
-        isDominance = false;
-        break;
-      }
-    }
-    if (isDominance)
-      isDone = true;
-  });
-  if (isDone && ubMap.isConstant())
+  WalkResult result = rootForOp->walk(
+      [&](AffineForOp forOp) -> WalkResult { // from the innermost
+        sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+        // definition should come before reference
+        bool isDominance = true;
+        for (auto user : sndApply->getUsers()) {
+          DominanceInfo domInfo;
+          if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
+            isDominance = false;
+            break;
+          }
+        }
+        if (isDominance)
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      });
+  if (result.wasInterrupted() && ubMap.isConstant())
     fstApply->moveBefore(sndApply);
 
   // 7) Add names to new loops
@@ -210,19 +210,18 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   }
 
   // 3) Find the requested loops
-  bool isFound = false;
   bool isOuterMost = false;
   SmallVector<StringRef, 6> nameArr;
   nameArr.push_back(x_loop);
   nameArr.push_back(y_loop);
   AffineLoopBand band;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, band, nameArr))
-      isFound = true;
-    return;
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (findContiguousNestedLoops(forOp, band, nameArr))
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     tileOp.emitError("Cannot find contiguous nested loops starting from Loop ")
         << x_loop.str();
     return failure();
@@ -272,24 +271,24 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   for (int i = 1; i >= 0; --i) { // from inner to outer
     auto fstApply = *(tiledNest[i].getOps<AffineApplyOp>().begin());
     auto sndApply = *(tiledNest[i + 2].getOps<AffineApplyOp>().begin());
-    bool isDone = false;
-    rootForOp->walk([&](AffineForOp forOp) { // from the innermost
-      if (isDone)
-        return;
-      sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
-      // definition should come before reference
-      bool isDominance = true;
-      for (auto user : sndApply->getUsers()) {
-        DominanceInfo domInfo;
-        if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
-          isDominance = false;
-          break;
-        }
-      }
-      if (isDominance)
-        isDone = true;
-    });
-    if (isDone && tiledNest[i + 2].getUpperBound().getMap().isConstant())
+    WalkResult result = rootForOp->walk(
+        [&](AffineForOp forOp) -> WalkResult { // from the innermost
+          sndApply->moveBefore(&(*forOp.getBody()->getOperations().begin()));
+          // definition should come before reference
+          bool isDominance = true;
+          for (auto user : sndApply->getUsers()) {
+            DominanceInfo domInfo;
+            if (!domInfo.properlyDominates(sndApply->getResult(0), user)) {
+              isDominance = false;
+              break;
+            }
+          }
+          if (isDominance)
+            return WalkResult::interrupt();
+          return WalkResult::advance();
+        });
+    if (result.wasInterrupted() &&
+        tiledNest[i + 2].getUpperBound().getMap().isConstant())
       fstApply->moveBefore(sndApply);
   }
 
@@ -449,17 +448,17 @@ LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{(int)factor};
       setIntAttr(band, attr_arr, "unroll");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     unrollOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -484,17 +483,17 @@ LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{1};
       setIntAttr(band, attr_arr, "parallel");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     parallelOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -526,17 +525,17 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   }
 
   // 3) Find the requested loop and attach attribute
-  bool isFound = false;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && loop_name == getLoopName(forOp)) {
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
       AffineLoopBand band{forOp};
       SmallVector<int, 6> attr_arr{(int)ii};
       setIntAttr(band, attr_arr, "pipeline_ii");
-      isFound = true;
+      return WalkResult::interrupt();
     }
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     pipelineOp.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
@@ -638,11 +637,10 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
   secondOutermostLoop.erase();
 
   // 5. Sink AffineApply operations
-  bool isDone = false;
   std::reverse(opToSink.begin(), opToSink.end());
-  loops[0]->walk([&](AffineForOp forOp) { // from the innermost
-    if (forOp == loops[0] || isDone)
-      return;
+  loops[0]->walk([&](AffineForOp forOp) -> WalkResult { // from the innermost
+    if (forOp == loops[0])
+      return WalkResult::advance();
     bool isDominance = true;
     for (auto applyOp : opToSink) {
       applyOp->moveBefore(&(*forOp.getBody()->getOperations().begin()));
@@ -656,7 +654,8 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
       }
     }
     if (isDominance)
-      isDone = true;
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   return success();
 }
@@ -688,16 +687,15 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   }
 
   // 3) Find the requested loops
-  bool isFound = false;
   bool isOuterMost = false;
   AffineLoopBand band;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!isFound && findContiguousNestedLoops(forOp, band, nameArr))
-      isFound = true;
-    return;
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (findContiguousNestedLoops(forOp, band, nameArr))
+      return WalkResult::interrupt();
+    return WalkResult::advance();
   });
   // handle exception
-  if (!isFound) {
+  if (!result.wasInterrupted()) {
     fuseOp.emitError("Cannot find contiguous nested loops starting from Loop ")
         << nameArr[0].str()
         << ". Please specify the loop to be fused from outermost to innermost.";
@@ -826,10 +824,25 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   return failure();
 }
 
+bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
+  if (!target.getDefiningOp()) { // in func args
+    for (auto arg : f.getArguments()) {
+      if (target == arg) { // found the corresponding array
+        ret_array = arg;
+        return true;
+      }
+    }
+    return false;
+  } else {
+    ret_array = target;
+    return true;
+  }
+}
+
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
+LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // 1) Get the schedule
-  auto memref = partitionOp.target(); // return a Value type
+  // auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
   unsigned int target_dim = partitionOp.dim();
   auto optional_factor = partitionOp.factor();
@@ -845,24 +858,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp) {
   }
 
   // 2) Find the requested array
-  Value array;
-  if (!memref.getDefiningOp()) { // in func args
-    bool isFound = false;
-    for (auto arg : f.getArguments()) {
-      if (memref == arg) { // found the corresponding array
-        array = arg;
-        isFound = true;
-        break;
-      }
-    }
-    if (!isFound) {
-      partitionOp.emitError(
-          "Cannot find the requested array to be partitioned");
-      return failure();
-    }
-  } else {
-    array = memref;
-  }
+  // has been done in findArray
 
   // 3) Construct new memory layout map
   auto builder = Builder(array.getContext());
@@ -1431,10 +1427,49 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-LogicalResult runTo(FuncOp &f, ToOp &toOp) {
-  // 1) Get the schedule
-  auto memref = toOp.target(); // return a Value type
-  auto device = toOp.device();
+LogicalResult runToStage(std::map<std::string, FuncOp> &funcMap,
+                         Value &arrayToStream) {
+  // Construct new array type (add stream attribute)
+  auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
+  auto newType = MemRefType::get(
+      arrayType.getShape(), arrayType.getElementType(),
+      arrayType.getAffineMaps(),
+      StringAttr::get(arrayToStream.getDefiningOp()->getContext(), "stream"));
+
+  // Set new type in the top function
+  arrayToStream.setType(newType);
+
+  // Set new types in stage functions
+  for (auto user : arrayToStream.getUsers()) {
+    // first locate the CallOp
+    if (auto callOp = dyn_cast<CallOp>(user)) {
+      // get stage function
+      auto stage = funcMap[callOp.getCallee().str().substr(6)];
+      for (unsigned argIdx = 0, e = user->getNumOperands(); argIdx < e;
+           ++argIdx) {
+        // find the corresponding array
+        if (callOp.getArgOperands()[argIdx] == arrayToStream) {
+          // first change argument type
+          stage.getArgument(argIdx).setType(newType);
+          // get new function input types
+          llvm::SmallVector<mlir::Type> inputTypes;
+          for (auto indexedArg :
+               llvm::enumerate(stage.front().getArgumentTypes())) {
+            if (indexedArg.index() != argIdx) {
+              inputTypes.push_back(indexedArg.value());
+            } else {
+              inputTypes.push_back(newType);
+            }
+          }
+          auto resultTypes = stage.front().getTerminator()->getOperandTypes();
+          // update function signature
+          stage.setType(
+              FunctionType::get(stage.getContext(), inputTypes, resultTypes));
+          break;
+        }
+      }
+    }
+  }
   return success();
 }
 
@@ -1446,36 +1481,26 @@ bool isHCLOp(Operation &op) {
 
 template <class HCLOp>
 bool runSchedule(
-    ModuleOp &mod, HCLOp &op,
+    std::map<std::string, FuncOp> &funcMap, HCLOp &op,
     std::function<LogicalResult(FuncOp &, HCLOp &)> schedule_func) {
   const auto stage_name =
       dyn_cast<CreateStageHandleOp>(op.stage().getDefiningOp())
           .stage_name()
           .str();
-  for (FuncOp f : mod.getOps<FuncOp>())
-    if (f.getName().str() == "Stage_" + stage_name)
-      if (failed(schedule_func(f, op)))
-        return false;
-  return true;
+  if (funcMap.count(stage_name) > 0) {
+    if (!failed(schedule_func(funcMap["stage_name"], op)))
+      return true;
+  }
+  return false;
 }
 
-void eraseScheduleOp(SmallVector<Operation *, 10> &opToRemove) {
+void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
-  std::set<Operation *> handleToRemove;
-  for (Operation *op : opToRemove) {
-    if (auto new_op = dyn_cast<SplitOp>(op)) {
-      handleToRemove.insert(new_op.loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<TileOp>(op)) {
-      handleToRemove.insert(new_op.x_loop().getDefiningOp());
-      handleToRemove.insert(new_op.y_loop().getDefiningOp());
-    } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-      for (auto loop : new_op.loops()) {
-        handleToRemove.insert(loop.getDefiningOp());
-      }
-    }
-    op->erase();
+  for (Operation &op : f.getOps()) {
+    if (llvm::isa<hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp>(op))
+      opToRemove.push_back(&op);
   }
-  for (Operation *op : handleToRemove) {
+  for (Operation *op : opToRemove) {
     op->erase();
   }
 }
@@ -1511,8 +1536,13 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
         if (failed(runComputeAt(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-        if (failed(runPartition(f, new_op)))
+        Value array;
+        if (findArray(f, new_op.target(), array)) {
+          if (failed(runPartition(f, new_op, array)))
+            return false;
+        } else {
           return false;
+        }
       } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
         if (failed(runReuseAt(f, new_op)))
           return false;
@@ -1520,68 +1550,96 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
         if (failed(runBufferAt(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<ToOp>(op)) {
-        if (failed(runTo(f, new_op)))
-          return false;
+        // if (failed(runToStage(f, new_op)))
+        //   return false;
       }
       opToRemove.push_back(&op);
     }
   }
   // remove schedule operations (from back to front) & legacy loop handles
-  eraseScheduleOp(opToRemove);
+  eraseScheduleOp(f, opToRemove);
   return true;
 }
 
 bool applyLoopTransformation(ModuleOp &mod) {
-  SmallVector<Operation *, 10> opToRemove;
-  // schedule should preverse orders, thus traverse one by one
-  // the following shows the dispatching logic
   bool isFoundTopFunc = false;
-  for (FuncOp top_func : mod.getOps<FuncOp>()) {
-    // find the top function
-    if (top_func->hasAttr("top")) {
+  // create name->function mapping
+  for (FuncOp func : mod.getOps<FuncOp>()) {
+    if (func->hasAttr("top")) {
       isFoundTopFunc = true;
-      for (Operation &op : top_func.getOps()) {
-        if (isHCLOp(op)) {
-          if (auto new_op = dyn_cast<SplitOp>(op)) {
-            runSchedule<SplitOp>(mod, new_op, &runSplitting);
-          } else if (auto new_op = dyn_cast<TileOp>(op)) {
-            runSchedule<TileOp>(mod, new_op, &runTiling);
-          } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
-            runSchedule<ReorderOp>(mod, new_op, &runReordering);
-          } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
-            runSchedule<UnrollOp>(mod, new_op, &runUnrolling);
-          } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
-            runSchedule<PipelineOp>(mod, new_op, &runPipelining);
-          } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
-            runSchedule<ParallelOp>(mod, new_op, &runParallel);
-          } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-            runSchedule<FuseOp>(mod, new_op, &runFusing);
-          } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
-            // runSchedule<ComputeAtOp>(mod, new_op, &runComputeAt);
-          } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-            bool isDone = false;
-            for (FuncOp f : mod.getOps<FuncOp>())
-              if (!failed(runPartition(f, new_op)))
-                isDone = true;
-          } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
-            runSchedule<ReuseAtOp>(mod, new_op, &runReuseAt);
-          } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
-            runSchedule<BufferAtOp>(mod, new_op, &runBufferAt);
-          } else if (auto new_op = dyn_cast<ToOp>(op)) {
-            // runSchedule<ToOp>(mod, new_op, &runTo);
-          }
-          opToRemove.push_back(&op);
-        }
-      }
+      break;
     }
   }
+
+  // apply schedule
   if (!isFoundTopFunc) { // fallback
     for (FuncOp f : mod.getOps<FuncOp>()) {
       applyLoopTransformationOnSingleFunction(f);
     }
+  } else {
+    std::map<std::string, FuncOp> funcMap;
+    for (FuncOp func : mod.getOps<FuncOp>()) {
+      if (func->hasAttr("top"))
+        funcMap["top"] = func;
+      else
+        funcMap[func.getName().str().substr(6)] = func; // Stage_xxx
+    }
+    FuncOp top_func = funcMap["top"];
+    SmallVector<Operation *, 10> opToRemove;
+    for (Operation &op : top_func.getOps()) {
+      if (isHCLOp(op)) {
+        if (auto new_op = dyn_cast<SplitOp>(op)) {
+          runSchedule<SplitOp>(funcMap, new_op, &runSplitting);
+        } else if (auto new_op = dyn_cast<TileOp>(op)) {
+          runSchedule<TileOp>(funcMap, new_op, &runTiling);
+        } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
+          runSchedule<ReorderOp>(funcMap, new_op, &runReordering);
+        } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
+          runSchedule<UnrollOp>(funcMap, new_op, &runUnrolling);
+        } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
+          runSchedule<PipelineOp>(funcMap, new_op, &runPipelining);
+        } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
+          runSchedule<ParallelOp>(funcMap, new_op, &runParallel);
+        } else if (auto new_op = dyn_cast<FuseOp>(op)) {
+          runSchedule<FuseOp>(funcMap, new_op, &runFusing);
+        } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
+          // runSchedule<ComputeAtOp>(funcMap, new_op, &runComputeAt);
+        } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
+          Value array;
+          bool isDone = false;
+          for (FuncOp f : mod.getOps<FuncOp>()) {
+            if (findArray(f, new_op.target(), array)) {
+              if (failed(runPartition(f, new_op, array))) {
+                return false;
+              } else {
+                isDone = true;
+                break;
+              }
+            }
+          }
+          if (!isDone)
+            return false;
+        } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
+          runSchedule<ReuseAtOp>(funcMap, new_op, &runReuseAt);
+        } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
+          runSchedule<BufferAtOp>(funcMap, new_op, &runBufferAt);
+        } else if (auto new_op = dyn_cast<ToOp>(op)) {
+          Value array;
+          if (!findArray(top_func, new_op.target(), array) ||
+              failed(runToStage(funcMap, array)))
+            return false;
+        }
+        opToRemove.push_back(&op);
+      }
+    }
+    eraseScheduleOp(top_func, opToRemove);
+    // move forward stage functions to avoid backward definition
+    for (auto item : funcMap) {
+      if (item.first != "top") {
+        item.second->moveBefore(top_func);
+      }
+    }
   }
-  // remove schedule operations (from back to front) & legacy loop handles
-  eraseScheduleOp(opToRemove);
   return true;
 }
 

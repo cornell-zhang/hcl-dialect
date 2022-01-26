@@ -9,32 +9,31 @@ module {
     %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %i = 0 to 30 {
-      // CHECK: %5 = memref.alloc() : memref<30xf32>
+      // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30xf32>
       // CHECK: %cst = constant 0.000000e+00 : f32
-      // CHECK: affine.for %arg4 = 0 to 30 {
-      // CHECK:   affine.store %cst, %5[%arg4] : memref<30xf32>
+      // CHECK: affine.for %[[VAR:.*]] = 0 to 30 {
+      // CHECK:   affine.store %cst, %[[MEM]][%[[VAR]]] : memref<30xf32>
       // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
-      // CHECK: affine.for %arg4 = 0 to 3 {
+      // CHECK: affine.for {{.*}} = 0 to 3 {
       affine.for %j = 0 to 30 {
-        // CHECK: affine.for %arg5 = 0 to 3 {
+        // CHECK: affine.for {{.*}} = 0 to 3 {
         affine.for %ry = 0 to 3 {
-          // CHECK: affine.for %arg6 = 0 to 30 {
+          // CHECK: affine.for %[[VAR1:.*]] = 0 to 30 {
           affine.for %rx = 0 to 3 {
             %a = affine.load %Input[%i+%ry, %j+%rx] : memref<32x32xf32>
             %k = affine.load %Kernel[%ry, %rx] : memref<3x3xf32>
-            // CHECK: %8 = affine.load %5[%arg6] : memref<30xf32>
             %b = affine.load %Output[%i, %j] : memref<30x30xf32>
             %mul = mulf %a, %k : f32
             %sum = addf %b, %mul : f32
-            // CHECK: affine.store %10, %5[%arg6] : memref<30xf32>
+            // CHECK: affine.store {{.*}}, %[[MEM]][%[[VAR1]]] : memref<30xf32>
             affine.store %sum, %Output[%i, %j] : memref<30x30xf32>
           } { loop_name = "rx", reduction = 1 }
         } { loop_name = "ry", reduction = 1 }
       } { loop_name = "j" }
       // CHECK: } {loop_name = "ry", reduction = 1 : i64}
-      // CHECK: affine.for %arg4 = 0 to 30 {
-      // CHECK:   %6 = affine.load %5[%arg4] : memref<30xf32>
-      // CHECK:   affine.store %6, %arg2[%arg3, %arg4] : memref<30x30xf32>
+      // CHECK: affine.for %[[VAR]] = 0 to 30 {
+      // CHECK:   %[[RES:.*]] = affine.load %[[MEM]][%[[VAR]]] : memref<30xf32>
+      // CHECK:   affine.store %[[RES]], {{.*}}[{{.*}}, %[[VAR]]] : memref<30x30xf32>
       // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
     } { loop_name = "i", stage_name = "s" }
     hcl.reorder(%s, %lry, %lrx, %lj)
@@ -112,11 +111,11 @@ module {
     %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %oc = 0 to 6 { // out channel
-    // CHECK: %7 = memref.alloc() : memref<30x30xf32>
+    // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
     // CHECK: %cst = constant 0.000000e+00 : f32
-    // CHECK: affine.for %arg4 = 0 to 30 {
-    // CHECK:   affine.for %arg5 = 0 to 30 {
-    // CHECK:     affine.store %cst, %7[%arg4, %arg5] : memref<30x30xf32>
+    // CHECK: affine.for %[[VAR1:.*]] = 0 to 30 {
+    // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
+    // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
     // CHECK:   } {pipeline_ii = 1 : i32}
     // CHECK: } {loop_name = "i_init"}
       affine.for %i = 0 to 30 {
@@ -126,21 +125,20 @@ module {
               affine.for %rx = 0 to 3 {
                 %a = affine.load %Input[%rc, %i+%ry, %j+%rx] : memref<3x32x32xf32>
                 %k = affine.load %Kernel[%oc, %rc, %ry, %rx] : memref<6x3x3x3xf32>
-                // CHECK: %10 = affine.load %7[%arg4, %arg5] : memref<30x30xf32>
                 %b = affine.load %Output[%oc, %i, %j] : memref<6x30x30xf32>
                 %mul = mulf %a, %k : f32
                 %sum = addf %b, %mul : f32
-                // CHECK: affine.store %12, %7[%arg4, %arg5] : memref<30x30xf32>
+                // CHECK: affine.store {{.*}}, %[[MEM]][{{.*}}, {{.*}}] : memref<30x30xf32>
                 affine.store %sum, %Output[%oc, %i, %j] : memref<6x30x30xf32>
               } { loop_name = "rx", reduction = 1 }
             } { loop_name = "ry", reduction = 1 }
           } { loop_name = "rc", reduction = 1 }
         } { loop_name = "j" }
       } { loop_name = "i" }
-      // CHECK: affine.for %arg4 = 0 to 30 {
-      // CHECK:   affine.for %arg5 = 0 to 30 {
-      // CHECK:     %8 = affine.load %7[%arg4, %arg5] : memref<30x30xf32>
-      // CHECK:     affine.store %8, %arg2[%arg3, %arg4, %arg5] : memref<6x30x30xf32>
+      // CHECK: affine.for %[[VAR1]] = 0 to 30 {
+      // CHECK:   affine.for %[[VAR2]] = 0 to 30 {
+      // CHECK:     %[[RES:.*]] = affine.load %[[MEM]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
+      // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
       // CHECK: } {loop_name = "i_back"}
     } {loop_name = "oc", stage_name = "s" }
@@ -157,11 +155,11 @@ module {
     %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %oc = 0 to 6 { // out channel
-      // CHECK: %7 = memref.alloc() : memref<30x30xf32>
+      // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
       // CHECK: %cst = constant 0.000000e+00 : f32
-      // CHECK: affine.for %arg4 = 0 to 30 {
-      // CHECK:   affine.for %arg5 = 0 to 30 {
-      // CHECK:     affine.store %cst, %7[%arg4, %arg5] : memref<30x30xf32>
+      // CHECK: affine.for %[[VAR1:.*]] = 0 to 30 {
+      // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
+      // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
       // CHECK: } {loop_name = "i_init"}
       affine.for %i = 0 to 30 {
@@ -185,10 +183,10 @@ module {
       // CHECK:     } {loop_name = "rx", reduction = 1 : i64}
       // CHECK:   } {loop_name = "ry", reduction = 1 : i64}
       // CHECK: } {loop_name = "rc", reduction = 1 : i64}
-      // CHECK: affine.for %arg4 = 0 to 30 {
-      // CHECK:   affine.for %arg5 = 0 to 30 {
-      // CHECK:     %8 = affine.load %7[%arg4, %arg5] : memref<30x30xf32>
-      // CHECK:     affine.store %8, %arg2[%arg3, %arg4, %arg5] : memref<6x30x30xf32>
+      // CHECK: affine.for %[[VAR1]] = 0 to 30 {
+      // CHECK:   affine.for %[[VAR2]] = 0 to 30 {
+      // CHECK:     %[[RES:.*]] = affine.load %[[MEM]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
+      // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
       // CHECK: } {loop_name = "i_back"}
     } {loop_name = "oc", stage_name = "s" }

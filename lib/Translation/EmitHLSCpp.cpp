@@ -250,6 +250,7 @@ public:
   void emitSelect(SelectOp op);
   void emitConstant(ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
+  void emitGeneralCast(UnrealizedConversionCastOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -257,7 +258,7 @@ public:
 private:
   /// C++ component emitters.
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
-  void emitArrayDecl(Value array);
+  void emitArrayDecl(Value array, bool isFunc = false);
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
@@ -268,6 +269,7 @@ private:
   void emitArrayDirectives(Value memref);
   void emitFunctionDirectives(FuncOp func, ArrayRef<Value> portList);
   void emitFunction(FuncOp func);
+  void emitHostFunction(FuncOp func);
 };
 } // namespace
 
@@ -436,6 +438,10 @@ public:
   bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedFloorDivIOp op) {
+    return emitter.emitBinary(op, "/"), true;
+  }
   bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
@@ -473,10 +479,18 @@ public:
   bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
   bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
   bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
+  bool visitOp(UnrealizedConversionCastOp op) {
+    return emitter.emitGeneralCast(op), true;
+  }
 
   /// HCL operations.
   bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
   bool visitOp(hcl::CreateStageHandleOp op) { return true; }
+
+  /// Fixed points
+  bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -632,16 +646,21 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
 /// Affine statement emitters.
 void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent();
+  auto iterVar = op.getInductionVar();
   if (op->hasAttr("loop_name")) { // loop label
     auto loop_name =
         op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
-    os << "l_" << loop_name << ": ";
+    os << "l_" << loop_name << "_";
+    os << addName(iterVar, false);
+    os << ": ";
   }
   os << "for (";
-  auto iterVar = op.getInductionVar();
 
   // Emit lower bound.
+  if (op->hasAttr("loop_name")) {
+    os << getTypeName(iterVar) << " ";
+  }
   emitValue(iterVar);
   os << " = ";
   auto lowerMap = op.getLowerBoundMap();
@@ -838,7 +857,13 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
@@ -853,7 +878,15 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
 
 void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   indent();
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".write(";
+    emitValue(op.getValueToStore());
+    os << "); // ";
+    emitValue(memref); // comment
+  }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
@@ -998,7 +1031,13 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".read(); // ";
+    emitValue(memref); // comment
+  }
   for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
@@ -1010,7 +1049,15 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
 
 void ModuleEmitter::emitStore(memref::StoreOp op) {
   indent();
-  emitValue(op.getMemRef());
+  auto memref = op.getMemRef();
+  emitValue(memref);
+  auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    os << ".write(";
+    emitValue(op.getValueToStore());
+    os << "); // ";
+    emitValue(memref); // comment
+  }
   for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
@@ -1052,6 +1099,7 @@ void ModuleEmitter::emitTensorInsert(tensor::InsertOp op) {
 
 /// Tensor-related statement emitters.
 void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
+  // TODO: stream interface for tensor?
   auto rank = emitNestedLoopHead(op.getResult());
   indent();
   emitValue(op.getResult(), rank);
@@ -1063,6 +1111,7 @@ void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
 }
 
 void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
+  // TODO: stream interface for tensor?
   auto rank = emitNestedLoopHead(op.getOperand(0));
   indent();
   emitValue(op.getOperand(1), rank);
@@ -1226,6 +1275,15 @@ template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
   emitInfoAndNewLine(op);
 }
 
+void ModuleEmitter::emitGeneralCast(UnrealizedConversionCastOp op) {
+  indent();
+  emitValue(op.getResult(0));
+  os << " = ";
+  emitValue(op.getOperand(0));
+  os << ";";
+  emitInfoAndNewLine(op);
+}
+
 void ModuleEmitter::emitCall(CallOp op) {
   // Handle returned value by the callee.
   for (auto result : op.getResults()) {
@@ -1287,14 +1345,38 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
     os << "[iv" << i << "]";
 }
 
-void ModuleEmitter::emitArrayDecl(Value array) {
+void ModuleEmitter::emitArrayDecl(Value array, bool isFunc) {
   assert(!isDeclared(array) && "has been declared before.");
 
   auto arrayType = array.getType().cast<ShapedType>();
   if (arrayType.hasStaticShape()) {
-    emitValue(array);
-    for (auto &shape : arrayType.getShape())
-      os << "[" << shape << "]";
+    auto attr = array.getType().dyn_cast<MemRefType>().getMemorySpace();
+    if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+      // Value has been declared before or is a constant number.
+      if (isDeclared(array)) {
+        os << getName(array);
+        return;
+      }
+
+      // print stream type
+      os << "hls::stream< " << getTypeName(array) << " > ";
+      if (isFunc) {
+        os << "&"; // pass by reference
+      }
+
+      // Add the new value to nameTable and emit its name.
+      os << addName(array, /*isPtr=*/false);
+      // Add original array declaration as comment
+      os << " /* ";
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
+      os << " */";
+    } else {
+      emitValue(array);
+      for (auto &shape : arrayType.getShape())
+        os << "[" << shape << "]";
+    }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true);
 }
@@ -1466,6 +1548,20 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   //   os << "\n";
   // }
 
+  // streaming
+  auto attr = type.getMemorySpace();
+  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    indent();
+    os << "#pragma HLS stream variable=";
+    emitValue(memref);
+    os << " depth=";
+    // a conversative estimation
+    int mul = 1;
+    for (auto shape : memref.getType().cast<ShapedType>().getShape())
+      mul *= shape;
+    os << mul << "\n";
+  }
+
   // Emit an empty line.
   if (emitPragmaFlag)
     os << "\n";
@@ -1532,6 +1628,10 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 
   //   // An empty line.
   //   os << "\n";
+  if (func->hasAttr("dataflow")) {
+    indent();
+    os << "#pragma HLS dataflow\n";
+  }
 
   // Emit other pragmas for function ports.
   for (auto &port : portList)
@@ -1544,9 +1644,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
-  // if (auto funcDirect = getFuncDirective(func))
-  //   if (funcDirect.getTopFunc())
-  os << "/// This is top function.\n";
+  if (func->hasAttr("top"))
+    os << "/// This is top function.\n";
 
   // Emit function signature.
   os << "void " << func.getName() << "(\n";
@@ -1560,7 +1659,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   for (auto &arg : func.getArguments()) {
     indent();
     if (arg.getType().isa<ShapedType>())
-      emitArrayDecl(arg);
+      emitArrayDecl(arg, true);
     else
       emitValue(arg);
 
@@ -1579,7 +1678,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
         // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
         // index, index. However, typically this should not happen.
         if (result.getType().isa<ShapedType>())
-          emitArrayDecl(result);
+          emitArrayDecl(result, true);
         else
           // In Vivado HLS, pointer indicates the value is an output.
           emitValue(result, /*rank=*/0, /*isPtr=*/true);
@@ -1606,9 +1705,29 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   os << "\n";
 }
 
+void ModuleEmitter::emitHostFunction(FuncOp func) {
+  if (func.getBlocks().size() != 1)
+    emitError(func, "has zero or more than one basic blocks.");
+
+  os << "/// This is top function.\n";
+
+  // Emit function signature.
+  os << "int main(int argc, char **argv) {\n";
+  addIndent();
+
+  emitBlock(func.front());
+
+  os << "  return 0;\n";
+  reduceIndent();
+  os << "}\n";
+
+  // An empty line.
+  os << "\n";
+}
+
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
-  os << R"XXX(
+  std::string device_header = R"XXX(
 //===------------------------------------------------------------*- C++ -*-===//
 //
 // Automatically generated file for High-level Synthesis (HLS).
@@ -1625,11 +1744,51 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 using namespace std;
 )XXX";
 
-  for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op))
-      emitFunction(func);
-    else
-      emitError(&op, "is unsupported operation.");
+  std::string host_header = R"XXX(
+//===------------------------------------------------------------*- C++ -*-===//
+//
+// Automatically generated file for host
+//
+//===----------------------------------------------------------------------===//
+// standard C/C++ headers
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <time.h>
+
+// vivado hls headers
+#include "kernel.h"
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_stream.h>
+
+#include <ap_axi_sdata.h>
+#include <ap_fixed.h>
+#include <ap_int.h>
+#include <hls_math.h>
+#include <hls_stream.h>
+#include <math.h>
+#include <stdint.h>
+
+)XXX";
+
+  if (module.getName().hasValue() && module.getName().getValue() == "host") {
+    os << host_header;
+    for (auto op : module.getOps<FuncOp>()) {
+      if (op.getName() == "main")
+        emitHostFunction(op);
+      else
+        emitFunction(op);
+    }
+  } else {
+    os << device_header;
+    for (auto &op : *module.getBody()) {
+      if (auto func = dyn_cast<FuncOp>(op))
+        emitFunction(func);
+      else
+        emitError(&op, "is unsupported operation.");
+    }
   }
 }
 

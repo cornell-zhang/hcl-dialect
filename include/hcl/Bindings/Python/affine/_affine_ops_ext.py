@@ -13,32 +13,34 @@ from typing import Any, Sequence
 class AffineForOp:
     """Specialization for the Affine for op class."""
 
-    def __init__(self,
-                 lower_bound,
-                 upper_bound,
-                 step,
-                 lowerBoundMap,
-                 upperBoundMap,
-                 reduction=None,
-                 iter_args: Sequence[Any] = [],
-                 name="",
-                 stage="",
-                 *,
-                 loc=None,
-                 ip=None):
+    def __init__(
+        self,
+        lower_bound,
+        upper_bound,
+        step,
+        lowerBoundMap,
+        upperBoundMap,
+        reduction=None,
+        iter_args: Sequence[Any] = [],
+        name="",
+        stage="",
+        *,
+        loc=None,
+        ip=None
+    ):
         """Creates an Affine `for` operation.
-    operation   ::= `affine.for` ssa-id `=` lower-bound `to` upper-bound
-                    (`step` integer-literal)? `{` op* `}`
+        operation   ::= `affine.for` ssa-id `=` lower-bound `to` upper-bound
+                        (`step` integer-literal)? `{` op* `}`
 
-    lower-bound ::= `max`? affine-map-attribute dim-and-symbol-use-list | shorthand-bound
-    upper-bound ::= `min`? affine-map-attribute dim-and-symbol-use-list | shorthand-bound
-    shorthand-bound ::= ssa-id | `-`? integer-literal
+        lower-bound ::= `max`? affine-map-attribute dim-and-symbol-use-list | shorthand-bound
+        upper-bound ::= `min`? affine-map-attribute dim-and-symbol-use-list | shorthand-bound
+        shorthand-bound ::= ssa-id | `-`? integer-literal
 
-    - `lower_bound` is the value to use as lower bound of the loop.
-    - `upper_bound` is the value to use as upper bound of the loop.
-    - `step` is the value to use as loop step.
-    - `iter_args` is a list of additional loop-carried arguments.
-    """
+        - `lower_bound` is the value to use as lower bound of the loop.
+        - `upper_bound` is the value to use as upper bound of the loop.
+        - `step` is the value to use as loop step.
+        - `iter_args` is a list of additional loop-carried arguments.
+        """
         results = [arg.type for arg in iter_args]
         attributes = {}
         attributes["step"] = step
@@ -51,15 +53,22 @@ class AffineForOp:
             attributes["reduction"] = reduction
         if lower_bound == None and upper_bound == None:
             operands = list(iter_args)
+        elif lower_bound != None:
+            operands = [lower_bound] + list(iter_args)
+        elif upper_bound != None:
+            operands = [upper_bound] + list(iter_args)
         else:
             operands = [lower_bound, upper_bound] + list(iter_args)
         super().__init__(
-            self.build_generic(regions=1,
-                               results=results,
-                               operands=operands,
-                               attributes=attributes,
-                               loc=loc,
-                               ip=ip))
+            self.build_generic(
+                regions=1,
+                results=results,
+                operands=operands,
+                attributes=attributes,
+                loc=loc,
+                ip=ip,
+            )
+        )
         self.regions[0].blocks.append(IndexType.get(), *results)
 
     @property
@@ -75,6 +84,69 @@ class AffineForOp:
     @property
     def inner_iter_args(self):
         """Returns the loop-carried arguments usable within the loop.
-    To obtain the loop-carried operands, use `iter_args`.
-    """
+        To obtain the loop-carried operands, use `iter_args`.
+        """
         return self.body.arguments[1:]
+
+
+class AffineStoreOp:
+    def __init__(self, value, memref, indices, *, loc=None, ip=None):
+        operands = []
+        results = []
+        operands.append(value)
+        operands.append(memref)
+        operands.extend(indices)
+        attributes = {}
+        identity_map = AffineMap.get_identity(len(indices))
+        attr = AffineMapAttr.get(identity_map)
+        attributes["map"] = attr
+        super().__init__(
+            self.build_generic(
+                attributes=attributes,
+                results=results,
+                operands=operands,
+                loc=loc,
+                ip=ip,
+            )
+        )
+
+    @property
+    def value(self):
+        return self.operation.operands[0]
+
+    @property
+    def memref(self):
+        return self.operation.operands[1]
+
+    @property
+    def indices(self):
+        _ods_variadic_group_length = len(self.operation.operands) - 3 + 1
+        return self.operation.operands[2 : 2 + _ods_variadic_group_length]
+
+
+class AffineIfOp:
+    def __init__(self, cond, set_operands, *, loc=None, ip=None):
+        operands = []
+        results = []
+        operands.extend(set_operands)
+        attributes = {}
+        attributes["condition"] = cond
+        super().__init__(
+            self.build_generic(
+                attributes=attributes,
+                results=results,
+                operands=operands,
+                loc=loc,
+                ip=ip,
+            )
+        )
+        self.regions[0].blocks.append(IndexType.get(), *results)
+        self.regions[1].blocks.append(IndexType.get(), *results)
+
+    @property
+    def then_block(self):
+        return self.regions[0].blocks[0]
+
+    @property
+    def else_block(self):
+        return self.regions[1].blocks[0]

@@ -41,11 +41,12 @@ declare_mlir_dialect_python_bindings(
 declare_mlir_dialect_python_bindings(
   ADD_TO_PARENT HCLMLIRPythonSources.Dialects
   ROOT_DIR "${HCL_MLIR_PYTHON_ROOT_DIR}"
-  TD_FILE affine/AffineOps.td
+  #TD_FILE affine/AffineOps.td
   SOURCES
     affine/__init__.py
     affine/_ods_common.py
     affine/_affine_ops_ext.py
+    affine/_affine_ops_gen.py
   DIALECT_NAME affine
 )
 
@@ -59,6 +60,7 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   SOURCES
     ${HCL_PYTHON_SOURCE_DIR}/HCLModule.cpp
     ${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
+    ${HCL_PYTHON_SOURCE_DIR}/HCLAttributes.cpp
     ${MLIR_PYTHON_SOURCE_DIR}/IRCore.cpp
     ${MLIR_PYTHON_SOURCE_DIR}/IRModule.cpp
     ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp

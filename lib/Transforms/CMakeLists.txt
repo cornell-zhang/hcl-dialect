@@ -4,11 +4,12 @@ add_mlir_dialect_library(MLIRHCLPasses
     ${globbed}
 
     ADDITIONAL_HEADER_DIRS
-    ${PROJECT_SOURCE_DIR}/include/hcl
+    ${PROJECT_SOURCE_DIR}/include/hcl/Transforms
 
     DEPENDS
     MLIRHeteroCLOpsIncGen
     MLIRHeteroCLTypesIncGen
+    MLIRHeteroCLPassesIncGen
 
     LINK_LIBS PUBLIC
     MLIRIR

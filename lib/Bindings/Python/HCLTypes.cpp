@@ -59,9 +59,63 @@ public:
   }
 };
 
+/// FixedType.
+class PyFixedType : public PyConcreteType<PyFixedType> {
+public:
+  static constexpr IsAFunctionTy isaFunction = hclMlirTypeIsAFixedType;
+  static constexpr const char *pyClassName = "FixedType";
+  using PyConcreteType::PyConcreteType;
+
+  static void bindDerived(ClassTy &c) {
+    c.def_static(
+        "get",
+        [](size_t width, size_t frac, DefaultingPyMlirContext context) {
+          MlirType t = hclMlirFixedTypeGet(context->get(), width, frac);
+          return PyFixedType(context->getRef(), t);
+        },
+        py::arg("width"), py::arg("frac"), py::arg("context") = py::none(), "Create a fixed type.");
+    c.def_property_readonly(
+        "width",
+        [](PyFixedType &self) { return hclMlirFixedTypeGetWidth(self); },
+        "Returns the width of the fixed point type");
+    c.def_property_readonly(
+        "frac",
+        [](PyFixedType &self) { return hclMlirFixedTypeGetFrac(self); },
+        "Returns the fraction of the fixed point type");
+  }
+};
+
+/// UFixedType.
+class PyUFixedType : public PyConcreteType<PyUFixedType> {
+public:
+  static constexpr IsAFunctionTy isaFunction = hclMlirTypeIsAUFixedType;
+  static constexpr const char *pyClassName = "UFixedType";
+  using PyConcreteType::PyConcreteType;
+
+  static void bindDerived(ClassTy &c) {
+    c.def_static(
+        "get",
+        [](size_t width, size_t frac, DefaultingPyMlirContext context) {
+          MlirType t = hclMlirUFixedTypeGet(context->get(), width, frac);
+          return PyUFixedType(context->getRef(), t);
+        },
+        py::arg("width"), py::arg("frac"), py::arg("context") = py::none(), "Create a ufixed type.");
+    c.def_property_readonly(
+        "width",
+        [](PyUFixedType &self) { return hclMlirUFixedTypeGetWidth(self); },
+        "Returns the width of the unsigned fixed point type");
+    c.def_property_readonly(
+        "frac",
+        [](PyUFixedType &self) { return hclMlirUFixedTypeGetFrac(self); },
+        "Returns the fraction of the unsigned fixed point type");
+  }
+};
+
 } // namespace
 
 void mlir::python::populateHCLIRTypes(py::module &m) {
   PyLoopHandleType::bind(m);
   PyStageHandleType::bind(m);
+  PyFixedType::bind(m);
+  PyUFixedType::bind(m);
 }

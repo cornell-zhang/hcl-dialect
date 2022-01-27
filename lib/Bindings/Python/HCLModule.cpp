@@ -6,15 +6,17 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
+#include "hcl/Bindings/Python/HCLModule.h"
 #include "IRModule.h"
 #include "hcl-c/Dialect/Dialects.h"
+#include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl-c/Translation/EmitHLSCpp.h"
-#include "hcl/Bindings/Python/HCLModule.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/Passes.h"
+#include "hcl/Transforms/HostDeviceSeparation.h"
+#include "hcl/Transforms/LoopTransformations.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
@@ -36,12 +38,32 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(PyOperation &op) {
+static bool loopTransformation(PyModule &pymod) {
   py::gil_scoped_release();
-  auto func = dyn_cast<FuncOp>(unwrap(op.get()));
-  if (!func)
-    throw SetPyError(PyExc_ValueError, "targeted operation not a function");
-  return applyLoopTransformation(func);
+  auto mod = unwrap(pymod.get());
+  return applyLoopTransformation(mod);
+}
+
+static bool hostDeviceSeparation(PyModule &host, PyModule &device,
+                                 py::dict pydevice_map, py::dict subgraph) {
+  py::gil_scoped_release();
+  auto host_mod = unwrap(host.get());
+  auto device_mod = unwrap(device.get());
+  std::map<std::string, std::string> device_map;
+  for (auto item : pydevice_map) {
+    device_map[item.first.cast<std::string>()] =
+        item.second.cast<std::string>();
+  }
+  std::vector<std::string> inputs;
+  for (auto input : subgraph["inputs"]) {
+    inputs.push_back(input.cast<std::string>());
+  }
+  std::vector<std::string> outputs;
+  for (auto output : subgraph["outputs"]) {
+    outputs.push_back(output.cast<std::string>());
+  }
+  return applyHostDeviceSeparation(host_mod, device_mod, device_map, inputs,
+                                   outputs);
 }
 
 //===----------------------------------------------------------------------===//
@@ -89,9 +111,11 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Type construction APIs.
   populateHCLIRTypes(m);
+  populateHCLAttributes(m);
 
   // Loop transform APIs.
   m.def("loop_transformation", &loopTransformation);
+  m.def("host_device_separation", &hostDeviceSeparation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

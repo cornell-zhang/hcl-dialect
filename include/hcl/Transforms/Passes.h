@@ -4,24 +4,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HETEROCL_PASSES_H
-#define HETEROCL_PASSES_H
+#ifndef HCL_TRANSFORMS_PASSES_H
+#define HCL_TRANSFORMS_PASSES_H
 
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Pass/PassRegistry.h"
-
-#include "hcl/Dialect/HeteroCLOps.h"
+#include "hcl/Transforms/LoopTransformations.h"
+#include "hcl/Transforms/ReconcileUnrealizedCasts.h"
 
 namespace mlir {
 namespace hcl {
-
-void registerHCLLoopTransformationPass();
-std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass();
-
-bool applyLoopTransformation(FuncOp &f);
+/// Generate the code for registering passes.
+#define GEN_PASS_REGISTRATION
+#include "hcl/Transforms/Passes.h.inc"
 
 } // namespace hcl
 } // namespace mlir
 
-#endif // HETEROCL_PASSES_H
+#endif // HCL_TRANSFORMS_PASSES_H

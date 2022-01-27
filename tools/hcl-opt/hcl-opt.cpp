@@ -30,7 +30,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "hcl/Conversion/HCLToLLVM.h"
-#include "hcl/Transforms/Passes.h"
+#include "hcl/Transforms/LoopTransformations.h"
 
 #include <iostream>
 
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt || runJiT) {
-    optPM.addPass(mlir::hcl::createHCLLoopTransformationPass());
+    pm.addPass(mlir::hcl::createHCLLoopTransformationPass());
   }
 
   if (enableNormalize) {

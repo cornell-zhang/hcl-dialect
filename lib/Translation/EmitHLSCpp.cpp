@@ -1717,7 +1717,7 @@ void ModuleEmitter::emitHostFunction(FuncOp func) {
 
   emitBlock(func.front());
 
-  os << "return 0;\n";
+  os << "  return 0;\n";
   reduceIndent();
   os << "}\n";
 
@@ -1773,18 +1773,13 @@ using namespace std;
 
 )XXX";
 
-  bool isHost = false;
-  for (auto op : module.getOps<FuncOp>()) {
-    if (op.getName() == "main")
-      isHost = true;
-  }
-
-  if (isHost) {
+  if (module.getName().hasValue() && module.getName().getValue() == "host") {
     os << host_header;
     for (auto op : module.getOps<FuncOp>()) {
-      // suppose only have one main function
-      emitHostFunction(op);
-      break;
+      if (op.getName() == "main")
+        emitHostFunction(op);
+      else
+        emitFunction(op);
     }
   } else {
     os << device_header;

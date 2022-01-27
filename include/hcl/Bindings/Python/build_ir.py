@@ -498,6 +498,7 @@ class TensorOp(ExprOp):
         self.built_op = self.op(
             memref_type, None, None, None, ip=GlobalInsertionPoint.get()
         )
+        self.built_op.attributes["name"] = StringAttr.get(self.name)
         return self.built_op
 
     def get_memref_type(self):
@@ -785,6 +786,7 @@ class LoadOp(ExprOp):
         self.built_op = self.op(
             self.dtype, self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
         )
+        self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
 
 
@@ -807,6 +809,7 @@ class StoreOp(ExprOp):
             new_indices,
             ip=GlobalInsertionPoint.get(),
         )
+        self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
         return self.built_op
 
 

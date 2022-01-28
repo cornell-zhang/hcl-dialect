@@ -45,7 +45,8 @@ static bool loopTransformation(PyModule &pymod) {
 }
 
 static bool hostDeviceSeparation(PyModule &host, PyModule &device,
-                                 py::dict pydevice_map, py::dict subgraph) {
+                                py::dict pydevice_map, py::list pygraph_roots,
+                                 py::dict subgraph) {
   py::gil_scoped_release();
   auto host_mod = unwrap(host.get());
   auto device_mod = unwrap(device.get());
@@ -53,6 +54,10 @@ static bool hostDeviceSeparation(PyModule &host, PyModule &device,
   for (auto item : pydevice_map) {
     device_map[item.first.cast<std::string>()] =
         item.second.cast<std::string>();
+  }
+  std::vector<std::string> graph_roots;
+  for (auto root : pygraph_roots) {
+    graph_roots.push_back(root.cast<std::string>());
   }
   std::vector<std::string> inputs;
   for (auto input : subgraph["inputs"]) {
@@ -62,8 +67,8 @@ static bool hostDeviceSeparation(PyModule &host, PyModule &device,
   for (auto output : subgraph["outputs"]) {
     outputs.push_back(output.cast<std::string>());
   }
-  return applyHostDeviceSeparation(host_mod, device_mod, device_map, inputs,
-                                   outputs);
+  return applyHostDeviceSeparation(host_mod, device_mod, device_map,
+                                   graph_roots, inputs, outputs);
 }
 
 //===----------------------------------------------------------------------===//

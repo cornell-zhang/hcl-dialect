@@ -20,6 +20,7 @@ namespace hcl {
 
 bool applyHostDeviceSeparation(ModuleOp &host_mod, ModuleOp &device_mod,
                                std::map<std::string, std::string> &device_map,
+                               std::vector<std::string> &graph_roots,
                                std::vector<std::string> &subgraph_inputs,
                                std::vector<std::string> &subgraph_outputs);
 

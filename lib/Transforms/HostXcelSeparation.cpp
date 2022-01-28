@@ -2,9 +2,9 @@
 //
 // Copyright 2020-2021 The HCL-MLIR Authors.
 //
-//===----------------------------------------------------------------------===//h
+//===----------------------------------------------------------------------===//
 
-#include "hcl/Transforms/HostDeviceSeparation.h"
+#include "hcl/Transforms/HostXcelSeparation.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
@@ -37,7 +37,7 @@ std::vector<std::string> split_names(const std::string &arg_names) {
   return args;
 }
 
-bool applyHostDeviceSeparation(
+bool applyHostXcelSeparation(
     ModuleOp &host_mod, ModuleOp &device_mod,
     std::map<std::string, std::string> &device_map /*stage, device*/,
     std::vector<std::string> &graph_roots,

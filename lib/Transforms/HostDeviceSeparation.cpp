@@ -98,7 +98,7 @@ bool applyHostDeviceSeparation(
 
   // get call @top function in host main
   auto call_top = *(host_main.getOps<CallOp>().begin());
-  auto top_ret = *(std::prev(call_top.arg_operand_end()));
+  // auto top_ret = *(std::prev(call_top.arg_operand_end()));
   // only support one output for now
   assert(subgraph_outputs.size() == 1);
 

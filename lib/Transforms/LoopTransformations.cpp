@@ -1427,14 +1427,23 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-LogicalResult runToStage(std::map<std::string, FuncOp> &funcMap,
-                         Value &arrayToStream) {
+LogicalResult
+runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
+                            Value &arrayToStream, int fifo_depth = -1) {
   // Construct new array type (add stream attribute)
   auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
+  auto shapedType = arrayToStream.getType().cast<ShapedType>().getShape();
+  if (fifo_depth == -1) {
+    // a conversative estimation
+    fifo_depth = 1;
+    for (auto size : shapedType)
+      fifo_depth *= size;
+  }
   auto newType = MemRefType::get(
       arrayType.getShape(), arrayType.getElementType(),
       arrayType.getAffineMaps(),
-      StringAttr::get(arrayToStream.getDefiningOp()->getContext(), "stream"));
+      StringAttr::get(arrayToStream.getDefiningOp()->getContext(),
+                      "stream:" + std::to_string(fifo_depth)));
 
   // Set new type in the top function
   arrayToStream.setType(newType);
@@ -1476,7 +1485,7 @@ LogicalResult runToStage(std::map<std::string, FuncOp> &funcMap,
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   ToOp>(op);
+                   InterKernelToOp>(op);
 }
 
 template <class HCLOp>
@@ -1549,8 +1558,8 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
       } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
         if (failed(runBufferAt(f, new_op)))
           return false;
-      } else if (auto new_op = dyn_cast<ToOp>(op)) {
-        // if (failed(runToStage(f, new_op)))
+      } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
+        // if (failed(runInterKernelDataPlacement(f, new_op)))
         //   return false;
       }
       opToRemove.push_back(&op);
@@ -1623,10 +1632,17 @@ bool applyLoopTransformation(ModuleOp &mod) {
           runSchedule<ReuseAtOp>(funcMap, new_op, &runReuseAt);
         } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
           runSchedule<BufferAtOp>(funcMap, new_op, &runBufferAt);
-        } else if (auto new_op = dyn_cast<ToOp>(op)) {
+        } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
           Value array;
+          auto optional_fifo_depth = new_op.fifo_depth();
+          unsigned int fifo_depth;
+          if (optional_fifo_depth.hasValue()) {
+            fifo_depth = optional_fifo_depth.getValue();
+          } else {
+            fifo_depth = -1; // conservative assumption
+          }
           if (!findArray(top_func, new_op.target(), array) ||
-              failed(runToStage(funcMap, array)))
+              failed(runInterKernelDataPlacement(funcMap, array, fifo_depth)))
             return false;
         }
         opToRemove.push_back(&op);

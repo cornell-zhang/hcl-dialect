@@ -307,38 +307,9 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     }];
 }
 
-// def HeteroCL_ToOp : HeteroCL_Op<"to"> 
-// {
-//     let summary = "to";
-//     let description = [{
-//         hcl.to(tensor, dst=None, src=None, axis=0,
-//                mode=IO.DMA, fifo_depth=1, burst_len=-1)
-
-//         Stream a list of Tensors to dst devices
-
-//         Parameters
-//         ----------
-//         tensor (Tensor) - The tensor to be moved
-//         dst (Device or Stage) - The destination of data movement
-//         src (Device or Stage) - The source of data movement
-//         axis (str or IterVar) - Move axis-th loop body to xcel scope
-//         mode (str) - The modes of data movement (Stream, DMA, MMIO)
-//             For inter-kernel data movemnet, only Stream is supported
-//         fifo_depth (int) - The streaming channel depth
-//             We leave an interface here to specify the FIFO depth
-//             in the future we should be able to infer automatically
-//     }];
-
-//     let arguments = (ins AnyMemRef:$target, DeviceEnum:$device);
-//     let results = (outs );
-//     let assemblyFormat = [{
-//         `(` $target `:` type($target) `,` $device `)` attr-dict
-//     }];
-// }
-
-def HeteroCL_ToOp : HeteroCL_Op<"to"> 
+def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to"> 
 {
-    let summary = "to";
+    let summary = "inter-kernel data placement";
     let description = [{
         hcl.to(tensor, dst=None, src=None, axis=0,
                mode=IO.DMA, fifo_depth=1, burst_len=-1)
@@ -358,10 +329,11 @@ def HeteroCL_ToOp : HeteroCL_Op<"to">
             in the future we should be able to infer automatically
     }];
 
-    let arguments = (ins AnyMemRef:$target, StageHandle:$dst);
+    let arguments = (ins AnyMemRef:$target, StageHandle:$dst,
+                         OptionalAttr<DefaultValuedAttr<I32Attr,"-1">>:$fifo_depth);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $target `:` type($target) `,` $dst `)` attr-dict
+        `(` $target `:` type($target) `,` $dst (`,` $fifo_depth^)? `)` attr-dict
     }];
 }
 

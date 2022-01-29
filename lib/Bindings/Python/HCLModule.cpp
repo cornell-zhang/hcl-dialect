@@ -15,7 +15,7 @@
 #include "hcl-c/Translation/EmitHLSCpp.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "hcl/Transforms/HostDeviceSeparation.h"
+#include "hcl/Transforms/HostXcelSeparation.h"
 #include "hcl/Transforms/LoopTransformations.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Analysis/LoopAnalysis.h"
@@ -44,8 +44,9 @@ static bool loopTransformation(PyModule &pymod) {
   return applyLoopTransformation(mod);
 }
 
-static bool hostDeviceSeparation(PyModule &host, PyModule &device,
-                                 py::dict pydevice_map, py::dict subgraph) {
+static bool hostXcelSeparation(PyModule &host, PyModule &device,
+                               py::dict pydevice_map, py::list pygraph_roots,
+                               py::dict subgraph) {
   py::gil_scoped_release();
   auto host_mod = unwrap(host.get());
   auto device_mod = unwrap(device.get());
@@ -53,6 +54,10 @@ static bool hostDeviceSeparation(PyModule &host, PyModule &device,
   for (auto item : pydevice_map) {
     device_map[item.first.cast<std::string>()] =
         item.second.cast<std::string>();
+  }
+  std::vector<std::string> graph_roots;
+  for (auto root : pygraph_roots) {
+    graph_roots.push_back(root.cast<std::string>());
   }
   std::vector<std::string> inputs;
   for (auto input : subgraph["inputs"]) {
@@ -62,8 +67,8 @@ static bool hostDeviceSeparation(PyModule &host, PyModule &device,
   for (auto output : subgraph["outputs"]) {
     outputs.push_back(output.cast<std::string>());
   }
-  return applyHostDeviceSeparation(host_mod, device_mod, device_map, inputs,
-                                   outputs);
+  return applyHostXcelSeparation(host_mod, device_mod, device_map, graph_roots,
+                                 inputs, outputs);
 }
 
 //===----------------------------------------------------------------------===//
@@ -115,7 +120,7 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Loop transform APIs.
   m.def("loop_transformation", &loopTransformation);
-  m.def("host_device_separation", &hostDeviceSeparation);
+  m.def("host_device_separation", &hostXcelSeparation);
 
   // Emission APIs.
   m.def("emit_hlscpp", &emitHlsCpp);

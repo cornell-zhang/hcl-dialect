@@ -860,7 +860,8 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+  if (attr &&
+      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".read(); // ";
     emitValue(memref); // comment
   }
@@ -881,7 +882,8 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+  if (attr &&
+      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".write(";
     emitValue(op.getValueToStore());
     os << "); // ";
@@ -1034,7 +1036,8 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+  if (attr &&
+      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".read(); // ";
     emitValue(memref); // comment
   }
@@ -1052,7 +1055,8 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   auto memref = op.getMemRef();
   emitValue(memref);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+  if (attr &&
+      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".write(";
     emitValue(op.getValueToStore());
     os << "); // ";
@@ -1351,7 +1355,8 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc) {
   auto arrayType = array.getType().cast<ShapedType>();
   if (arrayType.hasStaticShape()) {
     auto attr = array.getType().dyn_cast<MemRefType>().getMemorySpace();
-    if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
+    if (attr &&
+        attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
       // Value has been declared before or is a constant number.
       if (isDeclared(array)) {
         os << getName(array);
@@ -1550,16 +1555,16 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
 
   // streaming
   auto attr = type.getMemorySpace();
-  if (attr && attr.cast<StringAttr>().getValue().str() == "stream") {
-    indent();
-    os << "#pragma HLS stream variable=";
-    emitValue(memref);
-    os << " depth=";
-    // a conversative estimation
-    int mul = 1;
-    for (auto shape : memref.getType().cast<ShapedType>().getShape())
-      mul *= shape;
-    os << mul << "\n";
+  if (attr) {
+    std::string attr_str = attr.cast<StringAttr>().getValue().str();
+    if (attr_str.substr(0, 6) == "stream") {
+      indent();
+      os << "#pragma HLS stream variable=";
+      emitValue(memref);
+      os << " depth=";
+      os << attr_str.substr(7, std::string::npos);
+      os << "\n";
+    }
   }
 
   // Emit an empty line.

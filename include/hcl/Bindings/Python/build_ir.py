@@ -3,6 +3,7 @@
 # Copyright 2021-2022 The HCL-MLIR Authors.
 #
 # ===----------------------------------------------------------------------=== #
+from contextvars import ContextVar
 
 from mlir.dialects import builtin, math, memref, std
 from mlir.ir import *
@@ -19,6 +20,10 @@ bool = IntegerType.get_signless(1, context=global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
 i64 = IntegerType.get_signless(64, context=global_ctx)
 idx_type = IndexType.get(context=global_ctx)
+
+ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount")
+ImperativeLoopDepth = ContextVar("ImperativeLoopDepth")
+StageName = ContextVar("StageName")
 
 register_dialects(global_ctx)
 
@@ -481,6 +486,33 @@ class ConstantOp(ExprOp):
         self.built_op = self.op(self.dtype, value_attr, ip=GlobalInsertionPoint.get())
         return self.built_op
 
+class TensorSlice(ExprOp):
+    def __init__(self, shape, op, dtype, indices, name=None):
+        super().__init__(op)
+        self.shape = shape
+        self.dtype = dtype
+        self.name  = name
+        self.indices = indices
+
+    def __getitem__(self, indices):
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        if len(self.indices + indices) < len(self.shape):
+            return TensorSlice(self.shape, self.dtype, self.indices + indices, name)
+        else:
+            # format indices
+            new_indices = []
+            for index in indices:
+                if isinstance(index, int):
+                    index = ConstantOp(idx_type, index)
+                new_indices.append(index)
+            load = LoadOp(self.dtype, self, new_indices)
+            if flags.BUILD_INPLACE:
+                load.build()
+            return load
+
+    def __setitem__(self, indices, expr):
+        pass
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):
@@ -512,23 +544,29 @@ class TensorOp(ExprOp):
         return self._axis
 
     def __getitem__(self, indices):
-        # only one dimension
         if not isinstance(indices, tuple):
-            indices = [indices]
-
-        # format indices
-        new_indices = []
-        for index in indices:
-            if isinstance(index, int):
-                index = ConstantOp(idx_type, index)
-            new_indices.append(index)
-        load = LoadOp(self.dtype, self, new_indices)
-        if flags.BUILD_INPLACE:
-            load.build()
-        return load
+            indices = (indices,)
+        # if we are slicing tensor
+        if len(indices) < len(self.shape):
+            return TensorSlice(self.shape, self.op, self.dtype, indices, self.name)
+        else:
+            # format indices
+            new_indices = []
+            for index in indices:
+                if isinstance(index, int):
+                    index = ConstantOp(idx_type, index)
+                new_indices.append(index)
+            load = LoadOp(self.dtype, self, new_indices)
+            if flags.BUILD_INPLACE:
+                load.build()
+            return load
 
     def __setitem__(self, indices, expr):
-        return StoreOp(expr, self, indices)
+        if len(indices) < len(self.shape):
+            # TODO(Niansong): I think this is doable actually
+            raise RuntimeError("Writing to a slice of tensor is not allowed.")
+        else:
+            return StoreOp(expr, self, indices)
 
 
 #################################################

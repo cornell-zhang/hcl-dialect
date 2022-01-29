@@ -497,6 +497,7 @@ class TensorSlice(ExprOp):
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
+        print(f"getitem called on {self.name}, len(indices)={len(self.indices + indices)}")
         if len(self.indices + indices) < len(self.shape):
             return TensorSlice(self.shape, self.dtype, self.indices + indices, self.name)
         else:
@@ -507,12 +508,20 @@ class TensorSlice(ExprOp):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self, new_indices)
-            if flags.BUILD_INPLACE:
-                load.build()
+            # TODO(Niansong): Why build in place result in duplicate load?
+            # if flags.BUILD_INPLACE:
+            #     load.build()
             return load
 
     def __setitem__(self, indices, expr):
-        pass
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        print(f"setitem called on {self.name}, len(indices)={len(self.indices + indices)}")
+        if len(self.indices + indices) < len(self.shape):
+            pass
+        else:
+            return StoreOp(expr, self, self.indices + indices)
+
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):

@@ -498,11 +498,11 @@ class TensorSlice(ExprOp):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.shape):
-            return TensorSlice(self.shape, self.dtype, self.indices + indices, name)
+            return TensorSlice(self.shape, self.dtype, self.indices + indices, self.name)
         else:
             # format indices
             new_indices = []
-            for index in indices:
+            for index in self.indices + indices:
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)

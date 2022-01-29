@@ -26,17 +26,6 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-std::vector<std::string> split_names(const std::string &arg_names) {
-  std::stringstream ss(arg_names);
-  std::vector<std::string> args;
-  while (ss.good()) {
-    std::string substr;
-    getline(ss, substr, ',');
-    args.push_back(substr);
-  }
-  return args;
-}
-
 bool applyHostXcelSeparation(
     ModuleOp &host_mod, ModuleOp &device_mod,
     std::map<std::string, std::string> &device_map /*stage, device*/,

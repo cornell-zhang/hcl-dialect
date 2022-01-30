@@ -564,8 +564,8 @@ class TensorOp(ExprOp):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self, new_indices)
-            if flags.BUILD_INPLACE:
-                load.build()
+            # if flags.BUILD_INPLACE:
+            #     load.build()
             return load
 
     def __setitem__(self, indices, expr):

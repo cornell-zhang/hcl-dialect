@@ -19,8 +19,6 @@
 #include <memory>
 #include <iostream>
 
-//DEBJIT#include "pluto/internal/pluto.h"
-
 #include "mlir/Support/LLVM.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "llvm/ADT/DenseMap.h"

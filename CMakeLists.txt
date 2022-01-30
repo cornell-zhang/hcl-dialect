@@ -16,6 +16,11 @@ set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
 
+# ----------------------- Setup for required dependencies ---------------
+# Openscop for OpenSCoP extraction from MLIR code (Affine as of now)
+include("${CMAKE_SOURCE_DIR}/cmake/OpenScop.cmake")
+include_directories("${OSL_INCLUDE_DIR}")
+
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(TableGen)

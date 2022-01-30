@@ -1,0 +1,3 @@
+[submodule "openscop"]
+	path = openscop
+	url = https://github.com/periscop/openscop.git

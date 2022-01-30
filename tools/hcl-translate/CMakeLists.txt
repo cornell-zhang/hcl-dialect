@@ -20,6 +20,8 @@ target_link_libraries(hcl-translate
   MLIRTranslation
   MLIRSupport
   MLIRHCLEmitHLSCpp
+  MLIRHCLEmitOpenSCoP
+  MLIRHeteroCL
   )
 
 mlir_check_link_libraries(hcl-translate)

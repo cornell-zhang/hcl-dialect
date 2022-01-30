@@ -15,12 +15,14 @@
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Translation.h"
 #include "hcl/Translation/EmitHLSCpp.h"
+#include "hcl/Target/OpenScop.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllTranslations();
   mlir::hcl::registerEmitHLSCppTranslation();
+  mlir::hcl::registerToOpenScopTranslation();
 
   return failed(
       mlir::mlirTranslateMain(argc, argv, "HeteroCL MLIR Dialect Translation Tool"));

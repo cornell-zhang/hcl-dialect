@@ -569,6 +569,8 @@ class TensorOp(ExprOp):
             return load
 
     def __setitem__(self, indices, expr):
+        if not isinstance(indices, tuple):
+            indices = (indices,)
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
             raise RuntimeError("Writing to a slice of tensor is not allowed.")

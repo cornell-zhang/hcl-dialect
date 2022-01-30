@@ -16,7 +16,7 @@ struct LogicalResult;
 class FlatAffineValueConstraints;
 } // namespace mlir
 
-namespace polymer {
+namespace hcl {
 
 /// This class contains a set of operations that will correspond to a single
 /// OpenScop statement body. The underlying data structure is SetVector.

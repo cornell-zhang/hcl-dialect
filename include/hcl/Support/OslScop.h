@@ -3,8 +3,8 @@
 // This file declares the C++ wrapper for the Scop struct in OpenScop.
 //
 //===----------------------------------------------------------------------===//
-#ifndef POLYMER_SUPPORT_OSLSCOP_H
-#define POLYMER_SUPPORT_OSLSCOP_H
+#ifndef HCL_SUPPORT_OSLSCOP_H
+#define HCL_SUPPORT_OSLSCOP_H
 
 #include "mlir/Support/LLVM.h"
 

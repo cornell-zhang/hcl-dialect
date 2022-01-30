@@ -3,8 +3,8 @@
 // This file declares the C++ wrapper for the Scop scattering.
 //
 //===----------------------------------------------------------------------===//
-#ifndef POLYMER_SUPPORT_SCATTERINGUTILS_H
-#define POLYMER_SUPPORT_SCATTERINGUTILS_H
+#ifndef HCL_SUPPORT_SCATTERINGUTILS_H
+#define HCL_SUPPORT_SCATTERINGUTILS_H
 
 #include <memory>
 
@@ -16,7 +16,7 @@ class Value;
 class Operation;
 } // namespace mlir
 
-namespace polymer {
+namespace hcl {
 
 class ScatTreeNodeImpl;
 
@@ -43,6 +43,6 @@ private:
   std::unique_ptr<ScatTreeNodeImpl> impl;
 };
 
-} // namespace polymer
+} // namespace hcl
 
 #endif

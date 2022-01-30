@@ -11,7 +11,7 @@
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+//#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
@@ -85,8 +85,10 @@ static BlockArgument findTopLevelBlockArgument(mlir::Value val) {
     return val.cast<mlir::BlockArgument>();
 
   mlir::Operation *defOp = val.getDefiningOp();
+  /*
   assert((defOp && isa<mlir::arith::IndexCastOp>(defOp)) &&
          "Only allow defOp of a parameter to be an IndexCast.");
+  */
   return findTopLevelBlockArgument(defOp->getOperand(0));
 }
 
@@ -196,9 +198,10 @@ static mlir::Value findBlockArg(mlir::Value v) {
     mlir::Operation *defOp = r.getDefiningOp();
     if (!defOp || defOp->getNumOperands() != 1)
       return nullptr;
+    /*
     if (!isa<mlir::arith::IndexCastOp>(defOp))
       return nullptr;
-
+    */
     r = defOp->getOperand(0);
   }
 

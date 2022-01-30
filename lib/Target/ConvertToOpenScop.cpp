@@ -325,7 +325,7 @@ void OslScopBuilder::buildScopContext(OslScop *scop,
 }
 
 std::unique_ptr<OslScop>
-polymer::createOpenScopFromFuncOp(mlir::FuncOp f, OslSymbolTable &symTable) {
+hcl::createOpenScopFromFuncOp(mlir::FuncOp f, OslSymbolTable &symTable) {
   return OslScopBuilder().build(f);
 }
 

@@ -498,21 +498,28 @@ class TensorSlice(ExprOp):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.shape):
-            return TensorSlice(self.shape, self.dtype, self.indices + indices, name)
+            return TensorSlice(self.shape, self.dtype, self.indices + indices, self.name)
         else:
             # format indices
             new_indices = []
-            for index in indices:
+            for index in self.indices + indices:
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self, new_indices)
-            if flags.BUILD_INPLACE:
-                load.build()
+            # TODO(Niansong): Why build in place result in duplicate load?
+            # if flags.BUILD_INPLACE:
+            #     load.build()
             return load
 
     def __setitem__(self, indices, expr):
-        pass
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        if len(self.indices + indices) < len(self.shape):
+            pass
+        else:
+            return StoreOp(expr, self, self.indices + indices)
+
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):
@@ -557,11 +564,13 @@ class TensorOp(ExprOp):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self, new_indices)
-            if flags.BUILD_INPLACE:
-                load.build()
+            # if flags.BUILD_INPLACE:
+            #     load.build()
             return load
 
     def __setitem__(self, indices, expr):
+        if not isinstance(indices, tuple):
+            indices = (indices,)
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
             raise RuntimeError("Writing to a slice of tensor is not allowed.")

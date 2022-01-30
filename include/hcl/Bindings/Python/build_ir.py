@@ -497,7 +497,6 @@ class TensorSlice(ExprOp):
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        print(f"getitem called on {self.name}, len(indices)={len(self.indices + indices)}")
         if len(self.indices + indices) < len(self.shape):
             return TensorSlice(self.shape, self.dtype, self.indices + indices, self.name)
         else:
@@ -516,7 +515,6 @@ class TensorSlice(ExprOp):
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        print(f"setitem called on {self.name}, len(indices)={len(self.indices + indices)}")
         if len(self.indices + indices) < len(self.shape):
             pass
         else:

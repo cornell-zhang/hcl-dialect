@@ -22,7 +22,7 @@ namespace hcl {
 /// OpenScop statement body. The underlying data structure is SetVector.
 class OslScopStmtOpSet {
 public:
-  using Set = SetVector<mlir::Operation *>;
+  using Set = llvm::SetVector<mlir::Operation *>;
   using iterator = Set::iterator;
   using reverse_iterator = Set::reverse_iterator;
 

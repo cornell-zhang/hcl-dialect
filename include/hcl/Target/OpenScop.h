@@ -25,22 +25,25 @@
 #include "llvm/ADT/StringMap.h"
 
 namespace mlir {
+class ModuleOp;
+struct LogicalResult;
+} // namespace mlir
+
 namespace hcl {
 
 class OslScop;
 
-LogicalResult translateModuleToOpenScop(
+mlir::LogicalResult translateModuleToOpenScop(
     mlir::ModuleOp module,
     llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
     llvm::raw_ostream &os);
 
-LogicalResult emitOpenScop(
-    ModuleOp module, 
+mlir::LogicalResult emitOpenScop(
+    mlir::ModuleOp module, 
     llvm::raw_ostream &os);
 
 void registerToOpenScopTranslation();
 
 } // namespace hcl
-} // namespace mlir
 
 #endif // HCL_TARGET_OPENSCOP_H

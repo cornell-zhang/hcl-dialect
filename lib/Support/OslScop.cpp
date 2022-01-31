@@ -439,7 +439,7 @@ void OslScop::addBodyExtension(int stmtId, const ScopStmt &stmt) {
   ss << "\n" << callee.getName() << "(";
 
   SmallVector<std::string, 8> ivs;
-  SetVector<unsigned> visited;
+  llvm::SetVector<unsigned> visited;
   for (unsigned i = 0; i < caller.getNumOperands(); i++) {
     mlir::Value operand = caller.getOperand(i);
     if (ivToId.find(operand) != ivToId.end()) {
@@ -572,7 +572,7 @@ void OslScop::createAccessRelationConstraints(
 
   SmallVector<mlir::Value, 8> idValues;
   domain.getAllIdValues(&idValues);
-  SetVector<mlir::Value> idValueSet;
+  llvm::SetVector<mlir::Value> idValueSet;
   for (auto val : idValues)
     idValueSet.insert(val);
 

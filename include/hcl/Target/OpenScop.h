@@ -24,6 +24,8 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 
+#define SCOP_STMT_ATTR_NAME "scop.stmt"
+
 namespace mlir {
 class ModuleOp;
 struct LogicalResult;
@@ -33,14 +35,20 @@ namespace mlir {
 namespace hcl {
 
 class OslScop;
+class OslSymbolTable;
 
-mlir::LogicalResult translateModuleToOpenScop(
-    mlir::ModuleOp module,
+std::unique_ptr<OslScop> createOpenScopFromFuncOp(
+        FuncOp funcOp,
+        OslSymbolTable &symTable
+        );
+
+LogicalResult translateModuleToOpenScop(
+    ModuleOp module,
     llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
     llvm::raw_ostream &os);
 
-mlir::LogicalResult emitOpenScop(
-    mlir::ModuleOp module, 
+LogicalResult emitOpenScop(
+    ModuleOp module, 
     llvm::raw_ostream &os);
 
 void registerToOpenScopTranslation();

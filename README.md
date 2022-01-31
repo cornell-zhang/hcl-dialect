@@ -67,7 +67,7 @@ git checkout tags/llvmorg-13.0.0 -b v13.0.0
 ### Build HeteroCL Dialect
 This setup assumes that you have built LLVM and MLIR in `$BUILD_DIR` and installed them to `$PREFIX`. Please firstly clone our repository.
 ```sh
-git clone https://github.com/cornell-zhang/hcl-dialect-prototype.git
+git clone --recursive https://github.com/cornell-zhang/hcl-dialect-prototype.git
 cd hcl-dialect-prototype
 mkdir build && cd build
 ```
@@ -77,7 +77,8 @@ mkdir build && cd build
 cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
-   -DPYTHON_BINDING=OFF
+   -DPYTHON_BINDING=OFF \
+   -DLLVM_USE_LINKER=lld
 make -j
 ```
 
@@ -87,6 +88,7 @@ cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
+   -DLLVM_USE_LINKER=lld \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
 mkdir include/hcl/Bindings/Python/affine # Makefile bug
 make -j

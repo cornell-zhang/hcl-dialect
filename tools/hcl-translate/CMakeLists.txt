@@ -22,6 +22,7 @@ target_link_libraries(hcl-translate
   MLIRHCLEmitHLSCpp
   MLIRHCLEmitOpenSCoP
   MLIRHeteroCL
+  gmp
   )
 
 mlir_check_link_libraries(hcl-translate)

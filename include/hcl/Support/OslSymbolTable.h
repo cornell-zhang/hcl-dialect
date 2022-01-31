@@ -19,6 +19,7 @@ class Operation;
 class Value;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class OslScopStmtOpSet;
@@ -53,5 +54,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

@@ -16,6 +16,7 @@ struct LogicalResult;
 class FlatAffineConstraints;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 /// This class contains a set of operations that will correspond to a single
@@ -68,5 +69,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

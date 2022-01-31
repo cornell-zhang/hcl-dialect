@@ -27,9 +27,7 @@ using namespace llvm;
 using namespace mlir;
 using namespace hcl;
 
-namespace hcl {
-
-class ScopStmtImpl {
+class mlir::hcl::ScopStmtImpl {
 public:
   using EnclosingOpList = SmallVector<Operation *, 8>;
 
@@ -57,8 +55,6 @@ public:
   /// Enclosing for/if operations for the caller.
   EnclosingOpList enclosingOps;
 };
-
-} // namespace hcl
 
 /// Create ScopStmtImpl from only the caller/callee pair.
 std::unique_ptr<ScopStmtImpl> ScopStmtImpl::get(mlir::Operation *callerOp,

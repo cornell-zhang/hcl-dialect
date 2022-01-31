@@ -20,6 +20,7 @@ class CallOp;
 class Value;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 class ScopStmtImpl;
 
@@ -54,5 +55,6 @@ private:
   std::unique_ptr<ScopStmtImpl> impl;
 };
 } // namespace hcl
+} // namespace mlir
 
 #endif

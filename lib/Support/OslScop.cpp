@@ -29,9 +29,9 @@
 
 #include <vector>
 
-using namespace hcl;
 using namespace mlir;
 using namespace llvm;
+using namespace hcl;
 
 /// Create osl_vector from a STL vector. Since the input vector is of type
 /// int64_t, we can safely assume the osl_vector we will generate has 64 bits

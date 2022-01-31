@@ -13,8 +13,7 @@
 
 using namespace mlir;
 using namespace llvm;
-
-namespace hcl {
+using namespace hcl;
 
 Value OslSymbolTable::getValue(StringRef key) {
   // Key is a loop IV.
@@ -91,4 +90,3 @@ void OslSymbolTable::getOpSetSymbols(SmallVectorImpl<StringRef> &symbols) {
   for (auto &it : nameToStmtOpSet)
     symbols.push_back(it.first());
 }
-} // namespace hcl

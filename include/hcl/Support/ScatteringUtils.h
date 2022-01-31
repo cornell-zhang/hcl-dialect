@@ -16,6 +16,7 @@ class Value;
 class Operation;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class ScatTreeNodeImpl;
@@ -44,5 +45,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

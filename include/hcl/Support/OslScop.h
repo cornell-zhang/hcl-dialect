@@ -32,6 +32,7 @@ class Value;
 class FuncOp;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class ScopStmt;
@@ -159,5 +160,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

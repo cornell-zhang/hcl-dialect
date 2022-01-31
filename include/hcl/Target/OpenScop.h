@@ -29,6 +29,7 @@ class ModuleOp;
 struct LogicalResult;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class OslScop;
@@ -45,5 +46,6 @@ mlir::LogicalResult emitOpenScop(
 void registerToOpenScopTranslation();
 
 } // namespace hcl
+} // namespace mlir
 
 #endif // HCL_TARGET_OPENSCOP_H

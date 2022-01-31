@@ -11,7 +11,6 @@
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-//#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
@@ -54,7 +53,7 @@ public:
   /// The scop.stmt callee.
   mlir::FuncOp callee;
   /// The domain of the caller.
-  FlatAffineValueConstraints domain;
+  FlatAffineConstraints domain;
   /// Enclosing for/if operations for the caller.
   EnclosingOpList enclosingOps;
 };
@@ -85,15 +84,13 @@ static BlockArgument findTopLevelBlockArgument(mlir::Value val) {
     return val.cast<mlir::BlockArgument>();
 
   mlir::Operation *defOp = val.getDefiningOp();
-  /*
-  assert((defOp && isa<mlir::arith::IndexCastOp>(defOp)) &&
+  assert((defOp && isa<mlir::IndexCastOp>(defOp)) &&
          "Only allow defOp of a parameter to be an IndexCast.");
-  */
   return findTopLevelBlockArgument(defOp->getOperand(0));
 }
 
 static void
-promoteSymbolToTopLevel(mlir::Value val, FlatAffineValueConstraints &domain,
+promoteSymbolToTopLevel(mlir::Value val, FlatAffineConstraints &domain,
                         llvm::DenseMap<mlir::Value, mlir::Value> &symMap) {
   BlockArgument arg = findTopLevelBlockArgument(val);
   assert(isa<mlir::FuncOp>(arg.getOwner()->getParentOp()) &&
@@ -106,20 +103,9 @@ promoteSymbolToTopLevel(mlir::Value val, FlatAffineValueConstraints &domain,
   unsigned int pos;
   assert(domain.findId(val, &pos) &&
          "Provided value should be in the given domain");
-  domain.setValue(pos, arg);
+  domain.setIdValue(pos, arg);
 
   symMap[val] = arg;
-}
-
-static void reorderSymbolsByOperandId(FlatAffineValueConstraints &cst) {
-  // bubble sort
-  for (unsigned i = cst.getNumDimIds(); i < cst.getNumDimAndSymbolIds(); ++i)
-    for (unsigned j = i + 1; j < cst.getNumDimAndSymbolIds(); ++j) {
-      auto fst = cst.getValue(i).cast<BlockArgument>();
-      auto snd = cst.getValue(j).cast<BlockArgument>();
-      if (fst.getArgNumber() > snd.getArgNumber())
-        cst.swapId(i, j);
-    }
 }
 
 void ScopStmtImpl::initializeDomainAndEnclosingOps() {
@@ -128,20 +114,7 @@ void ScopStmtImpl::initializeDomainAndEnclosingOps() {
   getEnclosingAffineForAndIfOps(*caller, &enclosingOps);
 
   // The domain constraints can then be collected from the enclosing ops.
-  assert(succeeded(getIndexSet(enclosingOps, &domain)));
-
-  // Add additional indices that are in the top level block arguments.
-  for (Value arg : caller->getOperands()) {
-    if (!arg.getType().isIndex())
-      continue;
-    unsigned pos;
-    if (domain.findId(arg, &pos))
-      continue;
-
-    domain.appendSymbolId(1);
-    domain.dump();
-    domain.setValue(domain.getNumDimAndSymbolIds() - 1, arg);
-  }
+  getIndexSet(enclosingOps, &domain);
 
   // Symbol values, which could be a BlockArgument, or the result of DimOp or
   // IndexCastOp, or even an affine.apply. Here we limit the cases to be either
@@ -149,13 +122,10 @@ void ScopStmtImpl::initializeDomainAndEnclosingOps() {
   // should be a top-level BlockArgument.
   SmallVector<mlir::Value, 8> symValues;
   llvm::DenseMap<mlir::Value, mlir::Value> symMap;
-  domain.getValues(domain.getNumDimIds(), domain.getNumDimAndSymbolIds(),
-                   &symValues);
+  domain.getIdValues(domain.getNumDimIds(), domain.getNumDimAndSymbolIds(),
+                     &symValues);
   for (mlir::Value val : symValues)
     promoteSymbolToTopLevel(val, domain, symMap);
-
-  // Without this things like swapped-bounds.mlir in test cannot work.
-  reorderSymbolsByOperandId(domain);
 }
 
 void ScopStmtImpl::getArgsValueMapping(BlockAndValueMapping &argMap) {
@@ -175,9 +145,7 @@ ScopStmt::~ScopStmt() = default;
 ScopStmt::ScopStmt(ScopStmt &&) = default;
 ScopStmt &ScopStmt::operator=(ScopStmt &&) = default;
 
-FlatAffineValueConstraints *ScopStmt::getDomain() const {
-  return &(impl->domain);
-}
+FlatAffineConstraints *ScopStmt::getDomain() const { return &(impl->domain); }
 
 void ScopStmt::getEnclosingOps(llvm::SmallVectorImpl<mlir::Operation *> &ops,
                                bool forOnly) const {
@@ -198,10 +166,9 @@ static mlir::Value findBlockArg(mlir::Value v) {
     mlir::Operation *defOp = r.getDefiningOp();
     if (!defOp || defOp->getNumOperands() != 1)
       return nullptr;
-    /*
-    if (!isa<mlir::arith::IndexCastOp>(defOp))
+    if (!isa<mlir::IndexCastOp>(defOp))
       return nullptr;
-    */
+
     r = defOp->getOperand(0);
   }
 
@@ -211,8 +178,6 @@ static mlir::Value findBlockArg(mlir::Value v) {
 void ScopStmt::getAccessMapAndMemRef(mlir::Operation *op,
                                      mlir::AffineValueMap *vMap,
                                      mlir::Value *memref) const {
-  // Map from callee arguments to caller's. impl holds the callee and caller
-  // instances.
   BlockAndValueMapping argMap;
   impl->getArgsValueMapping(argMap);
 
@@ -227,11 +192,7 @@ void ScopStmt::getAccessMapAndMemRef(mlir::Operation *op,
   SmallVector<mlir::Value, 8> operands;
   for (mlir::Value operand : aMap.getOperands()) {
     mlir::Value origArg = findBlockArg(argMap.lookupOrDefault(operand));
-    assert(origArg && "The original value cannot be found as a block argument "
-                      "of the top function. Try -canonicalize.");
-    assert(origArg != operand &&
-           "The found original value shouldn't be the same as the operand.");
-
+    assert(origArg != operand);
     operands.push_back(origArg);
   }
 

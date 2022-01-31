@@ -13,7 +13,7 @@ using namespace llvm;
 namespace mlir {
 class Operation;
 struct LogicalResult;
-class FlatAffineValueConstraints;
+class FlatAffineConstraints;
 } // namespace mlir
 
 namespace hcl {
@@ -22,7 +22,7 @@ namespace hcl {
 /// OpenScop statement body. The underlying data structure is SetVector.
 class OslScopStmtOpSet {
 public:
-  using Set = llvm::SetVector<mlir::Operation *>;
+  using Set = SetVector<mlir::Operation *>;
   using iterator = Set::iterator;
   using reverse_iterator = Set::reverse_iterator;
 
@@ -50,11 +50,11 @@ public:
 
   /// The domain of a stmtOpSet is the union of all load/store operations in
   /// that set. We calculate such a union by concatenating the constraints of
-  /// domain defined by FlatAffineValueConstraints.
+  /// domain defined by FlatAffineConstraints.
   /// TODO: improve the interface.
-  mlir::LogicalResult getDomain(mlir::FlatAffineValueConstraints &domain);
+  mlir::LogicalResult getDomain(mlir::FlatAffineConstraints &domain);
   mlir::LogicalResult
-  getDomain(mlir::FlatAffineValueConstraints &domain,
+  getDomain(mlir::FlatAffineConstraints &domain,
             SmallVectorImpl<mlir::Operation *> &enclosingOps);
 
   /// Get the enclosing operations for the opSet.

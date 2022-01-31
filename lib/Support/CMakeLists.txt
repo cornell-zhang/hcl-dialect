@@ -12,6 +12,7 @@ add_mlir_library(MLIRHCLSupport
   MLIRHeteroCL
   MLIRMemRef
   MLIRAnalysis
+  MLIRLoopAnalysis
   # Needed for the OpenSCoPLib linkup.
   # Can link up other Polyhedral tools as needed
   libosl

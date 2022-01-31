@@ -8,7 +8,7 @@
 #include "hcl/Support/ScatteringUtils.h"
 #include "hcl/Support/ScopStmt.h"
 
-#include "osl/osl.h" // NOT SURE FROM WHERE IT WILL COME DEBJIT
+#include "osl/osl.h"
 
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
@@ -19,22 +19,19 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"
-#include "mlir/Support/LogicalResult.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "mlir/Support/LogicalResult.h"
 
 #include <vector>
 
 using namespace hcl;
 using namespace mlir;
 using namespace llvm;
-
-#define DEBUG_TYPE "oslscop"
 
 /// Create osl_vector from a STL vector. Since the input vector is of type
 /// int64_t, we can safely assume the osl_vector we will generate has 64 bits
@@ -140,11 +137,6 @@ void OslScop::addRelation(int target, int type, int numRows, int numCols,
     osl_relation_replace_vector(rel, vec, i);
   }
 
-  LLVM_DEBUG({
-    dbgs() << "Newly created relation: ";
-    osl_relation_dump(stderr, rel);
-  });
-
   // Append the newly created relation to a target linked list, or simply set it
   // to a relation pointer, which is indicated by the target argument.
   if (target == 0) {
@@ -169,14 +161,13 @@ void OslScop::addRelation(int target, int type, int numRows, int numCols,
   }
 }
 
-void OslScop::addContextRelation(FlatAffineValueConstraints cst) {
+void OslScop::addContextRelation(FlatAffineConstraints cst) {
   // Project out the dim IDs in the context with only the symbol IDs left.
   SmallVector<mlir::Value, 8> dimValues;
-  cst.getValues(0, cst.getNumDimIds(), &dimValues);
+  cst.getIdValues(0, cst.getNumDimIds(), &dimValues);
   for (mlir::Value dimValue : dimValues)
     cst.projectOut(dimValue);
-  if (cst.getNumDimAndSymbolIds() > 0)
-    cst.removeIndependentConstraints(0, cst.getNumDimAndSymbolIds());
+  cst.removeIndependentConstraints(0, cst.getNumDimAndSymbolIds());
 
   SmallVector<int64_t, 8> eqs, inEqs;
   // createConstraintRows(cst, eqs);
@@ -194,7 +185,7 @@ void OslScop::addContextRelation(FlatAffineValueConstraints cst) {
               cst.getNumSymbolIds(), eqs, inEqs);
 }
 
-void OslScop::addDomainRelation(int stmtId, FlatAffineValueConstraints &cst) {
+void OslScop::addDomainRelation(int stmtId, FlatAffineConstraints &cst) {
   SmallVector<int64_t, 8> eqs, inEqs;
   createConstraintRows(cst, eqs);
   createConstraintRows(cst, inEqs, /*isEq=*/false);
@@ -205,7 +196,7 @@ void OslScop::addDomainRelation(int stmtId, FlatAffineValueConstraints &cst) {
 }
 
 void OslScop::addScatteringRelation(int stmtId,
-                                    mlir::FlatAffineValueConstraints &cst,
+                                    mlir::FlatAffineConstraints &cst,
                                     llvm::ArrayRef<mlir::Operation *> ops) {
   // First insert the enclosing ops into the scat tree.
   SmallVector<unsigned, 8> scats;
@@ -253,32 +244,24 @@ void OslScop::addScatteringRelation(int stmtId,
 
 void OslScop::addAccessRelation(int stmtId, bool isRead, mlir::Value memref,
                                 AffineValueMap &vMap,
-                                FlatAffineValueConstraints &domain) {
-  FlatAffineValueConstraints cst;
+                                FlatAffineConstraints &domain) {
+  FlatAffineConstraints cst;
   // Insert the address dims and put constraints in it.
   createAccessRelationConstraints(vMap, cst, domain);
 
   // Create a new dim of memref and set its value to its corresponding ID.
   memRefIdMap.try_emplace(memref, memRefIdMap.size() + 1);
-  cst.insertDimId(0, memref);
-  cst.addBound(mlir::FlatAffineConstraints::BoundType::EQ, 0,
-               memRefIdMap[memref]);
-  // cst.setIdToConstant(0, memRefIdMap[memref]);
+  cst.addDimId(0, memref);
+  cst.setIdToConstant(0, memRefIdMap[memref]);
 
   SmallVector<int64_t, 8> eqs, inEqs;
   createConstraintRows(cst, eqs);
-  createConstraintRows(cst, inEqs, /*isEq=*/false);
+  // createConstraintRows(cst, inEqs, /*isEq=*/false);
   for (unsigned i = 0; i < eqs.size(); i++)
     eqs[i] = -eqs[i];
 
-  LLVM_DEBUG({
-    dbgs() << "Resolved access constraints: \n";
-    cst.dump();
-  });
-
   // Then put them into the scop as an ACCESS relation.
-  // Number of access indices + 1 for the memref ID.
-  unsigned numOutputDims = vMap.getNumResults() + 1;
+  unsigned numOutputDims = cst.getNumConstraints();
   unsigned numInputDims = cst.getNumDimIds() - numOutputDims;
   addRelation(stmtId + 1, isRead ? OSL_TYPE_READ : OSL_TYPE_WRITE,
               cst.getNumConstraints(), cst.getNumCols() + 1, numOutputDims,
@@ -456,7 +439,7 @@ void OslScop::addBodyExtension(int stmtId, const ScopStmt &stmt) {
   ss << "\n" << callee.getName() << "(";
 
   SmallVector<std::string, 8> ivs;
-  llvm::SetVector<unsigned> visited;
+  SetVector<unsigned> visited;
   for (unsigned i = 0; i < caller.getNumOperands(); i++) {
     mlir::Value operand = caller.getOperand(i);
     if (ivToId.find(operand) != ivToId.end()) {
@@ -485,19 +468,21 @@ void OslScop::addBodyExtension(int stmtId, const ScopStmt &stmt) {
 
   ss << ")";
 
+  llvm::errs() << body << "\n";
+
   addGeneric(stmtId + 1, "body", body);
 }
 
 void OslScop::initializeSymbolTable(mlir::FuncOp f,
-                                    FlatAffineValueConstraints *cst) {
+                                    FlatAffineConstraints *cst) {
   symbolTable.clear();
 
   unsigned numDimIds = cst->getNumDimIds();
   unsigned numSymbolIds = cst->getNumDimAndSymbolIds() - numDimIds;
 
   SmallVector<mlir::Value, 8> dimValues, symbolValues;
-  cst->getValues(0, numDimIds, &dimValues);
-  cst->getValues(numDimIds, cst->getNumDimAndSymbolIds(), &symbolValues);
+  cst->getIdValues(0, numDimIds, &dimValues);
+  cst->getIdValues(numDimIds, cst->getNumDimAndSymbolIds(), &symbolValues);
 
   // Setup the symbol table.
   for (unsigned i = 0; i < numDimIds; i++) {
@@ -550,7 +535,7 @@ bool OslScop::isConstantSymbol(llvm::StringRef name) const {
   return name.startswith("C");
 }
 
-void OslScop::createConstraintRows(FlatAffineValueConstraints &cst,
+void OslScop::createConstraintRows(FlatAffineConstraints &cst,
                                    SmallVectorImpl<int64_t> &rows, bool isEq) {
   unsigned numRows = isEq ? cst.getNumEqualities() : cst.getNumInequalities();
   unsigned numDimIds = cst.getNumDimIds();
@@ -580,32 +565,25 @@ void OslScop::createConstraintRows(FlatAffineValueConstraints &cst,
 }
 
 void OslScop::createAccessRelationConstraints(
-    mlir::AffineValueMap &vMap, mlir::FlatAffineValueConstraints &cst,
-    mlir::FlatAffineValueConstraints &domain) {
+    mlir::AffineValueMap &vMap, mlir::FlatAffineConstraints &cst,
+    mlir::FlatAffineConstraints &domain) {
   cst.reset();
   cst.mergeAndAlignIdsWithOther(0, &domain);
 
-  LLVM_DEBUG({
-    dbgs() << "Building access relation.\n"
-           << " + Domain:\n";
-    domain.dump();
-  });
-
   SmallVector<mlir::Value, 8> idValues;
-  domain.getAllValues(&idValues);
-  llvm::SetVector<mlir::Value> idValueSet;
+  domain.getAllIdValues(&idValues);
+  SetVector<mlir::Value> idValueSet;
   for (auto val : idValues)
     idValueSet.insert(val);
 
   for (auto operand : vMap.getOperands())
     if (!idValueSet.contains(operand)) {
-      llvm::errs() << "Operand missing: ";
-      operand.dump();
+      llvm::errs() << "Operand missing: " << operand << "\n";
     }
 
   // The results of the affine value map, which are the access addresses, will
   // be placed to the leftmost of all columns.
-  assert(cst.composeMap(&vMap).succeeded());
+  cst.composeMap(&vMap);
 }
 
 OslScop::SymbolTable *OslScop::getSymbolTable() { return &symbolTable; }

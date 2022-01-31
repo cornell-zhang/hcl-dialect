@@ -559,6 +559,24 @@ class TensorOp(ExprOp):
     @property
     def axis(self):
         return self._axis
+    
+    @property
+    def v(self):
+        if len(self.shape) == 1 and self.shape[0] == 1:
+            return self.__getitem__(0)
+        else:
+            raise RuntimeError(".v can only be used on mutable scalars")
+
+    @v.setter
+    def v(self, value):
+        """A syntactic sugar for setting the value of a single-element tensor.
+        This is the same as using `a[0]=value`, where a is a single-element tensor.
+        Parameters
+        ----------
+        value : Expr
+            The value to be set
+        """
+        self.__setitem__(0, value)
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):

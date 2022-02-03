@@ -65,6 +65,9 @@ def is_integer_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (FixedType, UFixedType))
 
+def is_index_type(dtype):
+    return isinstance(dtype, IndexType)
+
 
 def is_hcl_mlir_type(dtype):
     return (
@@ -73,7 +76,7 @@ def is_hcl_mlir_type(dtype):
 
 
 def get_mlir_type(dtype):
-    if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype):
+    if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype) or is_index_type(dtype):
         return dtype
     elif isinstance(dtype, str):
         with get_context() as ctx:
@@ -481,6 +484,8 @@ class ConstantOp(ExprOp):
             value_attr = IntegerAttr.get(i32, self.val)
         elif isinstance(self.dtype, F32Type):
             value_attr = FloatAttr.get(f32, self.val)
+        elif isinstance(self.dtype, IndexType):
+            value_attr = IntegerAttr.get(idx_type, self.val)
         else:
             raise RuntimeError("Type error")
         self.built_op = self.op(self.dtype, value_attr, ip=GlobalInsertionPoint.get())
@@ -518,7 +523,12 @@ class TensorSlice(ExprOp):
         if len(self.indices + indices) < len(self.shape):
             pass
         else:
-            return StoreOp(expr, self, self.indices + indices)
+            new_indices = []
+            for index in indices:
+                if isinstance(index, int):
+                    index = ConstantOp(idx_type, index)
+                new_indices.append(index)
+            return StoreOp(expr, self, self.indices + new_indices)
 
 
 class TensorOp(ExprOp):
@@ -549,6 +559,24 @@ class TensorOp(ExprOp):
     @property
     def axis(self):
         return self._axis
+    
+    @property
+    def v(self):
+        if len(self.shape) == 1 and self.shape[0] == 1:
+            return self.__getitem__(0)
+        else:
+            raise RuntimeError(".v can only be used on mutable scalars")
+
+    @v.setter
+    def v(self, value):
+        """A syntactic sugar for setting the value of a single-element tensor.
+        This is the same as using `a[0]=value`, where a is a single-element tensor.
+        Parameters
+        ----------
+        value : Expr
+            The value to be set
+        """
+        self.__setitem__(0, value)
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
@@ -575,7 +603,13 @@ class TensorOp(ExprOp):
             # TODO(Niansong): I think this is doable actually
             raise RuntimeError("Writing to a slice of tensor is not allowed.")
         else:
-            return StoreOp(expr, self, indices)
+            # format indices
+            new_indices = []
+            for index in indices:
+                if isinstance(index, int):
+                    index = ConstantOp(idx_type, index)
+                new_indices.append(index)
+            return StoreOp(expr, self, new_indices)
 
 
 #################################################

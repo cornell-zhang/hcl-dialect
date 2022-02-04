@@ -18,22 +18,24 @@ jobs:
           key: llvm-13-{{ checksum "CMakeLists.txt" }}
       - run:
           name: Build LLVM
-          command: |
-            echo $(pwd) && ls $(pwd)
+          command: | # /home/circleci/hcl-dialect-prototype
             if test -d llvm-project; then echo "LLVM exists"; \
               else git clone https://github.com/llvm/llvm-project.git; fi
             cd llvm-project
-            git checkout tags/llvmorg-13.0.0 -b v13.0.0
+            git checkout tags/llvmorg-13.0.0
             python3 -m pip install --upgrade pip
             python3 -m pip install -r mlir/python/requirements.txt
             mkdir -p build && cd build
-            cmake -G "Unix Makefiles" ../llvm -DLLVM_ENABLE_PROJECTS=mlir \
+            if test -d bin; \
+              then echo "Build completed"; \
+            else cmake -G "Unix Makefiles" ../llvm -DLLVM_ENABLE_PROJECTS=mlir \
                 -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
                 -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
                 -DLLVM_INSTALL_UTILS=ON -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-                -DPython3_EXECUTABLE=`which python3`
-            mkdir -p tools/mlir/python/dialects
-            make -j4
+                -DPython3_EXECUTABLE=`which python3` && \
+              mkdir -p tools/mlir/python/dialects && \
+              make -j4;
+            fi;
             export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
             cd ../..
       - save_cache:

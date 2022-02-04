@@ -88,23 +88,23 @@ bool applyHostXcelSeparation(
   // get call @top function in host main
   auto call_top = *(host_main.getOps<CallOp>().begin());
   // auto top_ret = *(std::prev(call_top.arg_operand_end()));
-  // only support one output for now
-  assert(subgraph_outputs.size() == 1);
+  // only support zero or one output for now
+  assert(subgraph_outputs.size() <= 1);
 
   // construct host module
   // should traverse in topological order
-  bool isBack = false;
+  bool isAfterXcelCall = false;
   for (auto callOp : callOrder) {
     std::string stage_name = callOp.getCallee().str().substr(6);
-    if (stage_name == subgraph_outputs[0])
-      isBack = true;
+    if (subgraph_outputs.size() > 0 && stage_name == subgraph_outputs[0])
+      isAfterXcelCall = true;
     // move stage from device to host
     std::string device = device_map[stage_name];
     if (device == "CPU" && funcMap.count(stage_name) > 0) {
       funcMap[stage_name]->moveBefore(host_main);
       // move array declaration from device to host
       auto stage_ret = *(std::prev(callMap[stage_name].arg_operand_end()));
-      if (!isBack) {
+      if (!isAfterXcelCall) {
         // return value should have been allocated
         stage_ret.getDefiningOp()->moveBefore(call_top);
         // move call function from device to host
@@ -158,17 +158,31 @@ bool applyHostXcelSeparation(
     }
   }
   // fix device return
-  for (auto output : subgraph_outputs) {
-    auto stage_ret = *(std::prev(callMap[output].arg_operand_end()));
+  if (subgraph_outputs.size() != 0) {
+    for (auto output : subgraph_outputs) {
+      auto stage_ret = *(std::prev(callMap[output].arg_operand_end()));
+      OpBuilder builder(device_retOp);
+      builder.create<ReturnOp>(device_retOp->getLoc(), stage_ret);
+      break;
+    }
+  } else {
     OpBuilder builder(device_retOp);
-    builder.create<ReturnOp>(device_retOp->getLoc(), stage_ret);
-    break;
+    builder.create<ReturnOp>(device_retOp->getLoc());
+    // erase block arguments
+    SmallVector<unsigned> argIdx;
+    // func.front() is a block
+    unsigned numArgs = top_func.front().getNumArguments();
+    for (unsigned i = 0; i < numArgs; ++i)
+      argIdx.push_back(i);
+    top_func.front().eraseArguments(argIdx);
+    // remove the host call
+    call_top.erase();
   }
   // remove original output
   device_retOp.erase();
   // set module name
   host_mod.setName("host");
-  device_mod.setName("device");
+  device_mod.setName("xcel");
   return true;
 }
 

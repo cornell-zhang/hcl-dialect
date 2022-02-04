@@ -10,8 +10,8 @@ jobs:
       - image: circleci/python:3.7  # primary container for the build job
     steps:
       - checkout  # checkout source code to working directory
-      - name: LLVM Build
-        run:
+      - run:
+          name: Build LLVM
           command: |
             git clone https://github.com/llvm/llvm-project.git
             cd llvm-project
@@ -28,8 +28,8 @@ jobs:
             make -j
             export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
             cd ..
-      - name: HCL-MLIR Build
-        run:
+      - run:
+          name: Build HCL-MLIR
           command: |
             export BUILD_DIR=$(pwd)/llvm-project/build && \
             export PREFIX=$(pwd)/llvm-project/build && \
@@ -42,7 +42,7 @@ jobs:
             mkdir -p include/hcl/Bindings/Python/affine && \ 
             make -j
             export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
-      - name: Test
-        run:
+      - run:
+          name: Test
           command: |
             cmake --build . --target check-hcl

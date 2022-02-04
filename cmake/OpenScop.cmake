@@ -27,5 +27,5 @@ ExternalProject_Add(
 )
 
 add_library(libosl SHARED IMPORTED)
-set_target_properties(libosl PROPERTIES IMPORTED_LOCATION "${OSL_LIB_DIR}/libosl.a")
+set_target_properties(libosl PROPERTIES IMPORTED_LOCATION "${OSL_LIB_DIR}/libosl.so")
 add_dependencies(libosl osl)

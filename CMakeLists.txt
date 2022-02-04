@@ -27,7 +27,7 @@ find_package(GMP REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lgmp" )
 
 # Openscop for OpenSCoP extraction from MLIR code (Affine as of now)
-include("${CMAKE_SOURCE_DIR}/cmake/OpenScop.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OpenScop.cmake")
 include_directories("${OSL_INCLUDE_DIR}")
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")

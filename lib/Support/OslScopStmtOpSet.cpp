@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScopStmtOpSet.cc --------------------------------------*- C++ -*-===//
 //
 // This file implements the class OslScopStmtOpSet.

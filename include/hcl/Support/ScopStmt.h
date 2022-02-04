@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- ScopStmt.h -----------------------------------------------*- C++ -*-===//
 //
 // This file declares the class ScopStmt.

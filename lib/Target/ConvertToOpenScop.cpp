@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- EmitOpenScop.cc ------------------------------------------*- C++ -*-===//
 //
 // This file implements the interfaces for emitting OpenScop representation from
@@ -94,7 +102,7 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
 
   /// Context constraints.
   FlatAffineConstraints ctx;
-
+  std::cout << "Point 1\n";
   // Initialize a new Scop per FuncOp. The osl_scop object within it will be
   // created. It doesn't contain any fields, and this may incur some problems,
   // which the validate function won't discover, e.g., no context will cause
@@ -104,11 +112,14 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
   OslScop::ScopStmtMap *scopStmtMap = scop->getScopStmtMap();
   auto *scopStmtNames = scop->getScopStmtNames();
 
+  std::cout << "Point 2\n";
   // Find all caller/callee pairs in which the callee has the attribute of name
   // SCOP_STMT_ATTR_NAME.
+
   buildScopStmtMap(f, scopStmtNames, scopStmtMap);
   if (scopStmtMap->empty())
     return nullptr;
+  std::cout << "Point 3\n";
 
   // Build context in it.
   buildScopContext(scop.get(), scopStmtMap, ctx);
@@ -117,7 +128,7 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
   // Counter for the statement inserted.
   unsigned stmtId = 0;
   for (const auto &scopStmtName : *scopStmtNames) {
-    // llvm::errs() << scopStmtName << "\n";
+    llvm::errs() << scopStmtName << "\n";
     const ScopStmt &stmt = scopStmtMap->find(scopStmtName)->second;
 
     // Collet the domain
@@ -145,6 +156,7 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
     });
 
     stmtId++;
+    std::cout << "stmtId: " << stmtId << "\n";
   }
 
   // Setup the symbol table within the OslScop, which builds the mapping from
@@ -239,122 +251,131 @@ hcl::createOpenScopFromFuncOp(FuncOp f, OslSymbolTable &symTable) {
   return OslScopBuilder().build(f);
 }
 
-namespace {
-
-/// This class maintains the state of a working emitter.
-class OpenScopEmitterState {
-public:
-  explicit OpenScopEmitterState(raw_ostream &os) : os(os) {}
-
-  /// The stream to emit to.
-  raw_ostream &os;
-
-  bool encounteredError = false;
-  unsigned currentIdent = 0; // TODO: may not need this.
-
-private:
-  OpenScopEmitterState(const OpenScopEmitterState &) = delete;
-  void operator=(const OpenScopEmitterState &) = delete;
-};
-
-/// Base class for various OpenScop emitters.
-class OpenScopEmitterBase {
-public:
-  explicit OpenScopEmitterBase(OpenScopEmitterState &state)
-      : state(state), os(state.os) {}
-
-  InFlightDiagnostic emitError(Operation *op, const Twine &message) {
-    state.encounteredError = true;
-    return op->emitError(message);
-  }
-
-  InFlightDiagnostic emitOpError(Operation *op, const Twine &message) {
-    state.encounteredError = true;
-    return op->emitOpError(message);
-  }
-
-  /// All of the mutable state we are maintaining.
-  OpenScopEmitterState &state;
-
-  /// The stream to emit to.
-  raw_ostream &os;
-
-private:
-  OpenScopEmitterBase(const OpenScopEmitterBase &) = delete;
-  void operator=(const OpenScopEmitterBase &) = delete;
-};
-
-/// Emit OpenScop representation from an MLIR module.
-class ModuleEmitter : public OpenScopEmitterBase {
-public:
-  explicit ModuleEmitter(OpenScopEmitterState &state)
-      : OpenScopEmitterBase(state) {}
-
-  /// Emit OpenScop definitions for all functions in the given module.
-  void emitMLIRModule(ModuleOp module,
-                      llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops);
-
-private:
-  /// Emit a OpenScop definition for a single function.
-  LogicalResult
-  emitFuncOp(FuncOp func,
-             llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops);
-};
-
-LogicalResult ModuleEmitter::emitFuncOp(
-    mlir::FuncOp func, llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops) {
-  OslSymbolTable symTable;
-  auto scop = createOpenScopFromFuncOp(func, symTable);
-  if (scop)
-    scops.push_back(std::move(scop));
-  return success();
-}
-
-/// The entry function to the current OpenScop emitter.
-void ModuleEmitter::emitMLIRModule(
-    ModuleOp module, llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops) {
-  // Emit a single OpenScop definition for each function.
-  for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<mlir::FuncOp>(op)) {
-      // Will only look at functions that are not attributed as scop.stmt
-      if (func->getAttr(SCOP_STMT_ATTR_NAME))
-        continue;
-      if (failed(emitFuncOp(func, scops))) {
-        state.encounteredError = true;
-        return;
-      }
-    }
-  }
-}
-} // namespace
-
-/// TODO: should decouple emitter and openscop builder.
-LogicalResult hcl::translateModuleToOpenScop(
-    ModuleOp module,
-    llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
-    llvm::raw_ostream &os) {
-  OpenScopEmitterState state(os);
-  ModuleEmitter(state).emitMLIRModule(module, scops);
-
-  return success();
-}
-
-LogicalResult hcl::emitOpenScop(ModuleOp module, llvm::raw_ostream &os) {
-  llvm::SmallVector<std::unique_ptr<OslScop>, 8> scops;
-
-  if (failed(translateModuleToOpenScop(module, scops, os)))
-    return failure();
-
-  for (auto &scop : scops)
-    scop->print();
-
-  return success();
-}
-
-void hcl::registerToOpenScopTranslation() {
-  static TranslateFromMLIRRegistration toOpenScop("export-scop", emitOpenScop, [&](DialectRegistry &registry){
-        registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
-                        tensor::TensorDialect, mlir::AffineDialect,
-                        mlir::math::MathDialect, mlir::memref::MemRefDialect>();
-      });
-}
+//namespace {
+//
+///// This class maintains the state of a working emitter.
+//class OpenScopEmitterState {
+//public:
+//  explicit OpenScopEmitterState(raw_ostream &os) : os(os) {}
+//
+//  /// The stream to emit to.
+//  raw_ostream &os;
+//
+//  bool encounteredError = false;
+//  unsigned currentIdent = 0; // TODO: may not need this.
+//
+//private:
+//  OpenScopEmitterState(const OpenScopEmitterState &) = delete;
+//  void operator=(const OpenScopEmitterState &) = delete;
+//};
+//
+///// Base class for various OpenScop emitters.
+//class OpenScopEmitterBase {
+//public:
+//  explicit OpenScopEmitterBase(OpenScopEmitterState &state)
+//      : state(state), os(state.os) {}
+//
+//  InFlightDiagnostic emitError(Operation *op, const Twine &message) {
+//    state.encounteredError = true;
+//    return op->emitError(message);
+//  }
+//
+//  InFlightDiagnostic emitOpError(Operation *op, const Twine &message) {
+//    state.encounteredError = true;
+//    return op->emitOpError(message);
+//  }
+//
+//  /// All of the mutable state we are maintaining.
+//  OpenScopEmitterState &state;
+//
+//  /// The stream to emit to.
+//  raw_ostream &os;
+//
+//private:
+//  OpenScopEmitterBase(const OpenScopEmitterBase &) = delete;
+//  void operator=(const OpenScopEmitterBase &) = delete;
+//};
+//
+///// Emit OpenScop representation from an MLIR module.
+//class ModuleEmitter : public OpenScopEmitterBase {
+//public:
+//  explicit ModuleEmitter(OpenScopEmitterState &state)
+//      : OpenScopEmitterBase(state) {}
+//
+//  /// Emit OpenScop definitions for all functions in the given module.
+//  void emitMLIRModule(ModuleOp module,
+//                      llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops);
+//
+//private:
+//  /// Emit a OpenScop definition for a single function.
+//  LogicalResult
+//  emitFuncOp(FuncOp func,
+//             llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops);
+//};
+//
+//LogicalResult ModuleEmitter::emitFuncOp(
+//    mlir::FuncOp func, llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops) {
+//  OslSymbolTable symTable;
+//  //auto scop = createOpenScopFromFuncOp(func, symTable);
+//  std::unique_ptr<OslScop> scop = createOpenScopFromFuncOp(func, symTable);
+//  if (!scop)
+//      std::cout << "EMPTY\n";
+//  if (scop) {
+//    osl_scop_print(stdout, scop->get());
+//    scops.push_back(std::move(scop));
+//  }
+//  return success();
+//}
+//
+///// The entry function to the current OpenScop emitter.
+//void ModuleEmitter::emitMLIRModule(
+//    ModuleOp module, llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops) {
+//  // Emit a single OpenScop definition for each function.
+//  for (auto &op : *module.getBody()) {
+//    if (auto func = dyn_cast<mlir::FuncOp>(op)) {
+//      // Will only look at functions that are not attributed as scop.stmt
+//      if (func->getAttr(SCOP_STMT_ATTR_NAME))
+//        continue;
+//      if (failed(emitFuncOp(func, scops))) {
+//        state.encounteredError = true;
+//        return;
+//      }
+//    }
+//  }
+//}
+//} // namespace
+//
+///// TODO: should decouple emitter and openscop builder.
+//LogicalResult hcl::translateModuleToOpenScop(
+//    ModuleOp module,
+//    llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
+//    llvm::raw_ostream &os) {
+//  OpenScopEmitterState state(os);
+//  ModuleEmitter(state).emitMLIRModule(module, scops);
+//
+//  std::cout << "In translateModuleToOpenScop\n";
+//
+//  return success();
+//}
+//
+//LogicalResult hcl::emitOpenScop(ModuleOp module, llvm::raw_ostream &os) {
+//  llvm::SmallVector<std::unique_ptr<OslScop>, 8> scops;
+//
+//  if (failed(translateModuleToOpenScop(module, scops, os)))
+//    return failure();
+//
+//  for (auto &scop : scops)
+//    scop->print();
+//
+//  std::cout << "After scop print\n";
+//
+//  return success();
+//}
+//
+//void hcl::registerToOpenScopTranslation() {
+//  static TranslateFromMLIRRegistration toOpenScop("export-scop", emitOpenScop, [&](DialectRegistry &registry){
+//        registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
+//                        tensor::TensorDialect, mlir::AffineDialect,
+//                        mlir::math::MathDialect, mlir::memref::MemRefDialect>();
+//      });
+//}

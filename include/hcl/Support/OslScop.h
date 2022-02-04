@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScop.h ------------------------------------------------*- C++ -*-===//
 //
 // This file declares the C++ wrapper for the Scop struct in OpenScop.

@@ -44,12 +44,13 @@ static bool loopTransformation(PyModule &pymod) {
   return applyLoopTransformation(mod);
 }
 
-static bool hostXcelSeparation(PyModule &host, PyModule &device,
-                               py::dict pydevice_map, py::list pygraph_roots,
-                               py::dict subgraph) {
+static bool hostXcelSeparation(PyModule &pyhost, PyModule &pyxcel,
+                               PyModule &pyextern, py::dict pydevice_map,
+                               py::list pygraph_roots, py::dict subgraph) {
   py::gil_scoped_release();
-  auto host_mod = unwrap(host.get());
-  auto device_mod = unwrap(device.get());
+  auto host_mod = unwrap(pyhost.get());
+  auto xcel_mod = unwrap(pyxcel.get());
+  auto extern_mod = unwrap(pyextern.get());
   std::map<std::string, std::string> device_map;
   for (auto item : pydevice_map) {
     device_map[item.first.cast<std::string>()] =
@@ -67,8 +68,8 @@ static bool hostXcelSeparation(PyModule &host, PyModule &device,
   for (auto output : subgraph["outputs"]) {
     outputs.push_back(output.cast<std::string>());
   }
-  return applyHostXcelSeparation(host_mod, device_mod, device_map, graph_roots,
-                                 inputs, outputs);
+  return applyHostXcelSeparation(host_mod, xcel_mod, extern_mod, device_map,
+                                 graph_roots, inputs, outputs);
 }
 
 //===----------------------------------------------------------------------===//

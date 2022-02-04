@@ -37,6 +37,17 @@ void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
                  StringAttr::get(forOp->getContext(), stage_name));
 }
 
+std::vector<std::string> hcl::split_names(const std::string &arg_names) {
+  std::stringstream ss(arg_names);
+  std::vector<std::string> args;
+  while (ss.good()) {
+    std::string substr;
+    getline(ss, substr, ',');
+    args.push_back(substr);
+  }
+  return args;
+}
+
 /// Parse other attributes.
 SmallVector<int64_t, 8> hcl::getIntArrayAttrValue(Operation *op,
                                                   StringRef name) {
@@ -502,8 +513,8 @@ bool hcl::checkDependence(Operation *A, Operation *B) {
 }
 
 static bool gatherLoadOpsAndStoreOps(AffineForOp forOp,
-                                 SmallVectorImpl<Operation *> &loadOps,
-                                 SmallVectorImpl<Operation *> &storeOps) {
+                                     SmallVectorImpl<Operation *> &loadOps,
+                                     SmallVectorImpl<Operation *> &storeOps) {
   bool hasIfOp = false;
   forOp.walk([&](Operation *op) {
     if (auto load = dyn_cast<AffineReadOpInterface>(op))

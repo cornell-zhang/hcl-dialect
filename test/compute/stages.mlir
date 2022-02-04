@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @matrix_multiply(%A: tensor<1024x1024xf32>, %B: tensor<1024x1024xf32>, %C: tensor<1024x1024xf32>)
+    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
         %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
@@ -14,12 +14,12 @@ module {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
+                    %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
+                    %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
+                    %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
-                    tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                    affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 // CHECK: } {loop_name = "j"}
                 } { loop_name = "k" }
             // CHECK: } {loop_name = "k"}
@@ -29,12 +29,12 @@ module {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
-                    %a = tensor.extract %A[%i, %k] : tensor<1024x1024xf32>
-                    %b = tensor.extract %B[%k, %j] : tensor<1024x1024xf32>
-                    %c = tensor.extract %C[%i, %j] : tensor<1024x1024xf32>
+                    %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
+                    %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
+                    %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
                     %prod = mulf %a, %b : f32
                     %sum = addf %prod, %c: f32
-                    tensor.insert %sum into %C[%i, %j] : tensor<1024x1024xf32>
+                    affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 // CHECK: } {loop_name = "i1"}
                 } { loop_name = "k1" }
             // CHECK: } {loop_name = "j1"}

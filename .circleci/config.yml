@@ -45,7 +45,6 @@ jobs:
       - run:
           name: Build HCL-MLIR
           command: |
-            echo $(pwd) && ls $(pwd)
             export BUILD_DIR=$(pwd)/llvm-project/build
             export PREFIX=$(pwd)/llvm-project/build
             mkdir -p build && cd build
@@ -60,4 +59,5 @@ jobs:
       - run:
           name: Test
           command: |
+            cd build
             cmake --build . --target check-hcl

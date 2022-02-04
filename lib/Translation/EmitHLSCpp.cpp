@@ -131,7 +131,7 @@ public:
   raw_ostream &os;
 
   /// Value name management methods.
-  SmallString<8> addName(Value val, bool isPtr = false);
+  SmallString<8> addName(Value val, bool isPtr = false, std::string name = "");
 
   SmallString<8> addAlias(Value val, Value alias);
 
@@ -151,14 +151,19 @@ private:
 } // namespace
 
 // TODO: update naming rule.
-SmallString<8> HCLEmitterBase::addName(Value val, bool isPtr) {
+SmallString<8> HCLEmitterBase::addName(Value val, bool isPtr,
+                                       std::string name) {
   assert(!isDeclared(val) && "has been declared before.");
 
   SmallString<8> valName;
   if (isPtr)
     valName += "*";
 
-  valName += StringRef("v" + std::to_string(state.nameTable.size()));
+  if (name != "") {
+    valName += StringRef(name + std::to_string(state.nameTable.size()));
+  } else {
+    valName += StringRef("v" + std::to_string(state.nameTable.size()));
+  }
   state.nameTable[val] = valName;
 
   return valName;
@@ -257,8 +262,9 @@ public:
 
 private:
   /// C++ component emitters.
-  void emitValue(Value val, unsigned rank = 0, bool isPtr = false);
-  void emitArrayDecl(Value array, bool isFunc = false);
+  void emitValue(Value val, unsigned rank = 0, bool isPtr = false,
+                 std::string name = "");
+  void emitArrayDecl(Value array, bool isFunc = false, std::string name = "");
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
   void emitInfoAndNewLine(Operation *op);
@@ -647,12 +653,12 @@ void ModuleEmitter::emitScfYield(scf::YieldOp op) {
 void ModuleEmitter::emitAffineFor(AffineForOp op) {
   indent();
   auto iterVar = op.getInductionVar();
+  std::string loop_name = "";
   if (op->hasAttr("loop_name")) { // loop label
-    auto loop_name =
-        op->getAttr("loop_name").cast<StringAttr>().getValue().str();
+    loop_name = op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
-    os << "l_" << loop_name << "_";
-    os << addName(iterVar, false);
+    os << "l_";
+    os << addName(iterVar, false, loop_name);
     os << ": ";
   }
   os << "for (";
@@ -661,7 +667,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   if (op->hasAttr("loop_name")) {
     os << getTypeName(iterVar) << " ";
   }
-  emitValue(iterVar);
+  emitValue(iterVar, 0, false, loop_name);
   os << " = ";
   auto lowerMap = op.getLowerBoundMap();
   AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
@@ -681,7 +687,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   os << "; ";
 
   // Emit upper bound.
-  emitValue(iterVar);
+  emitValue(iterVar, 0, false, loop_name);
   os << " < ";
   auto upperMap = op.getUpperBoundMap();
   AffineExprEmitter upperEmitter(state, upperMap.getNumDims(),
@@ -701,7 +707,7 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   os << "; ";
 
   // Emit increase step.
-  emitValue(iterVar);
+  emitValue(iterVar, 0, false, loop_name);
   os << " += " << op.getStep() << ") {";
   emitInfoAndNewLine(op);
 
@@ -855,15 +861,19 @@ void ModuleEmitter::emitAffineMaxMin(OpType op, const char *syntax) {
 
 void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   indent();
+  std::string load_from_name = "";
+  if (op->hasAttr("from")) {
+    load_from_name = op->getAttr("from").cast<StringAttr>().getValue().str();
+  }
   emitValue(op.getResult());
   os << " = ";
   auto memref = op.getMemRef();
-  emitValue(memref);
+  emitValue(memref, 0, false, load_from_name);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
   if (attr &&
       attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".read(); // ";
-    emitValue(memref); // comment
+    emitValue(memref, 0, false, load_from_name); // comment
   }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
@@ -879,15 +889,19 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
 
 void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   indent();
+  std::string store_to_name = "";
+  if (op->hasAttr("to")) {
+    store_to_name = op->getAttr("to").cast<StringAttr>().getValue().str();
+  }
   auto memref = op.getMemRef();
-  emitValue(memref);
+  emitValue(memref, 0, false, store_to_name);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
   if (attr &&
       attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
     os << ".write(";
     emitValue(op.getValueToStore());
     os << "); // ";
-    emitValue(memref); // comment
+    emitValue(memref, 0, false, store_to_name); // comment
   }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
@@ -1022,8 +1036,14 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   if (!op.getType().hasStaticShape())
     emitError(op, "is unranked or has dynamic shape.");
 
+  std::string name;
+  if (op->hasAttr("name")) {
+    auto attr = op->getAttr("name").template cast<StringAttr>();
+    name = attr.getValue().str();
+  }
+
   indent();
-  emitArrayDecl(op.getResult());
+  emitArrayDecl(op.getResult(), false, name);
   os << ";";
   emitInfoAndNewLine(op);
   emitArrayDirectives(op.getResult());
@@ -1330,7 +1350,8 @@ void ModuleEmitter::emitCall(CallOp op) {
 }
 
 /// C++ component emitters.
-void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
+void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
+                              std::string name) {
   assert(!(rank && isPtr) && "should be either an array or a pointer.");
 
   // Value has been declared before or is a constant number.
@@ -1343,13 +1364,17 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr) {
 
   os << getTypeName(val) << " ";
 
-  // Add the new value to nameTable and emit its name.
-  os << addName(val, isPtr);
-  for (unsigned i = 0; i < rank; ++i)
-    os << "[iv" << i << "]";
+  if (name == "") {
+    // Add the new value to nameTable and emit its name.
+    os << addName(val, isPtr);
+    for (unsigned i = 0; i < rank; ++i)
+      os << "[iv" << i << "]";
+  } else {
+    os << addName(val, isPtr, name);
+  }
 }
 
-void ModuleEmitter::emitArrayDecl(Value array, bool isFunc) {
+void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
   assert(!isDeclared(array) && "has been declared before.");
 
   auto arrayType = array.getType().cast<ShapedType>();
@@ -1370,20 +1395,20 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc) {
       }
 
       // Add the new value to nameTable and emit its name.
-      os << addName(array, /*isPtr=*/false);
+      os << addName(array, /*isPtr=*/false, name);
       // Add original array declaration as comment
       os << " /* ";
-      emitValue(array);
+      emitValue(array, 0, false, name);
       for (auto &shape : arrayType.getShape())
         os << "[" << shape << "]";
       os << " */";
     } else {
-      emitValue(array);
+      emitValue(array, 0, false, name);
       for (auto &shape : arrayType.getShape())
         os << "[" << shape << "]";
     }
   } else
-    emitValue(array, /*rank=*/0, /*isPtr=*/true);
+    emitValue(array, /*rank=*/0, /*isPtr=*/true, name);
 }
 
 unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
@@ -1661,12 +1686,32 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   // Emit input arguments.
   unsigned argIdx = 0;
+  std::vector<std::string> input_args;
+  if (func->hasAttr("inputs")) {
+    std::string input_names =
+        func->getAttr("inputs").cast<StringAttr>().getValue().str();
+    input_args = split_names(input_names);
+  }
+  std::string output_names;
+  if (func->hasAttr("outputs")) {
+    output_names =
+        func->getAttr("outputs").cast<StringAttr>().getValue().str();
+    // suppose only one output
+    input_args.push_back(output_names);
+  }
   for (auto &arg : func.getArguments()) {
     indent();
-    if (arg.getType().isa<ShapedType>())
-      emitArrayDecl(arg, true);
-    else
-      emitValue(arg);
+    if (input_args.size() == 0) {
+      if (arg.getType().isa<ShapedType>())
+        emitArrayDecl(arg, true);
+      else
+        emitValue(arg);
+    } else {
+      if (arg.getType().isa<ShapedType>())
+        emitArrayDecl(arg, true, input_args[argIdx]);
+      else
+        emitValue(arg, 0, false, input_args[argIdx]);
+    }
 
     portList.push_back(arg);
     if (argIdx++ != func.getNumArguments() - 1)
@@ -1680,13 +1725,21 @@ void ModuleEmitter::emitFunction(FuncOp func) {
       if (std::find(args.begin(), args.end(), result) == args.end()) {
         os << ",\n";
         indent();
-        // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-        // index, index. However, typically this should not happen.
-        if (result.getType().isa<ShapedType>())
-          emitArrayDecl(result, true);
-        else
-          // In Vivado HLS, pointer indicates the value is an output.
-          emitValue(result, /*rank=*/0, /*isPtr=*/true);
+        if (output_names != "") {
+          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
+          // index, index. However, typically this should not happen.
+          if (result.getType().isa<ShapedType>())
+            emitArrayDecl(result, true);
+          else
+            // In Vivado HLS, pointer indicates the value is an output.
+            emitValue(result, /*rank=*/0, /*isPtr=*/true);
+        } else {
+          if (result.getType().isa<ShapedType>())
+            emitArrayDecl(result, true, output_names);
+          else
+            // In Vivado HLS, pointer indicates the value is an output.
+            emitValue(result, /*rank=*/0, /*isPtr=*/true, output_names);
+        }
 
         portList.push_back(result);
       }

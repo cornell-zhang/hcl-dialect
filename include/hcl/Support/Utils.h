@@ -36,6 +36,9 @@ bool setLoopNames(SmallVector<AffineForOp, 6> &forOps,
                   const SmallVector<std::string, 6> &nameArr);
 bool setIntAttr(SmallVector<AffineForOp, 6> &forOps,
                 const SmallVector<int, 6> &attr_arr, std::string attr_name);
+
+std::vector<std::string> split_names(const std::string &arg_names);
+
 //===----------------------------------------------------------------------===//
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//

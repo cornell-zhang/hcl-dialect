@@ -1,0 +1,48 @@
+# Python CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+
+version: 2
+jobs:
+  build:
+    working_directory: ~/hcl-dialect-prototype
+    docker:
+      - image: circleci/python:3.7  # primary container for the build job
+    steps:
+      - checkout  # checkout source code to working directory
+      - name: LLVM Build
+        run:
+          command: |
+            git clone https://github.com/llvm/llvm-project.git
+            cd llvm-project
+            git checkout tags/llvmorg-13.0.0 -b v13.0.0
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r mlir/python/requirements.txt
+            mkdir build && cd build
+            cmake -G "Unix Makefiles" ../llvm -DLLVM_ENABLE_PROJECTS=mlir \
+                -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+                -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+                -DLLVM_INSTALL_UTILS=ON -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+                -DPython3_EXECUTABLE=`which python3`
+            mkdir tools/mlir/python/dialects
+            make -j
+            export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
+            cd ..
+      - name: HCL-MLIR Build
+        run:
+          command: |
+            export BUILD_DIR=$(pwd)/llvm-project/build && \
+            export PREFIX=$(pwd)/llvm-project/build && \
+            cd hcl-dialect-prototype && mkdir build && cd build && \
+            cmake -G "Unix Makefiles" .. \
+                -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
+                -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
+                -DPYTHON_BINDING=ON \
+                -DPython3_EXECUTABLE=`which python3` && \
+            mkdir -p include/hcl/Bindings/Python/affine && \ 
+            make -j
+            export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
+      - name: Test
+        run:
+          command: |
+            cmake --build . --target check-hcl

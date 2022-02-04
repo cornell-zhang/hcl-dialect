@@ -102,7 +102,6 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
 
   /// Context constraints.
   FlatAffineConstraints ctx;
-  std::cout << "Point 1\n";
   // Initialize a new Scop per FuncOp. The osl_scop object within it will be
   // created. It doesn't contain any fields, and this may incur some problems,
   // which the validate function won't discover, e.g., no context will cause
@@ -112,14 +111,12 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
   OslScop::ScopStmtMap *scopStmtMap = scop->getScopStmtMap();
   auto *scopStmtNames = scop->getScopStmtNames();
 
-  std::cout << "Point 2\n";
   // Find all caller/callee pairs in which the callee has the attribute of name
   // SCOP_STMT_ATTR_NAME.
 
   buildScopStmtMap(f, scopStmtNames, scopStmtMap);
   if (scopStmtMap->empty())
     return nullptr;
-  std::cout << "Point 3\n";
 
   // Build context in it.
   buildScopContext(scop.get(), scopStmtMap, ctx);

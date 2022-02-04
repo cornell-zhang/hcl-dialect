@@ -77,8 +77,7 @@ mkdir build && cd build
 cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
-   -DPYTHON_BINDING=OFF \
-   -DLLVM_USE_LINKER=lld
+   -DPYTHON_BINDING=OFF
 make -j
 ```
 
@@ -88,7 +87,6 @@ cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
-   -DLLVM_USE_LINKER=lld \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
 mkdir include/hcl/Bindings/Python/affine # Makefile bug
 make -j

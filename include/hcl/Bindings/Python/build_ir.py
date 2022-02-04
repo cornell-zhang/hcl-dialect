@@ -21,9 +21,9 @@ i32 = IntegerType.get_signless(32, context=global_ctx)
 i64 = IntegerType.get_signless(64, context=global_ctx)
 idx_type = IndexType.get(context=global_ctx)
 
-ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount")
-ImperativeLoopDepth = ContextVar("ImperativeLoopDepth")
-StageName = ContextVar("StageName")
+ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount", default=1)
+ImperativeLoopDepth = ContextVar("ImperativeLoopDepth", default=0)
+StageName = ContextVar("StageName", default="")
 
 register_dialects(global_ctx)
 

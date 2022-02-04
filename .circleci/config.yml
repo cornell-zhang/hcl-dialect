@@ -11,6 +11,10 @@ jobs:
     steps:
       - checkout  # checkout source code to working directory
       - run:
+          name: Install dependency
+          command: |
+            apt-get update -y && apt-get install -y python3-devel git wget cmake vim gdb gcc gcc-c++ kernel-devel make
+      - run:
           name: Build LLVM
           command: |
             git clone https://github.com/llvm/llvm-project.git
@@ -27,7 +31,7 @@ jobs:
             mkdir tools/mlir/python/dialects
             make -j
             export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
-            cd ..
+            cd ../..
       - run:
           name: Build HCL-MLIR
           command: |

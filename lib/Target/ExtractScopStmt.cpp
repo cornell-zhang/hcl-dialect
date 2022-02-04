@@ -48,6 +48,7 @@
 #include "osl/osl.h"
 
 #include <iostream>
+#include <fstream>
 
 #define DEBUG_TYPE "extract-scop-stmt"
 
@@ -486,10 +487,12 @@ static mlir::FuncOp plutoTransform(mlir::FuncOp f) {
     return nullptr;
   if (scop->getNumStatements() == 0)
     return nullptr;
-    
-  std::cout << "DEBJIT PRINTS\n";
-  osl_scop_print(stdout, scop->get());
-  std::cout << "DEBJIT PRINTS\n";
+  
+  // Print generated OpenSCoP in a file
+  FILE *scopfile;
+  scopfile = fopen("hcl.openscop", "w");
+  osl_scop_print(scopfile, scop->get());
+  fclose(scopfile);
 
   mlir::FuncOp g;
   return g;

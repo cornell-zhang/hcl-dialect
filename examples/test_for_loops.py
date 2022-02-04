@@ -42,9 +42,9 @@ with Context() as ctx, Location.unknown():
                 with InsertionPoint(for_j.body):
                     for_k = hcl_mlir.make_constant_for(0, 1024, name="k")
                     with InsertionPoint(for_k.body):
-                        a = tensor.ExtractOp(f32, A, [for_i.induction_variable, for_k.induction_variable])
-                        b = tensor.ExtractOp(f32, B, [for_k.induction_variable, for_j.induction_variable])
-                        c = tensor.ExtractOp(f32, C, [for_i.induction_variable, for_j.induction_variable])
+                        a = affine.loadOp(f32, A, [for_i.induction_variable, for_k.induction_variable])
+                        b = affine.loadOp(f32, B, [for_k.induction_variable, for_j.induction_variable])
+                        c = affine.loadOp(f32, C, [for_i.induction_variable, for_j.induction_variable])
                         prod = std.MulFOp(f32, a.result, b.result)
                         sum_ = std.AddFOp(f32, prod.result, c.result)
                         tensor.InsertOp(f32, sum_.result, C, [for_i.induction_variable, for_j.induction_variable])

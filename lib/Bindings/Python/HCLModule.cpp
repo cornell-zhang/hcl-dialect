@@ -18,6 +18,7 @@
 #include "hcl/Transforms/HostXcelSeparation.h"
 #include "hcl/Transforms/LoopTransformations.h"
 #include "mlir-c/Bindings/Python/Interop.h"
+#include "mlir-c/Dialect/Standard.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/CAPI/IR.h"
 
@@ -105,11 +106,13 @@ PYBIND11_MODULE(_hcl, m) {
   // register passes
   hclMlirRegisterAllPasses();
 
+  // register dialects
   m.def("register_dialects", [](py::object capsule) {
     // Get the MlirContext capsule from PyMlirContext capsule.
     auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
     MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
 
+    // hclMlirRegisterAllDialects(context);
     MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
     mlirDialectHandleRegisterDialect(hcl, context);
     mlirDialectHandleLoadDialect(hcl, context);

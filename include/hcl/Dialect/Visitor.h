@@ -56,6 +56,8 @@ public:
             SignedFloorDivIOp,
             // Integer binary expressions.
             CmpIOp, AddIOp, SubIOp, MulIOp,
+            // Logical expressions.
+            AndOp, OrOp, XOrOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp,
@@ -163,6 +165,11 @@ public:
   HANDLE(MulIOp);
   HANDLE(SignedDivIOp);
   HANDLE(SignedFloorDivIOp);
+
+  // Logical expressions.
+  HANDLE(AndOp);
+  HANDLE(OrOp);
+  HANDLE(XOrOp);
 
   // Special operations.
   HANDLE(CallOp);

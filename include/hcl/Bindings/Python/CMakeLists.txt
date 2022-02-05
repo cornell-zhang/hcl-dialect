@@ -71,6 +71,7 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   PRIVATE_LINK_LIBS
     MLIRCAPIDebug
     MLIRCAPIIR
+    #MLIRCAPIStandard
     MLIRCAPIRegistration
     LLVMSupport
 )

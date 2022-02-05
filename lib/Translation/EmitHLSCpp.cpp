@@ -473,6 +473,11 @@ public:
   }
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
+  /// Logical expressions.
+  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
+  bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
+  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
+
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }

@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    // CHECK: func @test(%arg0: memref<1024x512x!hcl.fixed<12, 6>>, %arg1: memref<512x1024x!hcl.ufixed<12, 2>>) {
+    // CHECK: func @test(%arg0: memref<1024x512x!hcl.Fixed<12, 6>>, %arg1: memref<512x1024x!hcl.UFixed<12, 2>>) {
     func @test(%A: memref<1024x512x!hcl.Fixed<12,6>>, %B: memref<512x1024x!hcl.UFixed<12,2>>)
     {
         affine.for %i = 0 to 1024 {

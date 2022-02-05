@@ -65,6 +65,7 @@ def is_integer_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (FixedType, UFixedType))
 
+
 def is_index_type(dtype):
     return isinstance(dtype, IndexType)
 
@@ -76,7 +77,12 @@ def is_hcl_mlir_type(dtype):
 
 
 def get_mlir_type(dtype):
-    if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype) or is_index_type(dtype):
+    if (
+        is_integer_type(dtype)
+        or is_floating_point_type(dtype)
+        or is_fixed_type(dtype)
+        or is_index_type(dtype)
+    ):
         return dtype
     elif isinstance(dtype, str):
         with get_context() as ctx:
@@ -491,19 +497,22 @@ class ConstantOp(ExprOp):
         self.built_op = self.op(self.dtype, value_attr, ip=GlobalInsertionPoint.get())
         return self.built_op
 
+
 class TensorSlice(ExprOp):
     def __init__(self, shape, op, dtype, indices, name=None):
         super().__init__(op)
         self.shape = shape
         self.dtype = dtype
-        self.name  = name
+        self.name = name
         self.indices = indices
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.shape):
-            return TensorSlice(self.shape, self.dtype, self.indices + indices, self.name)
+            return TensorSlice(
+                self.shape, self.dtype, self.indices + indices, self.name
+            )
         else:
             # format indices
             new_indices = []
@@ -559,7 +568,7 @@ class TensorOp(ExprOp):
     @property
     def axis(self):
         return self._axis
-    
+
     @property
     def v(self):
         if len(self.shape) == 1 and self.shape[0] == 1:
@@ -777,17 +786,17 @@ class RightShiftOp(BinaryOp):
 
 class AndOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.AndOp, i32, lhs, rhs)
+        super().__init__(std.AndOp, bool, lhs, rhs)
 
 
 class OrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.OrOp, i32, lhs, rhs)
+        super().__init__(std.OrOp, bool, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.XOrOp, i32, lhs, rhs)
+        super().__init__(std.XOrOp, bool, lhs, rhs)
 
 
 class NegOp(UnaryOp):
@@ -874,6 +883,13 @@ class LoadOp(ExprOp):
 class StoreOp(ExprOp):
     def __init__(self, val, to_tensor, indices):
         super().__init__(affine.AffineStoreOp)
+        if val.dtype != to_tensor.dtype:
+            print(
+                "Warning: store operation has different input types. Cast from {} to {}.".format(
+                    val.dtype, to_tensor.dtype
+                )
+            )
+            val = CastOp(val, to_tensor.dtype)
         self.val = val
         self.to_tensor = to_tensor
         self.indices = indices
@@ -910,6 +926,36 @@ class CallOp(ExprOp):
             self.inputs,
             ip=GlobalInsertionPoint.get(),
         )
+        return self.built_op
+
+
+class SelectOp(ExprOp):
+    """Ternary operation"""
+
+    def __init__(self, cond, true_val, false_val):
+        super().__init__(std.SelectOp)
+        if type(true_val.dtype) != type(false_val.dtype):
+            raise RuntimeError(
+                "SelectOp should have two same type inputs. Got {} and {}".format(
+                    true_val.dtype, false_val.dtype
+                )
+            )
+        self.dtype = true_val.dtype
+        self.cond = cond
+        self.true_val = true_val
+        self.false_val = false_val
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype,
+            self.cond.result,
+            self.true_val.result,
+            self.false_val.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
 
 
 class SumOp(ExprOp):
@@ -927,6 +973,8 @@ class ASTBuilder:
             return self.visit_unary_op(expr)
         elif isinstance(expr, BinaryOp):
             return self.visit_binary_op(expr)
+        elif isinstance(expr, SelectOp):
+            return self.visit_ternary_op(expr)
         elif isinstance(expr, LoadOp):
             return self.visit_load_op(expr)
         elif isinstance(expr, StoreOp):
@@ -945,6 +993,12 @@ class ASTBuilder:
     def visit_binary_op(self, expr):
         self.visit(expr.lhs)
         self.visit(expr.rhs)
+        return expr.build()
+
+    def visit_ternary_op(self, expr):
+        self.visit(expr.cond)
+        self.visit(expr.true_val)
+        self.visit(expr.false_val)
         return expr.build()
 
     def visit_load_op(self, expr):
@@ -974,6 +1028,7 @@ class ASTBuilder:
         rv = memref.AllocOp(
             memref_type, None, None, None, ip=GlobalInsertionPoint.get()
         )
+        rv.attributes["name"] = StringAttr.get("sum_rv")
         # intialize the single-element register to zero
         zero_idx = std.ConstantOp(
             idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
@@ -989,12 +1044,13 @@ class ASTBuilder:
         else:
             raise RuntimeError("Unrecognized data type in reduction sum op")
 
-        affine.AffineStoreOp(
+        store = affine.AffineStoreOp(
             zero_value.result,
             rv.result,
             [zero_idx.result],
             ip=GlobalInsertionPoint.get(),
         )
+        store.attributes["to"] = StringAttr.get("sum_rv")
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -1022,6 +1078,7 @@ class ASTBuilder:
         load = affine.AffineLoadOp(
             dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
+        load.attributes["from"] = StringAttr.get("sum_rv")
         if is_floating_point_type(dtype):
             add_op = std.AddFOp
         elif is_integer_type(dtype):
@@ -1041,9 +1098,10 @@ class ASTBuilder:
         )
 
         # store the result back to register
-        affine.AffineStoreOp(
+        store_reg = affine.AffineStoreOp(
             iter_sum.result, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
+        store_reg.attributes["to"] = StringAttr.get("sum_rv")
 
         # set terminator
         affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
@@ -1098,11 +1156,13 @@ def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None)
 
 
 def make_if(cond, ip=None):
+    # suppose in a imperative context (build in-place)
     d0 = AffineDimExpr.get(0)
     c1 = AffineConstantExpr.get(1)
     if_cond_set = IntegerSet.get(1, 0, [d0 - c1], [True])  # d0 - 1 == 0
     attr = IntegerSetAttr.get(if_cond_set)
-    set_operands = [cond.result]
+    cast = CastOp(cond, idx_type)
+    set_operands = [cast.result]
 
     if_op = affine.AffineIfOp(attr, set_operands, ip=ip)
     return if_op

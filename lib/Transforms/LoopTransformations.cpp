@@ -1497,7 +1497,7 @@ bool runSchedule(
           .stage_name()
           .str();
   if (funcMap.count(stage_name) > 0) {
-    if (!failed(schedule_func(funcMap["stage_name"], op)))
+    if (!failed(schedule_func(funcMap[stage_name], op)))
       return true;
   }
   return false;

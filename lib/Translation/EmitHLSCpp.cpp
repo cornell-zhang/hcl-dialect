@@ -473,6 +473,11 @@ public:
   }
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
+  /// Logical expressions.
+  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
+  bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
+  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
+
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
@@ -878,10 +883,15 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
-  for (auto index : affineMap.getResults()) {
-    os << "[";
-    affineEmitter.emitAffineExpr(index);
-    os << "]";
+  auto arrayType = memref.getType().cast<ShapedType>();
+  if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+    // do nothing;
+  } else {
+    for (auto index : affineMap.getResults()) {
+      os << "[";
+      affineEmitter.emitAffineExpr(index);
+      os << "]";
+    }
   }
   os << ";";
   emitInfoAndNewLine(op);
@@ -906,10 +916,15 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
-  for (auto index : affineMap.getResults()) {
-    os << "[";
-    affineEmitter.emitAffineExpr(index);
-    os << "]";
+  auto arrayType = memref.getType().cast<ShapedType>();
+  if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+    // do nothing;
+  } else {
+    for (auto index : affineMap.getResults()) {
+      os << "[";
+      affineEmitter.emitAffineExpr(index);
+      os << "]";
+    }
   }
   os << " = ";
   emitValue(op.getValueToStore());
@@ -1404,8 +1419,12 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
       os << " */";
     } else {
       emitValue(array, 0, false, name);
-      for (auto &shape : arrayType.getShape())
-        os << "[" << shape << "]";
+      if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+        // do nothing;
+      } else {
+        for (auto &shape : arrayType.getShape())
+          os << "[" << shape << "]";
+      }
     }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true, name);
@@ -1694,8 +1713,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
   std::string output_names;
   if (func->hasAttr("outputs")) {
-    output_names =
-        func->getAttr("outputs").cast<StringAttr>().getValue().str();
+    output_names = func->getAttr("outputs").cast<StringAttr>().getValue().str();
     // suppose only one output
     input_args.push_back(output_names);
   }
@@ -1726,8 +1744,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
         os << ",\n";
         indent();
         if (output_names != "") {
-          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-          // index, index. However, typically this should not happen.
+          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
+          // : index, index. However, typically this should not happen.
           if (result.getType().isa<ShapedType>())
             emitArrayDecl(result, true);
           else
@@ -1755,7 +1773,15 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   addIndent();
 
   emitFunctionDirectives(func, portList);
+
+  if (func->hasAttr("systolic")) {
+    os << "#pragma scop\n";
+  }
   emitBlock(func.front());
+  if (func->hasAttr("systolic")) {
+    os << "#pragma endscop\n";
+  }
+
   reduceIndent();
   os << "}\n";
 

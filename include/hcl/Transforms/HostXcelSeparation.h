@@ -18,7 +18,8 @@
 namespace mlir {
 namespace hcl {
 
-bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &device_mod,
+bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
+                             ModuleOp &extern_mod,
                              std::map<std::string, std::string> &device_map,
                              std::vector<std::string> &graph_roots,
                              std::vector<std::string> &subgraph_inputs,

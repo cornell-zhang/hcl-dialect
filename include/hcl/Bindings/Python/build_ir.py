@@ -926,6 +926,36 @@ class CallOp(ExprOp):
             self.inputs,
             ip=GlobalInsertionPoint.get(),
         )
+        return self.built_op
+
+
+class SelectOp(ExprOp):
+    """Ternary operation"""
+
+    def __init__(self, cond, true_val, false_val):
+        super().__init__(std.SelectOp)
+        if type(true_val.dtype) != type(false_val.dtype):
+            raise RuntimeError(
+                "SelectOp should have two same type inputs. Got {} and {}".format(
+                    true_val.dtype, false_val.dtype
+                )
+            )
+        self.dtype = true_val.dtype
+        self.cond = cond
+        self.true_val = true_val
+        self.false_val = false_val
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype,
+            self.cond.result,
+            self.true_val.result,
+            self.false_val.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
 
 
 class SumOp(ExprOp):
@@ -943,6 +973,8 @@ class ASTBuilder:
             return self.visit_unary_op(expr)
         elif isinstance(expr, BinaryOp):
             return self.visit_binary_op(expr)
+        elif isinstance(expr, SelectOp):
+            return self.visit_ternary_op(expr)
         elif isinstance(expr, LoadOp):
             return self.visit_load_op(expr)
         elif isinstance(expr, StoreOp):
@@ -961,6 +993,12 @@ class ASTBuilder:
     def visit_binary_op(self, expr):
         self.visit(expr.lhs)
         self.visit(expr.rhs)
+        return expr.build()
+
+    def visit_ternary_op(self, expr):
+        self.visit(expr.cond)
+        self.visit(expr.true_val)
+        self.visit(expr.false_val)
         return expr.build()
 
     def visit_load_op(self, expr):

@@ -1694,8 +1694,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
   std::string output_names;
   if (func->hasAttr("outputs")) {
-    output_names =
-        func->getAttr("outputs").cast<StringAttr>().getValue().str();
+    output_names = func->getAttr("outputs").cast<StringAttr>().getValue().str();
     // suppose only one output
     input_args.push_back(output_names);
   }
@@ -1726,8 +1725,8 @@ void ModuleEmitter::emitFunction(FuncOp func) {
         os << ",\n";
         indent();
         if (output_names != "") {
-          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
-          // index, index. However, typically this should not happen.
+          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
+          // : index, index. However, typically this should not happen.
           if (result.getType().isa<ShapedType>())
             emitArrayDecl(result, true);
           else
@@ -1755,7 +1754,15 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   addIndent();
 
   emitFunctionDirectives(func, portList);
+
+  if (func->hasAttr("systolic")) {
+    os << "#pragma scop\n";
+  }
   emitBlock(func.front());
+  if (func->hasAttr("systolic")) {
+    os << "#pragma endscop\n";
+  }
+
   reduceIndent();
   os << "}\n";
 

@@ -50,6 +50,14 @@ bool applyHostXcelSeparation(
       break;
     }
   }
+  // get extern top function
+  FuncOp extern_top;
+  for (auto extern_func : extern_mod.getOps<FuncOp>()) {
+    if (extern_func.getName().str() == "top") {
+      extern_top = extern_func;
+      break;
+    }
+  }
   // get host and xcel insertion points
   auto host_retOp = *(host_top.getOps<ReturnOp>().begin());
   auto xcel_retOp = *(xcel_top.getOps<ReturnOp>().begin());
@@ -178,11 +186,20 @@ bool applyHostXcelSeparation(
     // remove the host call
     call_top.erase();
   }
+  // move stages to extern module
+  for (auto func_op : xcel_mod.getOps<FuncOp>()) {
+    if (func_op->hasAttr("systolic")) {
+      func_op->moveBefore(extern_top);
+      break; // only support placement for one kernel
+    }
+  }
+  extern_top.erase();
   // remove original output
   xcel_retOp.erase();
   // set module name
   host_mod.setName("host");
   xcel_mod.setName("xcel");
+  extern_mod.setName("extern");
   return true;
 }
 

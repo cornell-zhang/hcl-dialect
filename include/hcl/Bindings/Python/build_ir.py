@@ -786,17 +786,17 @@ class RightShiftOp(BinaryOp):
 
 class AndOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.AndOp, i32, lhs, rhs)
+        super().__init__(std.AndOp, bool, lhs, rhs)
 
 
 class OrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.OrOp, i32, lhs, rhs)
+        super().__init__(std.OrOp, bool, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.XOrOp, i32, lhs, rhs)
+        super().__init__(std.XOrOp, bool, lhs, rhs)
 
 
 class NegOp(UnaryOp):

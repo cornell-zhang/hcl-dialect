@@ -878,10 +878,15 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
-  for (auto index : affineMap.getResults()) {
-    os << "[";
-    affineEmitter.emitAffineExpr(index);
-    os << "]";
+  auto arrayType = memref.getType().cast<ShapedType>();
+  if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+    // do nothing;
+  } else {
+    for (auto index : affineMap.getResults()) {
+      os << "[";
+      affineEmitter.emitAffineExpr(index);
+      os << "]";
+    }
   }
   os << ";";
   emitInfoAndNewLine(op);
@@ -906,10 +911,15 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
-  for (auto index : affineMap.getResults()) {
-    os << "[";
-    affineEmitter.emitAffineExpr(index);
-    os << "]";
+  auto arrayType = memref.getType().cast<ShapedType>();
+  if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+    // do nothing;
+  } else {
+    for (auto index : affineMap.getResults()) {
+      os << "[";
+      affineEmitter.emitAffineExpr(index);
+      os << "]";
+    }
   }
   os << " = ";
   emitValue(op.getValueToStore());
@@ -1404,8 +1414,12 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
       os << " */";
     } else {
       emitValue(array, 0, false, name);
-      for (auto &shape : arrayType.getShape())
-        os << "[" << shape << "]";
+      if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+        // do nothing;
+      } else {
+        for (auto &shape : arrayType.getShape())
+          os << "[" << shape << "]";
+      }
     }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true, name);

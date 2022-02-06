@@ -521,19 +521,35 @@ class ConstantOp(ExprOp):
 
 
 class TensorSlice(ExprOp):
-    def __init__(self, shape, op, dtype, indices, name=None):
+    def __init__(self, full_shape, op, dtype, indices, name=None):
         super().__init__(op)
-        self.shape = shape
+        self.op = op
+        self.full_shape = full_shape
         self.dtype = dtype
         self.name = name
         self.indices = indices
+        # calculate tensor slice shape
+        shape = list()
+        dims = 0
+        for index in indices:
+            if isinstance(index, int):
+                dims += 1
+            elif isinstance(index, slice):
+                step = index.step if index.step is not None else 1
+                dim_size = (index.stop - index.start) / step
+                shape.append(int(dim_size))
+                dims += 1
+        for i, dim in enumerate(self.full_shape):
+            if i < dims: continue
+            shape.append(dim)
+        self.shape = tuple(shape)
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             return TensorSlice(
-                self.shape, self.dtype, self.indices + indices, self.name
+                self.full_shape, self.op, self.dtype, self.indices + indices, self.name
             )
         else:
             # format indices
@@ -551,7 +567,7 @@ class TensorSlice(ExprOp):
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             pass
         else:
             new_indices = []

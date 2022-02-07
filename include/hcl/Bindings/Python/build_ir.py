@@ -45,6 +45,28 @@ enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
+class UniqueName(object):
+    scalar_idx = 0
+    tensor_idx = 0
+    stage_idx = 0
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def get(cls, case="stage"):
+        if case == "stage":
+            # Imperative computing stage
+            name = "stage_" + str(cls.stage_idx)
+            cls.stage_idx += 1
+        elif case == "scalar":
+            name = "scalar_" + str(cls.scalar_idx)
+            cls.scalar_idx += 1
+        elif case == "tensor":
+            name = "compute_" + str(cls.tensor_idx)
+            cls.tensor_idx += 1
+        else:
+            raise RuntimeError(f"Unrecognized case in get_unique_name: {case}")
+        return name
 
 def get_context():
     return global_ctx
@@ -499,19 +521,35 @@ class ConstantOp(ExprOp):
 
 
 class TensorSlice(ExprOp):
-    def __init__(self, shape, op, dtype, indices, name=None):
+    def __init__(self, full_shape, op, dtype, indices, name=None):
         super().__init__(op)
-        self.shape = shape
+        self.op = op
+        self.full_shape = full_shape
         self.dtype = dtype
         self.name = name
         self.indices = indices
+        # calculate tensor slice shape
+        shape = list()
+        dims = 0
+        for index in indices:
+            if isinstance(index, int):
+                dims += 1
+            elif isinstance(index, slice):
+                step = index.step if index.step is not None else 1
+                dim_size = (index.stop - index.start) / step
+                shape.append(int(dim_size))
+                dims += 1
+        for i, dim in enumerate(self.full_shape):
+            if i < dims: continue
+            shape.append(dim)
+        self.shape = tuple(shape)
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             return TensorSlice(
-                self.shape, self.dtype, self.indices + indices, self.name
+                self.full_shape, self.op, self.dtype, self.indices + indices, self.name
             )
         elif len(self.indices + indices) == len(self.shape):
             # format indices
@@ -531,7 +569,7 @@ class TensorSlice(ExprOp):
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             pass
         elif len(self.indices + indices) == len(self.shape):
             new_indices = []

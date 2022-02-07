@@ -58,6 +58,8 @@ public:
             CmpIOp, AddIOp, SubIOp, MulIOp,
             // Logical expressions.
             AndOp, OrOp, XOrOp,
+            // Bitwise operations.
+            GetIntBitOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp,
@@ -170,6 +172,9 @@ public:
   HANDLE(AndOp);
   HANDLE(OrOp);
   HANDLE(XOrOp);
+
+  // Bitwise operations.
+  HANDLE(GetIntBitOp);
 
   // Special operations.
   HANDLE(CallOp);

@@ -256,6 +256,7 @@ public:
   void emitConstant(ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
   void emitGeneralCast(UnrealizedConversionCastOp op);
+  void emitGetBit(GetIntBitOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -477,6 +478,9 @@ public:
   bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
   bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
   bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
+
+  /// Logical experssion.
+  bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
 
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
@@ -1237,6 +1241,17 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 }
 
 /// Special operation emitters.
+void ModuleEmitter::emitGetBit(GetIntBitOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.val());
+  os << "[";
+  emitValue(op.index());
+  os << "];";
+  emitInfoAndNewLine(op);
+}
+
 void ModuleEmitter::emitSelect(SelectOp op) {
   unsigned rank = emitNestedLoopHead(op.getResult());
   unsigned conditionRank = rank;

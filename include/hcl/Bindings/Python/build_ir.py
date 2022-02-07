@@ -513,7 +513,7 @@ class TensorSlice(ExprOp):
             return TensorSlice(
                 self.shape, self.dtype, self.indices + indices, self.name
             )
-        else:
+        elif len(self.indices + indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in self.indices + indices:
@@ -525,19 +525,23 @@ class TensorSlice(ExprOp):
             # if flags.BUILD_INPLACE:
             #     load.build()
             return load
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.shape):
             pass
-        else:
+        elif len(self.indices + indices) == len(self.shape):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             return StoreOp(expr, self, self.indices + new_indices)
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
 
 class TensorOp(ExprOp):
@@ -593,7 +597,7 @@ class TensorOp(ExprOp):
         # if we are slicing tensor
         if len(indices) < len(self.shape):
             return TensorSlice(self.shape, self.op, self.dtype, indices, self.name)
-        else:
+        elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in indices:
@@ -604,6 +608,8 @@ class TensorOp(ExprOp):
             # if flags.BUILD_INPLACE:
             #     load.build()
             return load
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
@@ -611,7 +617,7 @@ class TensorOp(ExprOp):
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
             raise RuntimeError("Writing to a slice of tensor is not allowed.")
-        else:
+        elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in indices:
@@ -619,6 +625,8 @@ class TensorOp(ExprOp):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             return StoreOp(expr, self, new_indices)
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
 
 #################################################
@@ -861,6 +869,31 @@ class CastOp(ExprOp):
         return self.built_op
 
 
+class GetBitOp(ExprOp):
+    def __init__(self, val, index):
+        super().__init__(GetIntBitOp, bool)
+        self.val = val
+        self.index = index
+        if not isinstance(self.index.dtype, IndexType):
+            print(
+                "Warning: GetBitOp's input is not an index. Cast from {} to {}.".format(
+                    self.index.dtype, idx_type
+                )
+            )
+            self.index = CastOp(self.index, idx_type)
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype,
+            self.val.result,
+            self.index.result,
+            ip=GlobalInsertionPoint.get()
+        )
+        return self.built_op
+
+
 class LoadOp(ExprOp):
     def __init__(self, dtype, tensor, indices):
         super().__init__(affine.AffineLoadOp, dtype)
@@ -878,6 +911,23 @@ class LoadOp(ExprOp):
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
+
+    def __getitem__(self, indices):
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only fixed integers can access the bits")
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        if not len(indices) == 1:
+            raise RuntimeError("Can only access one bit of the integer")
+        index = indices[0]
+        # TODO: Not necessary be a constant
+        # if index >= self.dtype.width:
+        #     raise RuntimeError(
+        #         "Index ({}) is larger than the width of the integer ({})".format(
+        #             index, self.dtype.width
+        #         )
+        #     )
+        return GetBitOp(self, index)
 
 
 class StoreOp(ExprOp):
@@ -979,6 +1029,10 @@ class ASTBuilder:
             return self.visit_load_op(expr)
         elif isinstance(expr, StoreOp):
             return self.visit_store_op(expr)
+        elif isinstance(expr, GetBitOp):
+            return self.visit_getbit_op(expr)
+        elif isinstance(expr, CastOp):
+            return self.visit_cast_op(expr)
         elif isinstance(expr, SumOp):
             return self.visit_sum_op(expr)
         elif isinstance(expr, ConstantOp):
@@ -1013,6 +1067,15 @@ class ASTBuilder:
         return expr.build()
 
     def visit_store_op(self, expr):
+        return expr.build()
+
+    def visit_cast_op(self, expr):
+        self.visit(expr.val)
+        return expr.build()
+
+    def visit_getbit_op(self, expr):
+        self.visit(expr.val)
+        self.visit(expr.index)
         return expr.build()
 
     def visit_constant_op(self, expr):

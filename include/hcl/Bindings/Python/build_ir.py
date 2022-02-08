@@ -207,6 +207,9 @@ def get_type_rank(dtype):
             raise RuntimeError("Cannot support integer width larger than 64")
         base += width
         return base
+    elif is_index_type(dtype): # width 32
+        base = 65
+        return base
     elif is_fixed_type(dtype):
         base = 100
         width = dtype.width
@@ -245,7 +248,7 @@ def cast_types(lhs, rhs):
         # integer type to float (the only real type possible is float, which remains as-is)
         res_type = f32
     # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
-    elif isinstance(ltype, IntegerType):
+    elif isinstance(ltype, (IntegerType, IndexType)):
         res_type = ltype
     # 5) Fixed types
     elif is_fixed_type(ltype):
@@ -472,7 +475,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype=i32)
+        super().__init__(op, dtype=idx_type)
         self.built_op = op
 
     def update_op(self, op):
@@ -707,7 +710,7 @@ class BinaryOp(ExprOp):
         self.lhs = lhs
         self.rhs = rhs
         if isinstance(op, dict):
-            if is_integer_type(dtype):
+            if is_integer_type(dtype) or is_index_type(dtype):
                 self.op = op["int"]
             elif is_floating_point_type(dtype):
                 self.op = op["float"]

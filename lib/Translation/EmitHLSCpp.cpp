@@ -445,10 +445,6 @@ public:
   bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedFloorDivIOp op) {
-    return emitter.emitBinary(op, "/"), true;
-  }
   bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
@@ -456,6 +452,11 @@ public:
   bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedFloorDivIOp op) {
+    return emitter.emitBinary(op, "/"), true;
+  }
+  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Unary expressions.
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }

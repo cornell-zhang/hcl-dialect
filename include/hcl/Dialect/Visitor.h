@@ -59,7 +59,7 @@ public:
             // Logical expressions.
             AndOp, OrOp, XOrOp,
             // Bitwise operations.
-            GetIntBitOp,
+            GetIntBitOp, ShiftLeftOp, SignedShiftRightOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp, UnrealizedConversionCastOp,
@@ -174,6 +174,8 @@ public:
 
   // Bitwise operations.
   HANDLE(GetIntBitOp);
+  HANDLE(ShiftLeftOp);
+  HANDLE(SignedShiftRightOp);
 
   // Special operations.
   HANDLE(CallOp);

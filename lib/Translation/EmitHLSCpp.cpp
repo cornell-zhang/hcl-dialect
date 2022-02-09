@@ -482,6 +482,10 @@ public:
 
   /// Bitwise experssions.
   bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
+  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(SignedShiftRightOp op) {
+    return emitter.emitBinary(op, ">>"), true;
+  }
 
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }

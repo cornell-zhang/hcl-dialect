@@ -476,11 +476,11 @@ public:
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Logical expressions.
-  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
-  bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
+  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
   bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
 
-  /// Logical experssion.
+  /// Bitwise experssions.
   bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
 
   /// Special operations.

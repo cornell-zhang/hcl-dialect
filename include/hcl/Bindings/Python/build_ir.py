@@ -336,6 +336,10 @@ class ExprOp(object):
         # turn py builtin op to hcl op
         lhs = get_hcl_op(lhs)
         rhs = get_hcl_op(rhs)
+
+        # type checking & conversion
+        if lhs.dtype != rhs.dtype:
+            rhs = CastOp(rhs, lhs.dtype)
         expr = OpClass(lhs, rhs)
         return expr
 
@@ -837,27 +841,27 @@ class RemOp(BinaryOp):
 
 class LeftShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.ShiftLeftOp, i32, lhs, rhs)
+        super().__init__(std.ShiftLeftOp, lhs.dtype, lhs, rhs)
 
 
 class RightShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.SignedShiftRightOp, i32, lhs, rhs)
+        super().__init__(std.SignedShiftRightOp, lhs.dtype, lhs, rhs)
 
 
 class AndOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.AndOp, bool, lhs, rhs)
+        super().__init__(std.AndOp, lhs.dtype, lhs, rhs)
 
 
 class OrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.OrOp, bool, lhs, rhs)
+        super().__init__(std.OrOp, lhs.dtype, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.XOrOp, bool, lhs, rhs)
+        super().__init__(std.XOrOp, lhs.dtype, lhs, rhs)
 
 
 class NegOp(UnaryOp):

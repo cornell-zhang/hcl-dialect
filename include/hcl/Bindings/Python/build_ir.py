@@ -971,6 +971,13 @@ class LoadOp(ExprOp):
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
 
+    def build_affine(self, indices, affine_attr):
+        self.built_op = self.op(
+            self.dtype, self.tensor.result, indices, affine_attr, ip=GlobalInsertionPoint.get()
+        )
+        self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
+        return self.built_op
+
     def __getitem__(self, indices):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
@@ -1079,6 +1086,10 @@ class SumOp(ExprOp):
 
 
 class ASTBuilder:
+
+    def __init__(self):
+        self.iv = []
+
     def visit(self, expr):
         """Apply the visitor to an expression."""
 
@@ -1103,6 +1114,33 @@ class ASTBuilder:
         else:  # IterVar
             return expr.built_op  # BlockArgument
 
+    def visit_affine_expr(self, expr):
+        """Build affine expression.
+        * Should all be binary op
+        * AffineExpr can be automatically simplied
+        """
+        if isinstance(expr, IterVar):
+            self.iv.append(expr.op) # BlockArgument
+            return AffineExpr.get_dim(len(self.iv) - 1)
+        elif isinstance(expr, ConstantOp):
+            return AffineExpr.get_constant(expr.val)
+        elif isinstance(expr, CastOp):
+            return self.visit_affine_expr(expr.val)
+        lhs = self.visit_affine_expr(expr.lhs)
+        rhs = self.visit_affine_expr(expr.rhs)
+        if isinstance(expr, AddOp):
+            return lhs + rhs
+        elif isinstance(expr, SubOp):
+            return lhs - rhs
+        elif isinstance(expr, MulOp):
+            return lhs * rhs
+        elif isinstance(expr, DivOp):
+            return lhs / rhs
+        elif isinstance(expr, RemOp):
+            return lhs % rhs
+        else:
+            raise RuntimeError("Not an affine index!")
+
     def visit_unary_op(self, expr):
         self.visit(expr.val)
         return expr.build()
@@ -1120,14 +1158,15 @@ class ASTBuilder:
 
     def visit_load_op(self, expr):
         new_indices = []
+        # create affine expressions
+        self.iv = [] # clear
+        exprs = []
         for index in expr.indices:
-            op = self.visit(index)
-            try:
-                new_indices.append(op.result)
-            except:  # BlockArgument
-                new_indices.append(op)
-        tensor = expr.tensor.result
-        return expr.build()
+            affine_expr = self.visit_affine_expr(index)
+            exprs.append(affine_expr)
+        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
+        affine_attr = AffineMapAttr.get(affine_map)
+        return expr.build_affine(self.iv, affine_attr)
 
     def visit_store_op(self, expr):
         return expr.build()

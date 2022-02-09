@@ -49,16 +49,17 @@ class AffineLoadOp(_ods_ir.OpView):
 
   _ODS_REGIONS = (0, True)
 
-  def __init__(self, result, memref, indices, *, loc=None, ip=None):
+  def __init__(self, result, memref, indices, affine_attr=None, *, loc=None, ip=None):
     operands = []
     results = []
     results.append(result)
     operands.append(memref)
     operands.extend(indices)
     attributes = {}
-    identity_map = mlir.ir.AffineMap.get_identity(len(indices))
-    attr = mlir.ir.AffineMapAttr.get(identity_map)
-    attributes["map"] = attr
+    if affine_attr == None:
+      identity_map = mlir.ir.AffineMap.get_identity(len(indices))
+      affine_attr = mlir.ir.AffineMapAttr.get(identity_map)
+    attributes["map"] = affine_attr
     super().__init__(self.build_generic(
       attributes=attributes, results=results, operands=operands,
       loc=loc, ip=ip))

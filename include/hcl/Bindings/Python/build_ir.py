@@ -45,13 +45,15 @@ enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
+
 class UniqueName(object):
     scalar_idx = 0
     tensor_idx = 0
     stage_idx = 0
+
     def __init__(self):
         pass
-    
+
     @classmethod
     def get(cls, case="stage"):
         if case == "stage":
@@ -67,6 +69,7 @@ class UniqueName(object):
         else:
             raise RuntimeError(f"Unrecognized case in get_unique_name: {case}")
         return name
+
 
 def get_context():
     return global_ctx
@@ -207,7 +210,7 @@ def get_type_rank(dtype):
             raise RuntimeError("Cannot support integer width larger than 64")
         base += width
         return base
-    elif is_index_type(dtype): # width 32
+    elif is_index_type(dtype):  # width 32
         base = 65
         return base
     elif is_fixed_type(dtype):
@@ -551,7 +554,8 @@ class TensorSlice(ExprOp):
                 shape.append(int(dim_size))
                 dims += 1
         for i, dim in enumerate(self.full_shape):
-            if i < dims: continue
+            if i < dims:
+                continue
             shape.append(dim)
         self.shape = tuple(shape)
 
@@ -921,7 +925,7 @@ class CastOp(ExprOp):
             self.built_op = self.op(
                 self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
             )
-        else: # builtin.UnrealizedConversionCastOp
+        else:  # builtin.UnrealizedConversionCastOp
             self.built_op = self.op(
                 [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
             )
@@ -948,7 +952,7 @@ class GetBitOp(ExprOp):
             self.dtype,
             self.val.result,
             self.index.result,
-            ip=GlobalInsertionPoint.get()
+            ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
 
@@ -973,7 +977,11 @@ class LoadOp(ExprOp):
 
     def build_affine(self, indices, affine_attr):
         self.built_op = self.op(
-            self.dtype, self.tensor.result, indices, affine_attr, ip=GlobalInsertionPoint.get()
+            self.dtype,
+            self.tensor.result,
+            indices,
+            affine_attr,
+            ip=GlobalInsertionPoint.get(),
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
@@ -1020,6 +1028,18 @@ class StoreOp(ExprOp):
             self.val.result,
             self.to_tensor.result,
             new_indices,
+            ip=GlobalInsertionPoint.get(),
+        )
+        self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
+        return self.built_op
+
+    def build_affine(self, indices, affine_attr):
+        self.built_op = self.op(
+            self.dtype,
+            self.val.result,
+            self.to_tensor.result,
+            indices,
+            affine_attr,
             ip=GlobalInsertionPoint.get(),
         )
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
@@ -1086,7 +1106,6 @@ class SumOp(ExprOp):
 
 
 class ASTBuilder:
-
     def __init__(self):
         self.iv = []
 
@@ -1120,7 +1139,7 @@ class ASTBuilder:
         * AffineExpr can be automatically simplied
         """
         if isinstance(expr, IterVar):
-            self.iv.append(expr.op) # BlockArgument
+            self.iv.append(expr.op)  # BlockArgument
             return AffineExpr.get_dim(len(self.iv) - 1)
         elif isinstance(expr, ConstantOp):
             return AffineExpr.get_constant(expr.val)
@@ -1157,9 +1176,8 @@ class ASTBuilder:
         return expr.build()
 
     def visit_load_op(self, expr):
-        new_indices = []
         # create affine expressions
-        self.iv = [] # clear
+        self.iv = []  # clear
         exprs = []
         for index in expr.indices:
             affine_expr = self.visit_affine_expr(index)
@@ -1169,7 +1187,15 @@ class ASTBuilder:
         return expr.build_affine(self.iv, affine_attr)
 
     def visit_store_op(self, expr):
-        return expr.build()
+        # create affine expressions
+        self.iv = []  # clear
+        exprs = []
+        for index in expr.indices:
+            affine_expr = self.visit_affine_expr(index)
+            exprs.append(affine_expr)
+        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
+        affine_attr = AffineMapAttr.get(affine_map)
+        return expr.build_affine(self.iv, affine_attr)
 
     def visit_cast_op(self, expr):
         self.visit(expr.val)

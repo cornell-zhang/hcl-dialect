@@ -260,7 +260,7 @@ def cast_types(lhs, rhs):
     else:
         raise RuntimeError("Type conversion failed")
     print(
-        "Warning: Types of {} ({}) and {} ({}) are different. Explictly cast {} to {}.".format(
+        "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
         )
     )
@@ -328,6 +328,14 @@ class ExprOp(object):
             expr = OpClass(lhs, rhs, arg)
         return expr
 
+    @staticmethod
+    def generic_integer_op(OpClass, lhs, rhs):
+        # turn py builtin op to hcl op
+        lhs = get_hcl_op(lhs)
+        rhs = get_hcl_op(rhs)
+        expr = OpClass(lhs, rhs)
+        return expr
+
     def __add__(self, other):
         return self.generic_op(AddOp, self, other)
 
@@ -374,27 +382,27 @@ class ExprOp(object):
     def __lshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Left shift")
-        return LeftShiftOp(self, other)
+        return self.generic_integer_op(LeftShiftOp, self, other)
 
     def __rshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Right shift")
-        return RightShiftOp(self, other)
+        return self.generic_integer_op(RightShiftOp, self, other)
 
     def __and__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise And")
-        return AndOp(self, other)
+        return self.generic_integer_op(AndOp, self, other)
 
     def __or__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise Or")
-        return OrOp(self, other)
+        return self.generic_integer_op(OrOp, self, other)
 
     def __xor__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise XOr")
-        return XOrOp(self, other)
+        return self.generic_integer_op(XOrOp, self, other)
 
     def __invert__(self):
         raise RuntimeError("Not implemented")
@@ -898,15 +906,25 @@ class MathTanhOp(UnaryOp):
 class CastOp(ExprOp):
     def __init__(self, val, res_type=None):
         # dtype is the result type
-        super().__init__(builtin.UnrealizedConversionCastOp, res_type)
-        self.val = val
+        res_type = get_mlir_type(res_type)
+        self.val = get_hcl_op(val)
+        if is_index_type(res_type) and is_integer_type(self.val.dtype):
+            op = std.IndexCastOp
+        else:
+            op = builtin.UnrealizedConversionCastOp
+        super().__init__(op, res_type)
         if flags.BUILD_INPLACE:
             self.build()
 
     def build(self):
-        self.built_op = self.op(
-            [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
-        )
+        if self.op == std.IndexCastOp:
+            self.built_op = self.op(
+                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+        else: # builtin.UnrealizedConversionCastOp
+            self.built_op = self.op(
+                [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
+            )
         return self.built_op
 
 
@@ -1025,9 +1043,13 @@ class SelectOp(ExprOp):
 
     def __init__(self, cond, true_val, false_val):
         super().__init__(std.SelectOp)
-        if type(true_val.dtype) != type(false_val.dtype):
+        # turn py builtin op to hcl op
+        true_val = get_hcl_op(true_val)
+        false_val = get_hcl_op(false_val)
+        # do the testing
+        if true_val.dtype != false_val.dtype:
             raise RuntimeError(
-                "SelectOp should have two same type inputs. Got {} and {}".format(
+                "SelectOp should have two same type of inputs. Got {} and {}".format(
                     true_val.dtype, false_val.dtype
                 )
             )

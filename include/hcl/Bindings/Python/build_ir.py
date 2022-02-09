@@ -1248,19 +1248,22 @@ class ASTBuilder:
             new_axes = [expr.axis]
         else:
             new_axes = expr.axis
+        body_ip = GlobalInsertionPoint.get()
         for axis in new_axes:
             reduction_loop = make_affine_for(
                 axis.lower_bound,
                 axis.upper_bound,
                 step=1,
                 name=axis.name,
-                ip=GlobalInsertionPoint.get(),
+                ip=body_ip,
             )
-            # update insertion point
-            GlobalInsertionPoint.save(reduction_loop.body)
+            body_ip = InsertionPoint(reduction_loop.body)
 
             # update reduction variable
             axis.update_op(reduction_loop.induction_variable)
+
+        # update insertion point
+        GlobalInsertionPoint.save(body_ip)
 
         # visit subexpressions
         data = self.visit(expr.op)

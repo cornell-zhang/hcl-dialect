@@ -13,6 +13,7 @@ include "hcl/Dialect/HeteroCLDialect.td"
 include "hcl/Dialect/HeteroCLTypes.td"
 include "hcl/Dialect/HeteroCLAttrs.td"
 
+include "mlir/IR/BuiltinTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
@@ -363,6 +364,16 @@ def SubFixedOp : FixedBinaryOp<"sub_fixed"> {
 
 def MulFixedOp : FixedBinaryOp<"mul_fixed"> {
   let summary = "fixed point mulplication operation";
+}
+
+// Bitwise operators
+def GetIntBitOp : HeteroCL_Op<"get_bit"> {
+    let summary = "get bit of an integer";
+    let arguments = (ins SignlessIntegerLike:$val, Builtin_Index:$index);
+    let results = (outs BoolLike:$result);
+    let assemblyFormat = [{
+        `(` $val `:` type($val) `,` $index `)` attr-dict `->` type($result)
+    }];
 }
 
 #endif // HCL_OPS

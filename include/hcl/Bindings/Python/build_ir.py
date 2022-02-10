@@ -46,6 +46,31 @@ disable_build_inplace = flags.disable_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
 
+class UniqueName(object):
+    scalar_idx = 0
+    tensor_idx = 0
+    stage_idx = 0
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def get(cls, case="stage"):
+        if case == "stage":
+            # Imperative computing stage
+            name = "stage_" + str(cls.stage_idx)
+            cls.stage_idx += 1
+        elif case == "scalar":
+            name = "scalar_" + str(cls.scalar_idx)
+            cls.scalar_idx += 1
+        elif case == "tensor":
+            name = "compute_" + str(cls.tensor_idx)
+            cls.tensor_idx += 1
+        else:
+            raise RuntimeError(f"Unrecognized case in get_unique_name: {case}")
+        return name
+
+
 def get_context():
     return global_ctx
 
@@ -185,6 +210,9 @@ def get_type_rank(dtype):
             raise RuntimeError("Cannot support integer width larger than 64")
         base += width
         return base
+    elif is_index_type(dtype):  # width 32
+        base = 65
+        return base
     elif is_fixed_type(dtype):
         base = 100
         width = dtype.width
@@ -223,7 +251,7 @@ def cast_types(lhs, rhs):
         # integer type to float (the only real type possible is float, which remains as-is)
         res_type = f32
     # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
-    elif isinstance(ltype, IntegerType):
+    elif isinstance(ltype, (IntegerType, IndexType)):
         res_type = ltype
     # 5) Fixed types
     elif is_fixed_type(ltype):
@@ -235,7 +263,7 @@ def cast_types(lhs, rhs):
     else:
         raise RuntimeError("Type conversion failed")
     print(
-        "Warning: Types of {} ({}) and {} ({}) are different. Explictly cast {} to {}.".format(
+        "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
         )
     )
@@ -303,6 +331,14 @@ class ExprOp(object):
             expr = OpClass(lhs, rhs, arg)
         return expr
 
+    @staticmethod
+    def generic_integer_op(OpClass, lhs, rhs):
+        # turn py builtin op to hcl op
+        lhs = get_hcl_op(lhs)
+        rhs = get_hcl_op(rhs)
+        expr = OpClass(lhs, rhs)
+        return expr
+
     def __add__(self, other):
         return self.generic_op(AddOp, self, other)
 
@@ -349,27 +385,27 @@ class ExprOp(object):
     def __lshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Left shift")
-        return LeftShiftOp(self, other)
+        return self.generic_integer_op(LeftShiftOp, self, other)
 
     def __rshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Right shift")
-        return RightShiftOp(self, other)
+        return self.generic_integer_op(RightShiftOp, self, other)
 
     def __and__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise And")
-        return AndOp(self, other)
+        return self.generic_integer_op(AndOp, self, other)
 
     def __or__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise Or")
-        return OrOp(self, other)
+        return self.generic_integer_op(OrOp, self, other)
 
     def __xor__(self, other):
         if isinstance(self, float) or isinstance(other, float):
             raise floating_point_error("Bitwise XOr")
-        return XOrOp(self, other)
+        return self.generic_integer_op(XOrOp, self, other)
 
     def __invert__(self):
         raise RuntimeError("Not implemented")
@@ -450,7 +486,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype=i32)
+        super().__init__(op, dtype=idx_type)
         self.built_op = op
 
     def update_op(self, op):
@@ -499,21 +535,38 @@ class ConstantOp(ExprOp):
 
 
 class TensorSlice(ExprOp):
-    def __init__(self, shape, op, dtype, indices, name=None):
+    def __init__(self, full_shape, op, dtype, indices, name=None):
         super().__init__(op)
-        self.shape = shape
+        self.op = op
+        self.full_shape = full_shape
         self.dtype = dtype
         self.name = name
         self.indices = indices
+        # calculate tensor slice shape
+        shape = list()
+        dims = 0
+        for index in indices:
+            if isinstance(index, int):
+                dims += 1
+            elif isinstance(index, slice):
+                step = index.step if index.step is not None else 1
+                dim_size = (index.stop - index.start) / step
+                shape.append(int(dim_size))
+                dims += 1
+        for i, dim in enumerate(self.full_shape):
+            if i < dims:
+                continue
+            shape.append(dim)
+        self.shape = tuple(shape)
 
     def __getitem__(self, indices):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             return TensorSlice(
-                self.shape, self.dtype, self.indices + indices, self.name
+                self.full_shape, self.op, self.dtype, self.indices + indices, self.name
             )
-        else:
+        elif len(self.indices + indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in self.indices + indices:
@@ -525,19 +578,23 @@ class TensorSlice(ExprOp):
             # if flags.BUILD_INPLACE:
             #     load.build()
             return load
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
-        if len(self.indices + indices) < len(self.shape):
+        if len(self.indices + indices) < len(self.full_shape):
             pass
-        else:
+        elif len(self.indices + indices) == len(self.shape):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             return StoreOp(expr, self, self.indices + new_indices)
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
 
 class TensorOp(ExprOp):
@@ -593,7 +650,7 @@ class TensorOp(ExprOp):
         # if we are slicing tensor
         if len(indices) < len(self.shape):
             return TensorSlice(self.shape, self.op, self.dtype, indices, self.name)
-        else:
+        elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in indices:
@@ -604,6 +661,8 @@ class TensorOp(ExprOp):
             # if flags.BUILD_INPLACE:
             #     load.build()
             return load
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
@@ -611,7 +670,7 @@ class TensorOp(ExprOp):
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
             raise RuntimeError("Writing to a slice of tensor is not allowed.")
-        else:
+        elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in indices:
@@ -619,6 +678,8 @@ class TensorOp(ExprOp):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
             return StoreOp(expr, self, new_indices)
+        else:
+            raise RuntimeError("Indices length > # of array dimensions")
 
 
 #################################################
@@ -661,7 +722,7 @@ class BinaryOp(ExprOp):
         self.lhs = lhs
         self.rhs = rhs
         if isinstance(op, dict):
-            if is_integer_type(dtype):
+            if is_integer_type(dtype) or is_index_type(dtype):
                 self.op = op["int"]
             elif is_floating_point_type(dtype):
                 self.op = op["float"]
@@ -849,14 +910,49 @@ class MathTanhOp(UnaryOp):
 class CastOp(ExprOp):
     def __init__(self, val, res_type=None):
         # dtype is the result type
-        super().__init__(builtin.UnrealizedConversionCastOp, res_type)
+        res_type = get_mlir_type(res_type)
+        self.val = get_hcl_op(val)
+        if is_index_type(res_type) and is_integer_type(self.val.dtype):
+            op = std.IndexCastOp
+        else:
+            op = builtin.UnrealizedConversionCastOp
+        super().__init__(op, res_type)
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        if self.op == std.IndexCastOp:
+            self.built_op = self.op(
+                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+        else:  # builtin.UnrealizedConversionCastOp
+            self.built_op = self.op(
+                [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
+            )
+        return self.built_op
+
+
+class GetBitOp(ExprOp):
+    def __init__(self, val, index):
+        super().__init__(GetIntBitOp, bool)
         self.val = val
+        self.index = index
+        if not isinstance(self.index.dtype, IndexType):
+            print(
+                "Warning: GetBitOp's input is not an index. Cast from {} to {}.".format(
+                    self.index.dtype, idx_type
+                )
+            )
+            self.index = CastOp(self.index, idx_type)
         if flags.BUILD_INPLACE:
             self.build()
 
     def build(self):
         self.built_op = self.op(
-            [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
+            self.dtype,
+            self.val.result,
+            self.index.result,
+            ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
 
@@ -878,6 +974,34 @@ class LoadOp(ExprOp):
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
+
+    def build_affine(self, indices, affine_attr):
+        self.built_op = self.op(
+            self.dtype,
+            self.tensor.result,
+            indices,
+            affine_attr,
+            ip=GlobalInsertionPoint.get(),
+        )
+        self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
+        return self.built_op
+
+    def __getitem__(self, indices):
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only fixed integers can access the bits")
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        if not len(indices) == 1:
+            raise RuntimeError("Can only access one bit of the integer")
+        index = indices[0]
+        # TODO: Not necessary be a constant
+        # if index >= self.dtype.width:
+        #     raise RuntimeError(
+        #         "Index ({}) is larger than the width of the integer ({})".format(
+        #             index, self.dtype.width
+        #         )
+        #     )
+        return GetBitOp(self, index)
 
 
 class StoreOp(ExprOp):
@@ -909,6 +1033,18 @@ class StoreOp(ExprOp):
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
         return self.built_op
 
+    def build_affine(self, indices, affine_attr):
+        self.built_op = self.op(
+            self.dtype,
+            self.val.result,
+            self.to_tensor.result,
+            indices,
+            affine_attr,
+            ip=GlobalInsertionPoint.get(),
+        )
+        self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
+        return self.built_op
+
 
 class CallOp(ExprOp):
     def __init__(self, dtype, func_name, inputs):
@@ -934,9 +1070,13 @@ class SelectOp(ExprOp):
 
     def __init__(self, cond, true_val, false_val):
         super().__init__(std.SelectOp)
-        if type(true_val.dtype) != type(false_val.dtype):
+        # turn py builtin op to hcl op
+        true_val = get_hcl_op(true_val)
+        false_val = get_hcl_op(false_val)
+        # do the testing
+        if true_val.dtype != false_val.dtype:
             raise RuntimeError(
-                "SelectOp should have two same type inputs. Got {} and {}".format(
+                "SelectOp should have two same type of inputs. Got {} and {}".format(
                     true_val.dtype, false_val.dtype
                 )
             )
@@ -966,6 +1106,9 @@ class SumOp(ExprOp):
 
 
 class ASTBuilder:
+    def __init__(self):
+        self.iv = []
+
     def visit(self, expr):
         """Apply the visitor to an expression."""
 
@@ -979,12 +1122,43 @@ class ASTBuilder:
             return self.visit_load_op(expr)
         elif isinstance(expr, StoreOp):
             return self.visit_store_op(expr)
+        elif isinstance(expr, GetBitOp):
+            return self.visit_getbit_op(expr)
+        elif isinstance(expr, CastOp):
+            return self.visit_cast_op(expr)
         elif isinstance(expr, SumOp):
             return self.visit_sum_op(expr)
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
         else:  # IterVar
             return expr.built_op  # BlockArgument
+
+    def visit_affine_expr(self, expr):
+        """Build affine expression.
+        * Should all be binary op
+        * AffineExpr can be automatically simplied
+        """
+        if isinstance(expr, IterVar):
+            self.iv.append(expr.op)  # BlockArgument
+            return AffineExpr.get_dim(len(self.iv) - 1)
+        elif isinstance(expr, ConstantOp):
+            return AffineExpr.get_constant(expr.val)
+        elif isinstance(expr, CastOp):
+            return self.visit_affine_expr(expr.val)
+        lhs = self.visit_affine_expr(expr.lhs)
+        rhs = self.visit_affine_expr(expr.rhs)
+        if isinstance(expr, AddOp):
+            return lhs + rhs
+        elif isinstance(expr, SubOp):
+            return lhs - rhs
+        elif isinstance(expr, MulOp):
+            return lhs * rhs
+        elif isinstance(expr, DivOp):
+            return lhs / rhs
+        elif isinstance(expr, RemOp):
+            return lhs % rhs
+        else:
+            raise RuntimeError("Not an affine index!")
 
     def visit_unary_op(self, expr):
         self.visit(expr.val)
@@ -1002,17 +1176,34 @@ class ASTBuilder:
         return expr.build()
 
     def visit_load_op(self, expr):
-        new_indices = []
+        # create affine expressions
+        self.iv = []  # clear
+        exprs = []
         for index in expr.indices:
-            op = self.visit(index)
-            try:
-                new_indices.append(op.result)
-            except:  # BlockArgument
-                new_indices.append(op)
-        tensor = expr.tensor.result
-        return expr.build()
+            affine_expr = self.visit_affine_expr(index)
+            exprs.append(affine_expr)
+        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
+        affine_attr = AffineMapAttr.get(affine_map)
+        return expr.build_affine(self.iv, affine_attr)
 
     def visit_store_op(self, expr):
+        # create affine expressions
+        self.iv = []  # clear
+        exprs = []
+        for index in expr.indices:
+            affine_expr = self.visit_affine_expr(index)
+            exprs.append(affine_expr)
+        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
+        affine_attr = AffineMapAttr.get(affine_map)
+        return expr.build_affine(self.iv, affine_attr)
+
+    def visit_cast_op(self, expr):
+        self.visit(expr.val)
+        return expr.build()
+
+    def visit_getbit_op(self, expr):
+        self.visit(expr.val)
+        self.visit(expr.index)
         return expr.build()
 
     def visit_constant_op(self, expr):

@@ -90,16 +90,17 @@ class AffineForOp:
 
 
 class AffineStoreOp:
-    def __init__(self, value, memref, indices, *, loc=None, ip=None):
+    def __init__(self, value, memref, indices, affine_attr=None, *, loc=None, ip=None):
         operands = []
         results = []
         operands.append(value)
         operands.append(memref)
         operands.extend(indices)
         attributes = {}
-        identity_map = AffineMap.get_identity(len(indices))
-        attr = AffineMapAttr.get(identity_map)
-        attributes["map"] = attr
+        if affine_attr == None:
+            identity_map = AffineMap.get_identity(len(indices))
+            affine_attr = AffineMapAttr.get(identity_map)
+        attributes["map"] = affine_attr
         super().__init__(
             self.build_generic(
                 attributes=attributes,

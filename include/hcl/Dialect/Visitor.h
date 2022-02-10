@@ -52,22 +52,22 @@ public:
             math::ExpOp, math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
             NegFOp,
             // Float binary expressions.
-            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp, SignedDivIOp,
-            SignedFloorDivIOp,
+            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp,
             // Integer binary expressions.
-            CmpIOp, AddIOp, SubIOp, MulIOp,
+            CmpIOp, AddIOp, SubIOp, MulIOp, SignedDivIOp, SignedFloorDivIOp,
+            SignedRemIOp,
             // Logical expressions.
             AndOp, OrOp, XOrOp,
+            // Bitwise operations.
+            GetIntBitOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
-            SIToFPOp, FPToSIOp, FPToUIOp,
-            UnrealizedConversionCastOp,
+            SIToFPOp, FPToSIOp, FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
-            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp,
-            hcl::AddFixedOp, hcl::SubFixedOp, hcl::MulFixedOp>(
-            [&](auto opNode) -> ResultType {
-              return thisCast->visitOp(opNode, args...);
-            })
+            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
+            hcl::SubFixedOp, hcl::MulFixedOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -165,11 +165,15 @@ public:
   HANDLE(MulIOp);
   HANDLE(SignedDivIOp);
   HANDLE(SignedFloorDivIOp);
+  HANDLE(SignedRemIOp);
 
   // Logical expressions.
   HANDLE(AndOp);
   HANDLE(OrOp);
   HANDLE(XOrOp);
+
+  // Bitwise operations.
+  HANDLE(GetIntBitOp);
 
   // Special operations.
   HANDLE(CallOp);

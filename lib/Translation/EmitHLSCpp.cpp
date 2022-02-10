@@ -256,6 +256,7 @@ public:
   void emitConstant(ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
   void emitGeneralCast(UnrealizedConversionCastOp op);
+  void emitGetBit(GetIntBitOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -444,10 +445,6 @@ public:
   bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedFloorDivIOp op) {
-    return emitter.emitBinary(op, "/"), true;
-  }
   bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
@@ -455,6 +452,11 @@ public:
   bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(SignedFloorDivIOp op) {
+    return emitter.emitBinary(op, "/"), true;
+  }
+  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Unary expressions.
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
@@ -477,6 +479,9 @@ public:
   bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
   bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
   bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
+
+  /// Logical experssion.
+  bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
 
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
@@ -1237,6 +1242,17 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 }
 
 /// Special operation emitters.
+void ModuleEmitter::emitGetBit(GetIntBitOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.val());
+  os << "[";
+  emitValue(op.index());
+  os << "];";
+  emitInfoAndNewLine(op);
+}
+
 void ModuleEmitter::emitSelect(SelectOp op) {
   unsigned rank = emitNestedLoopHead(op.getResult());
   unsigned conditionRank = rank;

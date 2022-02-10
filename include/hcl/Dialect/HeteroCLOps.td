@@ -366,6 +366,39 @@ def MulFixedOp : FixedBinaryOp<"mul_fixed"> {
   let summary = "fixed point mulplication operation";
 }
 
+def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, TypesMatchWith<
+    "result type has i1 element type and same shape as operands",
+    "lhs", "result", "getI1SameShape($_self)">] # ElementwiseMappable.traits> {
+  let summary = "fixed-point comparison operation";
+
+  let arguments = (ins
+      CmpFixedPredicateAttr:$predicate,
+      FixedLike:$lhs,
+      FixedLike:$rhs
+  );
+  let results = (outs BoolLike:$result);
+
+  let builders = [
+    OpBuilder<(ins "CmpFixedPredicate":$predicate, "Value":$lhs,
+                 "Value":$rhs), [{
+      mlir::hcl::buildCmpFixedOp($_builder, $_state, predicate, lhs, rhs);
+    }]>];
+
+  let extraClassDeclaration = [{
+    static StringRef getPredicateAttrName() { return "predicate"; }
+    static CmpFixedPredicate getPredicateByName(StringRef name);
+
+    CmpFixedPredicate getPredicate() {
+      return (CmpFixedPredicate)(*this)->getAttrOfType<IntegerAttr>(
+          getPredicateAttrName()).getInt();
+    }
+  }];
+
+  let verifier = [{ return success(); }];
+
+  let assemblyFormat = "$predicate `,` $lhs `,` $rhs attr-dict `:` type($lhs)";
+}
+
 // Bitwise operators
 def GetIntBitOp : HeteroCL_Op<"get_bit"> {
     let summary = "get bit of an integer";

@@ -65,7 +65,7 @@ public:
             SIToFPOp, FPToSIOp, FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
-            hcl::SubFixedOp, hcl::MulFixedOp>([&](auto opNode) -> ResultType {
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -197,6 +197,7 @@ public:
   HANDLE(hcl::AddFixedOp);
   HANDLE(hcl::SubFixedOp);
   HANDLE(hcl::MulFixedOp);
+  HANDLE(hcl::CmpFixedOp);
 
 #undef HANDLE
 };

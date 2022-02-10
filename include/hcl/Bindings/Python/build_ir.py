@@ -749,7 +749,16 @@ class BinaryOp(ExprOp):
 class CmpOp(BinaryOp):
     def __init__(self, lhs, rhs, arg):
         self.arg = arg
-        super().__init__({"float": std.CmpFOp, "int": std.CmpIOp}, bool, lhs, rhs)
+        dtype = lhs.dtype
+        if is_integer_type(dtype) or is_index_type(dtype):
+            self.op = std.CmpIOp
+        elif is_floating_point_type(dtype):
+            self.op = std.CmpFOp
+        elif is_fixed_type(dtype):
+            self.op = CmpFixedOp
+        else:
+            raise RuntimeError("Unsupported types")
+        super().__init__(self.op, bool, lhs, rhs)
 
     def build(self):
         if self.arg == "eq":

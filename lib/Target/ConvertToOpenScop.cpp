@@ -125,7 +125,7 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
   // Counter for the statement inserted.
   unsigned stmtId = 0;
   for (const auto &scopStmtName : *scopStmtNames) {
-    llvm::errs() << scopStmtName << "\n";
+    llvm::errs() << "Statement name: " << scopStmtName << "\n";
     const ScopStmt &stmt = scopStmtMap->find(scopStmtName)->second;
 
     // Collet the domain
@@ -146,7 +146,6 @@ std::unique_ptr<OslScop> OslScopBuilder::build(mlir::FuncOp f) {
         bool isRead = isa<mlir::AffineReadOpInterface>(op);
         AffineValueMap vMap;
         mlir::Value memref;
-
         stmt.getAccessMapAndMemRef(op, &vMap, &memref);
         scop->addAccessRelation(stmtId, isRead, memref, vMap, domain);
       }

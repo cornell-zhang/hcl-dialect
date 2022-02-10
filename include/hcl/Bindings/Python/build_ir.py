@@ -526,16 +526,29 @@ class ConstantOp(ExprOp):
             self.build()
 
     def build(self):
-        if isinstance(self.dtype, IntegerType):
-            value_attr = IntegerAttr.get(i32, self.val)
-        elif isinstance(self.dtype, F32Type):
-            value_attr = FloatAttr.get(f32, self.val)
-        elif isinstance(self.dtype, IndexType):
-            value_attr = IntegerAttr.get(idx_type, self.val)
-        else:
-            raise RuntimeError("Type error")
-        self.built_op = self.op(self.dtype, value_attr, ip=GlobalInsertionPoint.get())
-        return self.built_op
+        if not is_fixed_type(self.dtype):
+            if isinstance(self.dtype, IntegerType):
+                value_attr = IntegerAttr.get(i32, self.val)
+            elif isinstance(self.dtype, F32Type):
+                value_attr = FloatAttr.get(f32, self.val)
+            elif isinstance(self.dtype, IndexType):
+                value_attr = IntegerAttr.get(idx_type, self.val)
+            else:
+                raise RuntimeError("Type error")
+            self.built_op = self.op(
+                self.dtype, value_attr, ip=GlobalInsertionPoint.get()
+            )
+            return self.built_op
+        else:  # fixed types
+            if isinstance(self.val, float):
+                value_attr = FloatAttr.get(f32, self.val)
+                self.built_op = self.op(f32, value_attr, ip=GlobalInsertionPoint.get())
+            elif isinstance(self.val, int):
+                value_attr = IntegerAttr.get(i32, self.val)
+                self.built_op = self.op(i32, value_attr, ip=GlobalInsertionPoint.get())
+            else:
+                raise RuntimeError("Type error")
+            return self.built_op
 
 
 class TensorSlice(ExprOp):

@@ -91,6 +91,9 @@ cmake -G "Unix Makefiles" .. \
 mkdir include/hcl/Bindings/Python/affine # Makefile bug
 make -j
 
+# Export the LD_LIBRARY_PATH for OpenSCoP library
+export LD_LIBRARY_PATH=$(pwd)/openscop/lib:$LD_LIBRARY_PATH
+
 # Export the generated HCL-MLIR Python library
 export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
@@ -109,6 +112,11 @@ cmake --build . --target check-hcl
 # generate C++ HLS code
 ./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
 ./bin/hcl-translate -emit-hlscpp
+
+# generate OpenSCoP
+./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
+./bin/hcl-translate --extract-scop-stmt
+
 ```
 
 Or you can use our provided script to directly generate C++ HLS code from MLIR.

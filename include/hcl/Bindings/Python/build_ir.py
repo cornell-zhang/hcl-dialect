@@ -1124,11 +1124,26 @@ class SelectOp(ExprOp):
         return self.built_op
 
 
-class SumOp(ExprOp):
+class ReduceOp(ExprOp):
     # cannot build inplace!!!
     def __init__(self, op, axis, dtype):
         super().__init__(op, dtype=get_mlir_type(dtype))
         self.axis = axis
+
+
+class SumOp(ReduceOp):
+    def __init__(self, op, axis, dtype):
+        super().__init__(op, axis, dtype)
+
+
+class MinOp(ReduceOp):
+    def __init__(self, op, axis, dtype):
+        super().__init__(op, axis, dtype)
+
+
+class MaxOp(ReduceOp):
+    def __init__(self, op, axis, dtype):
+        super().__init__(op, axis, dtype)
 
 
 class ASTBuilder:
@@ -1152,8 +1167,8 @@ class ASTBuilder:
             return self.visit_getbit_op(expr)
         elif isinstance(expr, CastOp):
             return self.visit_cast_op(expr)
-        elif isinstance(expr, SumOp):
-            return self.visit_sum_op(expr)
+        elif isinstance(expr, ReduceOp):
+            return self.visit_reduce_op(expr)
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
         else:  # IterVar
@@ -1235,31 +1250,46 @@ class ASTBuilder:
     def visit_constant_op(self, expr):
         return expr.build()
 
-    def visit_sum_op(self, expr):
+    def visit_reduce_op(self, expr):
         # save insetion point
         save_ip = GlobalInsertionPoint.get()
 
-        # create a single-element register for summation
+        # create a single-element register for reduction
         dtype = expr.dtype
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(
             memref_type, None, None, None, ip=GlobalInsertionPoint.get()
         )
-        rv.attributes["name"] = StringAttr.get("sum_rv")
-        # intialize the single-element register to zero
+        if isinstance(expr, SumOp):
+            prefix = "sum"
+            init_val = 0
+            reduce_op = {"float": std.AddFOp, "int": std.AddIOp, "fixed": AddFixedOp}
+        elif isinstance(expr, MinOp):
+            prefix = "min"
+            init_val = 0x3F3F3F3F  # magic large number
+            raise RuntimeError("Need to upgrade to LLVM 14!")
+        elif isinstance(expr, MaxOp):
+            prefix = "max"
+            init_val = -0x3F3F3F3F
+            raise RuntimeError("Need to upgrade to LLVM 14!")
+        else:
+            raise RuntimeError("Should not in this branch")
+        rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
+        # initialize the single-element register
         zero_idx = std.ConstantOp(
             idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
         )
+        # initialize the original value of the reducer
         if is_floating_point_type(dtype):
             zero_value = std.ConstantOp(
-                dtype, FloatAttr.get(dtype, 0), ip=GlobalInsertionPoint.get()
+                dtype, FloatAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
         elif is_integer_type(dtype) or is_fixed_type(dtype):
             zero_value = std.ConstantOp(
-                dtype, IntegerAttr.get(dtype, 0), ip=GlobalInsertionPoint.get()
+                dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
         else:
-            raise RuntimeError("Unrecognized data type in reduction sum op")
+            raise RuntimeError("Unrecognized data type in reduction op")
 
         store = affine.AffineStoreOp(
             zero_value.result,
@@ -1267,7 +1297,7 @@ class ASTBuilder:
             [zero_idx.result],
             ip=GlobalInsertionPoint.get(),
         )
-        store.attributes["to"] = StringAttr.get("sum_rv")
+        store.attributes["to"] = StringAttr.get("{}_rv".format(prefix))
 
         # create reduction loop
         if not isinstance(expr.axis, list):
@@ -1294,17 +1324,17 @@ class ASTBuilder:
         # visit subexpressions
         data = self.visit(expr.op)
 
-        # load register value and sum up
+        # load register value and reduce
         load = affine.AffineLoadOp(
             dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
-        load.attributes["from"] = StringAttr.get("sum_rv")
+        load.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
         if is_floating_point_type(dtype):
-            add_op = std.AddFOp
+            reduce_op = reduce_op["float"]
         elif is_integer_type(dtype):
-            add_op = std.AddIOp
+            reduce_op = reduce_op["int"]
         elif is_fixed_type(dtype):
-            add_op = AddFixedOp
+            reduce_op = reduce_op["fixed"]
         else:
             raise RuntimeError("Unsupported type")
         if dtype != data.result.type:
@@ -1313,15 +1343,18 @@ class ASTBuilder:
                     dtype, data.result.type
                 )
             )
-        iter_sum = add_op(
+        iter_reduction = reduce_op(
             dtype, data.result, load.result, ip=GlobalInsertionPoint.get()
         )
 
         # store the result back to register
         store_reg = affine.AffineStoreOp(
-            iter_sum.result, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+            iter_reduction.result,
+            rv.result,
+            [zero_idx.result],
+            ip=GlobalInsertionPoint.get(),
         )
-        store_reg.attributes["to"] = StringAttr.get("sum_rv")
+        store_reg.attributes["to"] = StringAttr.get("{}_rv".format(prefix))
 
         # set terminator
         affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())

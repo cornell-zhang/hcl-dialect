@@ -86,7 +86,8 @@ static FlatAffineConstraints mergeDomainAndContext(FlatAffineConstraints dom,
 
   for (mlir::Value dim : dims)
     ctx.projectOut(dim);
-  ctx.removeIndependentConstraints(0, ctx.getNumDimAndSymbolIds());
+  if (ctx.getNumDimAndSymbolIds())
+    ctx.removeIndependentConstraints(0, ctx.getNumDimAndSymbolIds());
   ctx.removeRedundantInequalities();
   ctx.removeRedundantConstraints();
   ctx.removeTrivialRedundancy();

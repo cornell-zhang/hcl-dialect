@@ -476,12 +476,16 @@ public:
   bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Logical expressions.
-  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&&"), true; }
-  bool visitOp(OrOp op) { return emitter.emitBinary(op, "||"), true; }
+  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
   bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
 
-  /// Logical experssion.
+  /// Bitwise experssions.
   bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
+  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(SignedShiftRightOp op) {
+    return emitter.emitBinary(op, ">>"), true;
+  }
 
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
@@ -507,6 +511,7 @@ public:
   bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(hcl::CmpFixedOp op);
 
 private:
   ModuleEmitter &emitter;
@@ -556,6 +561,30 @@ bool ExprVisitor::visitOp(CmpIOp op) {
     return emitter.emitBinary(op, ">"), true;
   case CmpIPredicate::sge:
   case CmpIPredicate::uge:
+    return emitter.emitBinary(op, ">="), true;
+  default:
+    op.emitError("has unsupported compare type.");
+    return false;
+  }
+}
+
+bool ExprVisitor::visitOp(hcl::CmpFixedOp op) {
+  switch (op.getPredicate()) {
+  case hcl::CmpFixedPredicate::eq:
+    return emitter.emitBinary(op, "=="), true;
+  case hcl::CmpFixedPredicate::ne:
+    return emitter.emitBinary(op, "!="), true;
+  case hcl::CmpFixedPredicate::slt:
+  case hcl::CmpFixedPredicate::ult:
+    return emitter.emitBinary(op, "<"), true;
+  case hcl::CmpFixedPredicate::sle:
+  case hcl::CmpFixedPredicate::ule:
+    return emitter.emitBinary(op, "<="), true;
+  case hcl::CmpFixedPredicate::sgt:
+  case hcl::CmpFixedPredicate::ugt:
+    return emitter.emitBinary(op, ">"), true;
+  case hcl::CmpFixedPredicate::sge:
+  case hcl::CmpFixedPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
   default:
     op.emitError("has unsupported compare type.");

@@ -59,13 +59,13 @@ public:
             // Logical expressions.
             AndOp, OrOp, XOrOp,
             // Bitwise operations.
-            GetIntBitOp,
+            GetIntBitOp, ShiftLeftOp, SignedShiftRightOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
             SIToFPOp, FPToSIOp, FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
-            hcl::SubFixedOp, hcl::MulFixedOp>([&](auto opNode) -> ResultType {
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -174,6 +174,8 @@ public:
 
   // Bitwise operations.
   HANDLE(GetIntBitOp);
+  HANDLE(ShiftLeftOp);
+  HANDLE(SignedShiftRightOp);
 
   // Special operations.
   HANDLE(CallOp);
@@ -195,6 +197,7 @@ public:
   HANDLE(hcl::AddFixedOp);
   HANDLE(hcl::SubFixedOp);
   HANDLE(hcl::MulFixedOp);
+  HANDLE(hcl::CmpFixedOp);
 
 #undef HANDLE
 };

@@ -17,8 +17,8 @@ module {
                     %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
                     %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
                     %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
-                    %prod = mulf %a, %b : f32
-                    %sum = addf %prod, %c: f32
+                    %prod = arith.mulf %a, %b : f32
+                    %sum = arith.addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 // CHECK: } {loop_name = "j"}
                 } { loop_name = "k" }
@@ -32,8 +32,8 @@ module {
                     %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
                     %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
                     %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
-                    %prod = mulf %a, %b : f32
-                    %sum = addf %prod, %c: f32
+                    %prod = arith.mulf %a, %b : f32
+                    %sum = arith.addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 // CHECK: } {loop_name = "i1"}
                 } { loop_name = "k1" }

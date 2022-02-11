@@ -16,7 +16,7 @@ module {
             affine.for %arg6 = 0 to 3 {
             %0 = affine.load %arg0[%arg5, %arg6] : memref<10x10xf32>
             %1 = affine.load %arg1[%arg5, %arg6] : memref<10x10xf32>
-            %2 = mulf %0, %1 : f32
+            %2 = arith.mulf %0, %1 : f32
             affine.store %2, %arg3[%arg5, %arg6] : memref<10x10xf32>
             } {loop_name = "k"}
         } {loop_name = "i", stage_name = "s1"}
@@ -24,7 +24,7 @@ module {
             affine.for %arg6 = 0 to 3 {
             %0 = affine.load %arg0[%arg5, %arg6] : memref<10x10xf32>
             %1 = affine.load %arg2[%arg5, %arg6] : memref<10x10xf32>
-            %2 = addf %0, %1 : f32
+            %2 = arith.addf %0, %1 : f32
             affine.store %2, %arg4[%arg5, %arg6] : memref<10x10xf32>
             } {loop_name = "k1"}
         } {loop_name = "i1", stage_name = "s2"}
@@ -48,8 +48,8 @@ module {
                     %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
                     %b = affine.load %B[%k, %j] : memref<1024x1024xf32>
                     %c = affine.load %C[%i, %j] : memref<1024x1024xf32>
-                    %prod = mulf %a, %b : f32
-                    %sum = addf %prod, %c: f32
+                    %prod = arith.mulf %a, %b : f32
+                    %sum = arith.addf %prod, %c: f32
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k" }
             } { loop_name = "j" }
@@ -61,8 +61,8 @@ module {
                     %a = affine.load %A[%i, %k] : memref<1024x1024xf32>
                     %c = affine.load %C[%k, %j] : memref<1024x1024xf32>
                     %d = affine.load %D[%i, %j] : memref<1024x1024xf32>
-                    %prod = mulf %a, %c : f32
-                    %sum = addf %prod, %d: f32
+                    %prod = arith.mulf %a, %c : f32
+                    %sum = arith.addf %prod, %d: f32
                     affine.store %sum, %D[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k1" }
             } { loop_name = "j1" }

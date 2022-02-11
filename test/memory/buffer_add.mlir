@@ -8,7 +8,7 @@ module {
         %s = hcl.create_stage_handle "s" : !hcl.StageHandle
         affine.for %i = 0 to 1024 {
             // CHECK: %[[MEM:.*]] = memref.alloc() : memref<1024xf32>
-            // CHECK: %cst = constant 0.000000e+00 : f32
+            // CHECK: %cst = arith.constant 0.000000e+00 : f32
             // CHECK: affine.for %[[VAR:.*]] = 0 to 1024 {
             // CHECK:     affine.store %cst, %[[MEM]][%[[VAR]]] : memref<1024xf32>
             // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
@@ -16,8 +16,8 @@ module {
             affine.for %j = 0 to 1024 {
                 // B[i, j] = A[i, j] + 1
                 %a = affine.load %A[%i, %j] : memref<1024x1024xf32>
-                %cst = constant 1.0 : f32
-                %sum = addf %a, %cst: f32 //register
+                %cst = arith.constant 1.0 : f32
+                %sum = arith.addf %a, %cst: f32 //register
                 // CHECK: affine.store {{.*}}, %[[MEM]][%[[VAR]]] : memref<1024xf32>
                 affine.store %sum, %B[%i, %j] : memref<1024x1024xf32>
             } { loop_name = "j" }
@@ -39,8 +39,8 @@ module {
     //         affine.for %j = 0 to 1024 {
     //             // B[i, j] = A[i, j] + 1
     //             %a = affine.load %A[%i, %j] : memref<1024x1024xf32>
-    //             %cst = constant 1.0 : f32
-    //             %sum = addf %a, %cst: f32 //register
+    //             %cst = arith.constant 1.0 : f32
+    //             %sum = arith.addf %a, %cst: f32 //register
     //             affine.store %sum, %B[%i, %j] : memref<1024x1024xf32>
     //         } { loop_name = "j" }
     //     } { loop_name = "i", stage_name = "s" }

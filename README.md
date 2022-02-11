@@ -174,4 +174,5 @@ We follow [Google Style Guides](https://google.github.io/styleguide/) and use
 
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)
+* [Polymer](https://github.com/kumasento/polymer)
 * [Torch-MLIR](https://github.com/llvm/torch-mlir)

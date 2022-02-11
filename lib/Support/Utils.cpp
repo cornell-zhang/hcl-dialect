@@ -7,10 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Support/Utils.h"
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Analysis/Utils.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -171,19 +167,19 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
 }
 
 /// Collect all load and store operations in the block and return them in "map".
-void hcl::getMemAccessesMap(Block &block, MemAccessesMap &map) {
-  for (auto &op : block) {
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      map[MemRefAccess(&op).memref].push_back(&op);
+// void hcl::getMemAccessesMap(Block &block, MemAccessesMap &map) {
+//   for (auto &op : block) {
+//     if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
+//       map[MemRefAccess(&op).memref].push_back(&op);
 
-    else if (op.getNumRegions()) {
-      // Recursively collect memory access operations in each block.
-      for (auto &region : op.getRegions())
-        for (auto &block : region)
-          getMemAccessesMap(block, map);
-    }
-  }
-}
+//     else if (op.getNumRegions()) {
+//       // Recursively collect memory access operations in each block.
+//       for (auto &region : op.getRegions())
+//         for (auto &block : region)
+//           getMemAccessesMap(block, map);
+//     }
+//   }
+// }
 
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
@@ -307,11 +303,11 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
 /// Return the layout map of "memrefType".
 AffineMap hcl::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
-  auto memrefMaps = memrefType.getAffineMaps();
-  if (memrefMaps.empty())
+  auto memrefMaps = memrefType.getLayout();
+  if (!memrefMaps.getAffineMap())
     return (AffineMap) nullptr;
 
-  return memrefMaps.back();
+  return memrefMaps.getAffineMap();
 }
 
 bool hcl::isFullyPartitioned(MemRefType memrefType, int axis) {

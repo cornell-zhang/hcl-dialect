@@ -8,7 +8,6 @@
 
 #include "hcl/Translation/EmitHLSCpp.h"
 #include "hcl/Dialect/Visitor.h"
-// #include "hcl/Dialect/InitAllDialects.h"
 #include "hcl/Support/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
@@ -132,9 +131,6 @@ public:
 
   /// Value name management methods.
   SmallString<8> addName(Value val, bool isPtr = false, std::string name = "");
-
-  SmallString<8> addAlias(Value val, Value alias);
-
   SmallString<8> getName(Value val);
 
   bool isDeclared(Value val) {
@@ -169,22 +165,12 @@ SmallString<8> HCLEmitterBase::addName(Value val, bool isPtr,
   return valName;
 }
 
-SmallString<8> HCLEmitterBase::addAlias(Value val, Value alias) {
-  assert(!isDeclared(alias) && "has been declared before.");
-  assert(isDeclared(val) && "hasn't been declared before.");
-
-  auto valName = getName(val);
-  state.nameTable[alias] = valName;
-
-  return valName;
-}
-
 SmallString<8> HCLEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto defOp = val.getDefiningOp()) {
-    if (auto constOp = dyn_cast<ConstantOp>(defOp)) {
-      auto constAttr = constOp.value();
+    if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
+      auto constAttr = constOp.getValue();
 
       if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
@@ -240,11 +226,9 @@ public:
   /// Tensor-related statement emitters.
   void emitTensorExtract(tensor::ExtractOp op);
   void emitTensorInsert(tensor::InsertOp op);
-  void emitTensorLoad(memref::TensorLoadOp op);
   void emitTensorStore(memref::TensorStoreOp op);
-  void emitTensorToMemref(memref::BufferCastOp op);
   void emitDim(memref::DimOp op);
-  void emitRank(RankOp op);
+  void emitRank(memref::RankOp op);
 
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
@@ -253,7 +237,7 @@ public:
   /// Special operation emitters.
   void emitCall(CallOp op);
   void emitSelect(SelectOp op);
-  void emitConstant(ConstantOp op);
+  void emitConstant(arith::ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
   void emitGeneralCast(UnrealizedConversionCastOp op);
   void emitGetBit(GetIntBitOp op);
@@ -416,17 +400,11 @@ public:
   bool visitOp(tensor::InsertOp op) {
     return emitter.emitTensorInsert(op), true;
   }
-  bool visitOp(memref::TensorLoadOp op) {
-    return emitter.emitTensorLoad(op), true;
-  }
   bool visitOp(memref::TensorStoreOp op) {
     return emitter.emitTensorStore(op), true;
   }
-  bool visitOp(memref::BufferCastOp op) {
-    return emitter.emitTensorToMemref(op), true;
-  }
   bool visitOp(memref::DimOp op) { return emitter.emitDim(op), true; }
-  bool visitOp(RankOp op) { return emitter.emitRank(op), true; }
+  bool visitOp(memref::RankOp op) { return emitter.emitRank(op), true; }
 
 private:
   ModuleEmitter &emitter;
@@ -440,25 +418,35 @@ public:
 
   using HLSCppVisitorBase::visitOp;
   /// Float binary expressions.
-  bool visitOp(CmpFOp op);
-  bool visitOp(AddFOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubFOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulFOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(DivFOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(RemFOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::CmpFOp op);
+  bool visitOp(arith::AddFOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubFOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
 
   /// Integer binary expressions.
-  bool visitOp(CmpIOp op);
-  bool visitOp(AddIOp op) { return emitter.emitBinary(op, "+"), true; }
-  bool visitOp(SubIOp op) { return emitter.emitBinary(op, "-"), true; }
-  bool visitOp(MulIOp op) { return emitter.emitBinary(op, "*"), true; }
-  bool visitOp(SignedDivIOp op) { return emitter.emitBinary(op, "/"), true; }
-  bool visitOp(SignedFloorDivIOp op) {
-    return emitter.emitBinary(op, "/"), true;
-  }
-  bool visitOp(SignedRemIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::CmpIOp op);
+  bool visitOp(arith::AddIOp op) { return emitter.emitBinary(op, "+"), true; }
+  bool visitOp(arith::SubIOp op) { return emitter.emitBinary(op, "-"), true; }
+  bool visitOp(arith::MulIOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(arith::DivSIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
+  bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+
+  /// Logical expressions.
+  bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
+  bool visitOp(arith::AndIOp op) { return emitter.emitBinary(op, "&"), true; }
+  bool visitOp(arith::OrIOp op) { return emitter.emitBinary(op, "|"), true; }
+  bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
+  bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
+  bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
 
   /// Unary expressions.
+  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
   bool visitOp(math::TanhOp op) { return emitter.emitUnary(op, "tanh"), true; }
@@ -473,32 +461,28 @@ public:
   bool visitOp(math::Log10Op op) {
     return emitter.emitUnary(op, "log10"), true;
   }
-  bool visitOp(NegFOp op) { return emitter.emitUnary(op, "-"), true; }
-
-  /// Logical expressions.
-  bool visitOp(AndOp op) { return emitter.emitBinary(op, "&"), true; }
-  bool visitOp(OrOp op) { return emitter.emitBinary(op, "|"), true; }
-  bool visitOp(XOrOp op) { return emitter.emitBinary(op, "^"), true; }
-
-  /// Bitwise experssions.
-  bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
-  bool visitOp(ShiftLeftOp op) { return emitter.emitBinary(op, "<<"), true; }
-  bool visitOp(SignedShiftRightOp op) {
-    return emitter.emitBinary(op, ">>"), true;
-  }
+  bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Special operations.
   bool visitOp(CallOp op) { return emitter.emitCall(op), true; }
   bool visitOp(ReturnOp op) { return true; }
   bool visitOp(SelectOp op) { return emitter.emitSelect(op), true; }
-  bool visitOp(ConstantOp op) { return emitter.emitConstant(op), true; }
-  bool visitOp(IndexCastOp op) {
-    return emitter.emitCast<IndexCastOp>(op), true;
+  bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
+  bool visitOp(arith::IndexCastOp op) {
+    return emitter.emitCast<arith::IndexCastOp>(op), true;
   }
-  bool visitOp(UIToFPOp op) { return emitter.emitCast<UIToFPOp>(op), true; }
-  bool visitOp(SIToFPOp op) { return emitter.emitCast<SIToFPOp>(op), true; }
-  bool visitOp(FPToUIOp op) { return emitter.emitCast<FPToUIOp>(op), true; }
-  bool visitOp(FPToSIOp op) { return emitter.emitCast<FPToSIOp>(op), true; }
+  bool visitOp(arith::UIToFPOp op) {
+    return emitter.emitCast<arith::UIToFPOp>(op), true;
+  }
+  bool visitOp(arith::SIToFPOp op) {
+    return emitter.emitCast<arith::SIToFPOp>(op), true;
+  }
+  bool visitOp(arith::FPToUIOp op) {
+    return emitter.emitCast<arith::FPToUIOp>(op), true;
+  }
+  bool visitOp(arith::FPToSIOp op) {
+    return emitter.emitCast<arith::FPToSIOp>(op), true;
+  }
   bool visitOp(UnrealizedConversionCastOp op) {
     return emitter.emitGeneralCast(op), true;
   }
@@ -518,25 +502,25 @@ private:
 };
 } // namespace
 
-bool ExprVisitor::visitOp(CmpFOp op) {
+bool ExprVisitor::visitOp(arith::CmpFOp op) {
   switch (op.getPredicate()) {
-  case CmpFPredicate::OEQ:
-  case CmpFPredicate::UEQ:
+  case arith::CmpFPredicate::OEQ:
+  case arith::CmpFPredicate::UEQ:
     return emitter.emitBinary(op, "=="), true;
-  case CmpFPredicate::ONE:
-  case CmpFPredicate::UNE:
+  case arith::CmpFPredicate::ONE:
+  case arith::CmpFPredicate::UNE:
     return emitter.emitBinary(op, "!="), true;
-  case CmpFPredicate::OLT:
-  case CmpFPredicate::ULT:
+  case arith::CmpFPredicate::OLT:
+  case arith::CmpFPredicate::ULT:
     return emitter.emitBinary(op, "<"), true;
-  case CmpFPredicate::OLE:
-  case CmpFPredicate::ULE:
+  case arith::CmpFPredicate::OLE:
+  case arith::CmpFPredicate::ULE:
     return emitter.emitBinary(op, "<="), true;
-  case CmpFPredicate::OGT:
-  case CmpFPredicate::UGT:
+  case arith::CmpFPredicate::OGT:
+  case arith::CmpFPredicate::UGT:
     return emitter.emitBinary(op, ">"), true;
-  case CmpFPredicate::OGE:
-  case CmpFPredicate::UGE:
+  case arith::CmpFPredicate::OGE:
+  case arith::CmpFPredicate::UGE:
     return emitter.emitBinary(op, ">="), true;
   default:
     op.emitError("has unsupported compare type.");
@@ -544,23 +528,23 @@ bool ExprVisitor::visitOp(CmpFOp op) {
   }
 }
 
-bool ExprVisitor::visitOp(CmpIOp op) {
+bool ExprVisitor::visitOp(arith::CmpIOp op) {
   switch (op.getPredicate()) {
-  case CmpIPredicate::eq:
+  case arith::CmpIPredicate::eq:
     return emitter.emitBinary(op, "=="), true;
-  case CmpIPredicate::ne:
+  case arith::CmpIPredicate::ne:
     return emitter.emitBinary(op, "!="), true;
-  case CmpIPredicate::slt:
-  case CmpIPredicate::ult:
+  case arith::CmpIPredicate::slt:
+  case arith::CmpIPredicate::ult:
     return emitter.emitBinary(op, "<"), true;
-  case CmpIPredicate::sle:
-  case CmpIPredicate::ule:
+  case arith::CmpIPredicate::sle:
+  case arith::CmpIPredicate::ule:
     return emitter.emitBinary(op, "<="), true;
-  case CmpIPredicate::sgt:
-  case CmpIPredicate::ugt:
+  case arith::CmpIPredicate::sgt:
+  case arith::CmpIPredicate::ugt:
     return emitter.emitBinary(op, ">"), true;
-  case CmpIPredicate::sge:
-  case CmpIPredicate::uge:
+  case arith::CmpIPredicate::sge:
+  case arith::CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
   default:
     op.emitError("has unsupported compare type.");
@@ -605,19 +589,19 @@ void ModuleEmitter::emitScfFor(scf::ForOp op) {
   // Emit lower bound.
   emitValue(iterVar);
   os << " = ";
-  emitValue(op.lowerBound());
+  emitValue(op.getLowerBound());
   os << "; ";
 
   // Emit upper bound.
   emitValue(iterVar);
   os << " < ";
-  emitValue(op.upperBound());
+  emitValue(op.getUpperBound());
   os << "; ";
 
   // Emit increase step.
   emitValue(iterVar);
   os << " += ";
-  emitValue(op.step());
+  emitValue(op.getStep());
   os << ") {";
   emitInfoAndNewLine(op);
 
@@ -647,19 +631,19 @@ void ModuleEmitter::emitScfIf(scf::IfOp op) {
 
   indent();
   os << "if (";
-  emitValue(op.condition());
+  emitValue(op.getCondition());
   os << ") {";
   emitInfoAndNewLine(op);
 
   addIndent();
-  emitBlock(op.thenRegion().front());
+  emitBlock(op.getThenRegion().front());
   reduceIndent();
 
-  if (!op.elseRegion().empty()) {
+  if (!op.getElseRegion().empty()) {
     indent();
     os << "} else {\n";
     addIndent();
-    emitBlock(op.elseRegion().front());
+    emitBlock(op.getElseRegion().front());
     reduceIndent();
   }
 
@@ -1020,7 +1004,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
     os << "} else {\n";
 
     // Otherwise, generated values will be accumulated/reduced to the
-    // current results with corresponding AtomicRMWKind operations.
+    // current results with corresponding arith::AtomicRMWKind operations.
     addIndent();
     auto RMWAttrs =
         getIntArrayAttrValue(parentOp, parentOp.getReductionsAttrName());
@@ -1029,37 +1013,45 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
       unsigned rank = emitNestedLoopHead(result);
       indent();
       emitValue(result, rank);
-      switch ((AtomicRMWKind)RMWAttrs[resultIdx]) {
-      case (AtomicRMWKind::addf):
-      case (AtomicRMWKind::addi):
+      switch ((arith::AtomicRMWKind)RMWAttrs[resultIdx]) {
+      case (arith::AtomicRMWKind::addf):
+      case (arith::AtomicRMWKind::addi):
         os << " += ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (AtomicRMWKind::assign):
+      case (arith::AtomicRMWKind::assign):
         os << " = ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (AtomicRMWKind::maxf):
-      case (AtomicRMWKind::maxs):
-      case (AtomicRMWKind::maxu):
+      case (arith::AtomicRMWKind::maxf):
+      case (arith::AtomicRMWKind::maxs):
+      case (arith::AtomicRMWKind::maxu):
         os << " = max(";
         emitValue(result, rank);
         os << ", ";
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (AtomicRMWKind::minf):
-      case (AtomicRMWKind::mins):
-      case (AtomicRMWKind::minu):
+      case (arith::AtomicRMWKind::minf):
+      case (arith::AtomicRMWKind::mins):
+      case (arith::AtomicRMWKind::minu):
         os << " = min(";
         emitValue(result, rank);
         os << ", ";
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (AtomicRMWKind::mulf):
-      case (AtomicRMWKind::muli):
+      case (arith::AtomicRMWKind::mulf):
+      case (arith::AtomicRMWKind::muli):
         os << " *= ";
+        emitValue(op.getOperand(resultIdx++), rank);
+        break;
+      case (arith::AtomicRMWKind::ori):
+        os << " |= ";
+        emitValue(op.getOperand(resultIdx++), rank);
+        break;
+      case (arith::AtomicRMWKind::andi):
+        os << " &= ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
       }
@@ -1171,18 +1163,6 @@ void ModuleEmitter::emitTensorInsert(tensor::InsertOp op) {
 }
 
 /// Tensor-related statement emitters.
-void ModuleEmitter::emitTensorLoad(memref::TensorLoadOp op) {
-  // TODO: stream interface for tensor?
-  auto rank = emitNestedLoopHead(op.getResult());
-  indent();
-  emitValue(op.getResult(), rank);
-  os << " = ";
-  emitValue(op.getOperand(), rank);
-  os << ";";
-  emitInfoAndNewLine(op);
-  emitNestedLoopTail(rank);
-}
-
 void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   // TODO: stream interface for tensor?
   auto rank = emitNestedLoopHead(op.getOperand(0));
@@ -1195,27 +1175,9 @@ void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitTensorToMemref(memref::BufferCastOp op) {
-  // A declared result indicates that the memref is output of the function, and
-  // has been declared in the function signature.
-  if (isDeclared(op.getResult())) {
-    auto rank = emitNestedLoopHead(op.getResult());
-    indent();
-    emitValue(op.getResult(), rank);
-    os << " = ";
-    emitValue(op.getOperand(), rank);
-    os << ";";
-    emitInfoAndNewLine(op);
-    emitNestedLoopTail(rank);
-  } else {
-    addAlias(op.getOperand(), op.getResult());
-    emitArrayDirectives(op.getResult());
-  }
-}
-
 void ModuleEmitter::emitDim(memref::DimOp op) {
-  if (auto constOp = dyn_cast<ConstantOp>(op.getOperand(1).getDefiningOp())) {
-    auto constVal = constOp.value().cast<IntegerAttr>().getInt();
+  if (auto constOp = dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
+    auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();
 
     if (type.hasStaticShape()) {
@@ -1233,7 +1195,7 @@ void ModuleEmitter::emitDim(memref::DimOp op) {
     emitError(op, "index is not a constant.");
 }
 
-void ModuleEmitter::emitRank(RankOp op) {
+void ModuleEmitter::emitRank(memref::RankOp op) {
   auto type = op.getOperand().getType().cast<ShapedType>();
   if (type.hasRank()) {
     indent();
@@ -1303,12 +1265,12 @@ void ModuleEmitter::emitSelect(SelectOp op) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitConstant(ConstantOp op) {
+void ModuleEmitter::emitConstant(arith::ConstantOp op) {
   // This indicates the constant type is scalar (float, integer, or bool).
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.value().dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";

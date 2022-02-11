@@ -10,9 +10,11 @@
 #define HCL_ANALYSIS_UTILS_H
 
 #include "hcl/Dialect/HeteroCLDialect.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 namespace mlir {
 namespace hcl {
@@ -60,7 +62,7 @@ bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                int depth = -1, bool countReductionLoops = true);
 
 /// Collect all load and store operations in the block and return them in "map".
-void getMemAccessesMap(Block &block, MemAccessesMap &map);
+// void getMemAccessesMap(Block &block, MemAccessesMap &map);
 
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,

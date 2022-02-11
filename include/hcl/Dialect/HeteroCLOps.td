@@ -345,14 +345,10 @@ def FixedLike: TypeConstraint<Or<[AnyFixed.predicate,
         VectorOf<[AnyFixed]>.predicate, TensorOf<[AnyFixed]>.predicate]>,
     "fixed-point-like">;
 
-class FixedBinaryOp<string mnemonic, list<OpTrait> traits = []> :
-    Op<HeteroCL_Dialect, mnemonic, traits # [NoSideEffect,
-        SameOperandsAndResultType] #
-        ElementwiseMappable.traits>,
-    Arguments<(ins FixedLike:$lhs, FixedLike:$rhs)> {
-
-  let results = (outs AnyType:$result);
-}
+class FixedBinaryOp<string mnemonic, list<Trait> traits = []> :
+    Op<HeteroCL_Dialect, mnemonic, traits>,
+    Arguments<(ins FixedLike:$lhs, FixedLike:$rhs)>,
+    Results<(outs FixedLike:$result)>;
 
 def AddFixedOp : FixedBinaryOp<"add_fixed"> {
   let summary = "fixed point addition operation";

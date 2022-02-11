@@ -12,19 +12,17 @@
 #include "hcl/Transforms/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
 
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Affine/LoopFusionUtils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
-#include "mlir/IR/FunctionSupport.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/LoopFusionUtils.h"
-#include "mlir/Transforms/LoopUtils.h"
-#include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
 
 #include <algorithm>
@@ -573,7 +571,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
   for (AffineForOp loop : loops) {
     auto cstUb = loop.getConstantUpperBound();
     prod *= cstUb;
-    auto cstOp = builder.create<ConstantIndexOp>(loc, cstUb);
+    auto cstOp = builder.create<arith::ConstantIndexOp>(loc, cstUb);
     upperBoundSymbols.push_back(cstOp);
     // hoist to the outermost
     cstOp->moveBefore(stageLoop);
@@ -863,7 +861,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // 3) Construct new memory layout map
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
-  auto layouts = arrayType.getAffineMaps();
+  auto layout = arrayType.getLayout().getAffineMap();
 
   // Walk through each dimension of the current memory
   SmallVector<AffineExpr, 4> partitionIndices;
@@ -873,10 +871,10 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // last N : physical index
   for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
-      if (layouts.size() != 0) {
+      if (!layout.isEmpty()) {
         // TODO: not sure why warning does not work (no output)
         // partitionOp.emitWarning
-        partitionOp.emitError("Partition on the array partitioned before."
+        partitionOp.emitError("Partition on the array partitioned before. "
                               "The original layout map will be rewritten!");
       }
       if (kind == PartitionKindEnum::CyclicPartition) {
@@ -906,12 +904,12 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
         return failure();
       }
     } else {
-      if (layouts.size() == 0) {
+      if (layout.isEmpty()) {
         partitionIndices.push_back(builder.getAffineConstantExpr(0));
         addressIndices.push_back(builder.getAffineDimExpr(dim));
       } else { // already had one layout map before
-        partitionIndices.push_back(layouts[0].getResult(dim));
-        addressIndices.push_back(layouts[0].getResult(dim));
+        partitionIndices.push_back(layout.getResult(dim));
+        addressIndices.push_back(layout.getResult(dim));
       }
     }
   }
@@ -1241,10 +1239,10 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
     // buffer only has one element
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get({1}, elementType));
-    auto zero = builder.create<ConstantOp>(
+    auto zero = builder.create<arith::ConstantOp>(
         loc_front, elementType, createZeroAttr(builder, elementType));
     // no need to create an explicit loop
-    auto idx = builder.create<ConstantIndexOp>(loc_front, 0);
+    auto idx = builder.create<arith::ConstantIndexOp>(loc_front, 0);
     memIndices.push_back(idx);
     builder.create<AffineStoreOp>(loc_front, zero, buf, memIndices);
 
@@ -1309,7 +1307,7 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
     // a.1) Allocate buffer
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get(ubs, elementType));
-    auto zero = builder.create<ConstantOp>(
+    auto zero = builder.create<arith::ConstantOp>(
         loc_front, elementType, createZeroAttr(builder, elementType));
 
     // a.2) Create initialization loop
@@ -1441,7 +1439,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
   }
   auto newType = MemRefType::get(
       arrayType.getShape(), arrayType.getElementType(),
-      arrayType.getAffineMaps(),
+      arrayType.getLayout(),
       StringAttr::get(arrayToStream.getDefiningOp()->getContext(),
                       "stream:" + std::to_string(fifo_depth)));
 
@@ -1681,7 +1679,8 @@ namespace hcl {
 
 // Register Loop Transformation Pass
 void registerHCLLoopTransformationPass() {
-  ::registerPasses();
+  // ::registerPasses();
+  PassRegistration<HCLLoopTransformation>();
   // mlir::PassPipelineRegistration<>(
   //     "loop-opt", "Loop transformation pass", [](OpPassManager &pm) {
   //       pm.addPass(std::make_unique<HCLLoopTransformation>());

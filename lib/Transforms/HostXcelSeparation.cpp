@@ -9,7 +9,6 @@
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
 
-#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -17,8 +16,6 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
-#include "mlir/Transforms/LoopUtils.h"
-#include "mlir/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace hcl;

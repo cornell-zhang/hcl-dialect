@@ -29,7 +29,7 @@ def Fixed : HeteroCL_Type<"Fixed", [MemRefElementTypeInterface]> {
   let mnemonic = "Fixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
   let printer = [{
-    $_printer << "Fixed<" << getImpl()->width << ", " << getImpl()->frac << ">";
+    $_printer << "<" << getImpl()->width << ", " << getImpl()->frac << ">";
   }];
   let parser = [{
     if (parser.parseLess())
@@ -53,7 +53,7 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   let mnemonic = "UFixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
   let printer = [{
-    $_printer << "UFixed<" << getImpl()->width << ", " << getImpl()->frac << ">";
+    $_printer << "<" << getImpl()->width << ", " << getImpl()->frac << ">";
   }];
   let parser = [{
     if (parser.parseLess())

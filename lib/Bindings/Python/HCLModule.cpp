@@ -114,15 +114,15 @@ static bool emitHlsCpp(MlirModule &mod, py::object fileObject) {
       mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
 }
 
-// //===----------------------------------------------------------------------===//
-// // Lowering APIs
-// //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+// Lowering APIs
+//===----------------------------------------------------------------------===//
 
-// static bool lowerHCLToLLVM(PyModule &module, PyMlirContext &context) {
-//   auto mod = unwrap(module.get());
-//   auto ctx = unwrap(context.get());
-//   return applyHCLToLLVMLoweringPass(mod, *ctx);
-// }
+static bool lowerHCLToLLVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
+  auto mod = unwrap(mlir_mod);
+  auto ctx = unwrap(mlir_ctx);
+  return applyHCLToLLVMLoweringPass(mod, *ctx);
+}
 
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
@@ -139,11 +139,14 @@ PYBIND11_MODULE(_hcl, m) {
   auto hcl_m = m.def_submodule("hcl");
 
   // register dialects
-  hcl_m.def("register_dialect", [](MlirContext context) {
-    MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
-    mlirDialectHandleRegisterDialect(hcl, context);
-    mlirDialectHandleLoadDialect(hcl, context);
-  }, py::arg("context") = py::none());
+  hcl_m.def(
+      "register_dialect",
+      [](MlirContext context) {
+        MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
+        mlirDialectHandleRegisterDialect(hcl, context);
+        mlirDialectHandleLoadDialect(hcl, context);
+      },
+      py::arg("context") = py::none());
 
   // populateIRCore(m);
   // populateHCLIRTypes(m);
@@ -153,8 +156,7 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("loop_transformation", &loopTransformation);
   // m.def("host_device_separation", &hostXcelSeparation);
 
-  // Emission APIs.
+  // Codegen APIs.
   hcl_m.def("emit_hlscpp", &emitHlsCpp);
-
-  // m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
+  hcl_m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
 }

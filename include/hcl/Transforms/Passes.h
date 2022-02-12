@@ -7,14 +7,24 @@
 #ifndef HCL_TRANSFORMS_PASSES_H
 #define HCL_TRANSFORMS_PASSES_H
 
-#include "hcl/Transforms/LoopTransformations.h"
-#include "hcl/Transforms/ReconcileUnrealizedCasts.h"
+#include "mlir/Pass/Pass.h"
 
 namespace mlir {
 namespace hcl {
-/// Generate the code for registering passes.
-#define GEN_PASS_REGISTRATION
-#include "hcl/Transforms/Passes.h.inc"
+
+std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass();
+
+bool applyLoopTransformation(ModuleOp &f);
+
+bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
+                             ModuleOp &extern_mod,
+                             std::map<std::string, std::string> &device_map,
+                             std::vector<std::string> &graph_roots,
+                             std::vector<std::string> &subgraph_inputs,
+                             std::vector<std::string> &subgraph_outputs);
+
+/// Registers all HCL transformation passes
+void registerHCLPasses();
 
 } // namespace hcl
 } // namespace mlir

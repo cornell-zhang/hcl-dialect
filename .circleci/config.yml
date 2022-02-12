@@ -1,0 +1,62 @@
+# Python CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+
+version: 2
+jobs:
+  build:
+    working_directory: ~/hcl-dialect-prototype
+    docker:
+      - image: circleci/python:3.7  # primary container for the build job
+    steps:
+      - checkout  # checkout source code to working directory
+      - run:
+          name: Install dependency
+          command: |
+            sudo apt-get update && sudo apt-get install -y build-essential cmake
+      - restore_cache:
+          key: llvm-14-{{ checksum "CMakeLists.txt" }}
+      - run:
+          name: Build LLVM
+          command: | # /home/circleci/hcl-dialect-prototype
+            if test -d llvm-project; then echo "LLVM exists"; \
+              else git clone https://github.com/llvm/llvm-project.git; fi
+            cd llvm-project
+            git checkout tags/llvmorg-14.0.0-rc1
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r mlir/python/requirements.txt
+            mkdir -p build && cd build
+            if test -d bin; \
+              then echo "Build completed"; \
+            else cmake -G "Unix Makefiles" ../llvm -DLLVM_ENABLE_PROJECTS=mlir \
+                -DLLVM_BUILD_EXAMPLES=ON -DLLVM_TARGETS_TO_BUILD="X86" \
+                -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+                -DLLVM_INSTALL_UTILS=ON -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+                -DPython3_EXECUTABLE=`which python3` && \
+              mkdir -p tools/mlir/python/dialects && \
+              make -j4;
+            fi;
+            export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
+            cd ../..
+      - save_cache:
+          key: llvm-14-{{ checksum "CMakeLists.txt" }}
+          paths:
+            - llvm-project
+      - run:
+          name: Build HCL-MLIR
+          command: |
+            export BUILD_DIR=$(pwd)/llvm-project/build
+            export PREFIX=$(pwd)/llvm-project/build
+            mkdir -p build && cd build
+            cmake -G "Unix Makefiles" .. \
+                -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
+                -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
+                -DPYTHON_BINDING=ON \
+                -DPython3_EXECUTABLE=`which python3`
+            make -j4
+            export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
+      - run:
+          name: Test
+          command: |
+            cd build
+            cmake --build . --target check-hcl

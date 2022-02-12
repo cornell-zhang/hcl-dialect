@@ -10,7 +10,7 @@ module {
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %i = 0 to 30 {
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30xf32>
-      // CHECK: %cst = constant 0.000000e+00 : f32
+      // CHECK: %cst = arith.constant 0.000000e+00 : f32
       // CHECK: affine.for %[[VAR:.*]] = 0 to 30 {
       // CHECK:   affine.store %cst, %[[MEM]][%[[VAR]]] : memref<30xf32>
       // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
@@ -23,8 +23,8 @@ module {
             %a = affine.load %Input[%i+%ry, %j+%rx] : memref<32x32xf32>
             %k = affine.load %Kernel[%ry, %rx] : memref<3x3xf32>
             %b = affine.load %Output[%i, %j] : memref<30x30xf32>
-            %mul = mulf %a, %k : f32
-            %sum = addf %b, %mul : f32
+            %mul = arith.mulf %a, %k : f32
+            %sum = arith.addf %b, %mul : f32
             // CHECK: affine.store {{.*}}, %[[MEM]][%[[VAR1]]] : memref<30xf32>
             affine.store %sum, %Output[%i, %j] : memref<30x30xf32>
           } { loop_name = "rx", reduction = 1 }
@@ -58,8 +58,8 @@ module {
                 %a = affine.load %Input[%rc, %i+%ry, %j+%rx] : memref<3x32x32xf32>
                 %k = affine.load %Kernel[%oc, %rc, %ry, %rx] : memref<6x3x3x3xf32>
                 %b = affine.load %Output[%oc, %i, %j] : memref<6x30x30xf32>
-                %mul = mulf %a, %k : f32
-                %sum = addf %b, %mul : f32
+                %mul = arith.mulf %a, %k : f32
+                %sum = arith.addf %b, %mul : f32
                 affine.store %sum, %Output[%oc, %i, %j] : memref<6x30x30xf32>
               } { loop_name = "rx", reduction = 1 }
             } { loop_name = "ry", reduction = 1 }
@@ -89,8 +89,8 @@ module {
                 %a = affine.load %Input[%rc, %i+%ry, %j+%rx] : memref<3x32x32xf32>
                 %k = affine.load %Kernel[%oc, %rc, %ry, %rx] : memref<6x3x3x3xf32>
                 %b = affine.load %Output[%oc, %i, %j] : memref<6x30x30xf32>
-                %mul = mulf %a, %k : f32
-                %sum = addf %b, %mul : f32
+                %mul = arith.mulf %a, %k : f32
+                %sum = arith.addf %b, %mul : f32
                 affine.store %sum, %Output[%oc, %i, %j] : memref<6x30x30xf32>
               } { loop_name = "rx", reduction = 1 }
             } { loop_name = "ry", reduction = 1 }
@@ -112,7 +112,7 @@ module {
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %oc = 0 to 6 { // out channel
     // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
-    // CHECK: %cst = constant 0.000000e+00 : f32
+    // CHECK: %cst = arith.constant 0.000000e+00 : f32
     // CHECK: affine.for %[[VAR1:.*]] = 0 to 30 {
     // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
     // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
@@ -126,8 +126,8 @@ module {
                 %a = affine.load %Input[%rc, %i+%ry, %j+%rx] : memref<3x32x32xf32>
                 %k = affine.load %Kernel[%oc, %rc, %ry, %rx] : memref<6x3x3x3xf32>
                 %b = affine.load %Output[%oc, %i, %j] : memref<6x30x30xf32>
-                %mul = mulf %a, %k : f32
-                %sum = addf %b, %mul : f32
+                %mul = arith.mulf %a, %k : f32
+                %sum = arith.addf %b, %mul : f32
                 // CHECK: affine.store {{.*}}, %[[MEM]][{{.*}}, {{.*}}] : memref<30x30xf32>
                 affine.store %sum, %Output[%oc, %i, %j] : memref<6x30x30xf32>
               } { loop_name = "rx", reduction = 1 }
@@ -156,7 +156,7 @@ module {
     %s = hcl.create_stage_handle "s" : !hcl.StageHandle
     affine.for %oc = 0 to 6 { // out channel
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
-      // CHECK: %cst = constant 0.000000e+00 : f32
+      // CHECK: %cst = arith.constant 0.000000e+00 : f32
       // CHECK: affine.for %[[VAR1:.*]] = 0 to 30 {
       // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
       // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
@@ -170,8 +170,8 @@ module {
                 %a = affine.load %Input[%rc, %i+%ry, %j+%rx] : memref<3x32x32xf32>
                 %k = affine.load %Kernel[%oc, %rc, %ry, %rx] : memref<6x3x3x3xf32>
                 %b = affine.load %Output[%oc, %i, %j] : memref<6x30x30xf32>
-                %mul = mulf %a, %k : f32
-                %sum = addf %b, %mul : f32
+                %mul = arith.mulf %a, %k : f32
+                %sum = arith.addf %b, %mul : f32
                 affine.store %sum, %Output[%oc, %i, %j] : memref<6x30x30xf32>
               } { loop_name = "rx", reduction = 1 }
             } { loop_name = "ry", reduction = 1 }

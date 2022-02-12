@@ -14,7 +14,7 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
 
 RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
     cd llvm-project && \
-    git checkout tags/llvmorg-13.0.0 -b v13.0.0 && \
+    git checkout tags/llvmorg-14.0.0-rc1 && \
     python3 -m pip install --upgrade pip && \
     python3 -m pip install -r mlir/python/requirements.txt && \
     mkdir build && cd build && \
@@ -39,7 +39,6 @@ RUN cd /root/ && export TOKEN="Username:PersonalToken" && \
         -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
         -DPYTHON_BINDING=ON \
         -DPython3_EXECUTABLE=`which python3` && \
-    mkdir -p include/hcl/Bindings/Python/affine && \ 
     make -j`nproc`
 ENV PYTHONPATH /root/hcl-dialect-prototype/build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 

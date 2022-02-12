@@ -4,12 +4,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Transforms/HostXcelSeparation.h"
+#include "PassDetail.h"
+
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
+#include "hcl/Transforms/Passes.h"
 
-#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -17,8 +18,6 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
-#include "mlir/Transforms/LoopUtils.h"
-#include "mlir/Transforms/Passes.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -26,104 +25,101 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-std::vector<std::string> split_names(const std::string &arg_names) {
-  std::stringstream ss(arg_names);
-  std::vector<std::string> args;
-  while (ss.good()) {
-    std::string substr;
-    getline(ss, substr, ',');
-    args.push_back(substr);
-  }
-  return args;
-}
-
 bool applyHostXcelSeparation(
-    ModuleOp &host_mod, ModuleOp &device_mod,
-    std::map<std::string, std::string> &device_map /*stage, device*/,
+    ModuleOp &host_mod, ModuleOp &xcel_mod, ModuleOp &extern_mod,
+    std::map<std::string, std::string> &device_map /*stage, xcel*/,
     std::vector<std::string> &graph_roots,
     std::vector<std::string> &subgraph_inputs,
     std::vector<std::string> &subgraph_outputs) {
   // get stage map: name->func_op
-  // & get device top function
+  // & get xcel top function
   std::map<std::string, FuncOp> funcMap;
-  FuncOp top_func;
-  for (FuncOp func : device_mod.getOps<FuncOp>()) {
+  FuncOp xcel_top;
+  for (FuncOp func : xcel_mod.getOps<FuncOp>()) {
     if (func->hasAttr("top"))
-      top_func = func;
+      xcel_top = func;
     else
       funcMap[func.getName().str().substr(6)] = func; // Stage_xxx
   }
   // get host main function
-  FuncOp host_main;
+  FuncOp host_top;
   for (auto host_func : host_mod.getOps<FuncOp>()) {
     if (host_func.getName().str() == "main") {
-      host_main = host_func;
+      host_top = host_func;
       break;
     }
   }
-  // get host and device insertion points
-  auto host_retOp = *(host_main.getOps<ReturnOp>().begin());
-  auto device_retOp = *(top_func.getOps<ReturnOp>().begin());
+  // get extern top function
+  FuncOp extern_top;
+  for (auto extern_func : extern_mod.getOps<FuncOp>()) {
+    if (extern_func.getName().str() == "top") {
+      extern_top = extern_func;
+      break;
+    }
+  }
+  // get host and xcel insertion points
+  auto host_retOp = *(host_top.getOps<ReturnOp>().begin());
+  auto xcel_retOp = *(xcel_top.getOps<ReturnOp>().begin());
 
   // get definitions map: name->array
   std::map<std::string, Value> defMap;
-  for (auto def : top_func.getOps<memref::AllocOp>()) {
+  for (auto def : xcel_top.getOps<memref::AllocOp>()) {
     std::string name = def->getAttr("name").cast<StringAttr>().getValue().str();
     defMap[name] = def.getResult();
   }
-  for (auto def : host_main.getOps<memref::AllocOp>()) {
+  for (auto def : host_top.getOps<memref::AllocOp>()) {
     std::string name = def->getAttr("name").cast<StringAttr>().getValue().str();
     defMap[name] = def.getResult();
   }
   std::string input_names =
-      top_func->getAttr("inputs").cast<StringAttr>().getValue().str();
+      xcel_top->getAttr("inputs").cast<StringAttr>().getValue().str();
   std::vector<std::string> args = split_names(input_names);
   std::string output_names =
-      top_func->getAttr("outputs").cast<StringAttr>().getValue().str();
+      xcel_top->getAttr("outputs").cast<StringAttr>().getValue().str();
   size_t len_inputs = args.size();
-  for (auto it : llvm::enumerate(top_func.getArguments())) {
+  for (auto it : llvm::enumerate(xcel_top.getArguments())) {
     if (it.index() < len_inputs) {
       defMap[args[it.index()]] = it.value();
     } else {
       defMap[output_names] = it.value();
     }
   }
-  // get device stage call functions
+  // get xcel stage call functions
   std::map<std::string, CallOp> callMap;
   std::vector<CallOp> callOrder;
-  for (auto callOp : top_func.getOps<CallOp>()) {
+  for (auto callOp : xcel_top.getOps<CallOp>()) {
     callMap[callOp.getCallee().str().substr(6)] = callOp;
     callOrder.push_back(callOp);
   }
 
   // get call @top function in host main
-  auto call_top = *(host_main.getOps<CallOp>().begin());
+  auto call_top = *(host_top.getOps<CallOp>().begin());
   // auto top_ret = *(std::prev(call_top.arg_operand_end()));
-  // only support one output for now
-  assert(subgraph_outputs.size() == 1);
+  // only support zero or one output for now
+  assert(subgraph_outputs.size() <= 1);
 
   // construct host module
   // should traverse in topological order
-  bool isBack = false;
+  bool isAfterXcelCall = false;
   for (auto callOp : callOrder) {
     std::string stage_name = callOp.getCallee().str().substr(6);
-    if (stage_name == subgraph_outputs[0])
-      isBack = true;
-    // move stage from device to host
+    if (subgraph_outputs.size() > 0 && stage_name == subgraph_outputs[0])
+      isAfterXcelCall = true;
+    // move stage from xcel to host
     std::string device = device_map[stage_name];
     if (device == "CPU" && funcMap.count(stage_name) > 0) {
-      funcMap[stage_name]->moveBefore(host_main);
-      // move array declaration from device to host
+      funcMap[stage_name]->moveBefore(host_top);
+      // move array declaration from xcel to host
       auto stage_ret = *(std::prev(callMap[stage_name].arg_operand_end()));
-      if (!isBack) {
+      if (!isAfterXcelCall) {
         // return value should have been allocated
         stage_ret.getDefiningOp()->moveBefore(call_top);
-        // move call function from device to host
+        // move call function from xcel to host
         callMap[stage_name]->moveBefore(call_top);
       } else {
         // return value should have been allocated
         stage_ret.getDefiningOp()->moveBefore(host_retOp);
-        // move call function from device to host
+        // move call function from xcel to host
         callMap[stage_name]->moveBefore(host_retOp);
       }
     }
@@ -131,7 +127,7 @@ bool applyHostXcelSeparation(
 
   // fix reference (the following API will check all the operands in that
   // operation)
-  for (auto callOp : host_main.getOps<CallOp>()) {
+  for (auto callOp : host_top.getOps<CallOp>()) {
     auto input_names =
         callOp->getAttr("inputs").cast<StringAttr>().getValue().str();
     std::vector<std::string> args = split_names(input_names);
@@ -150,7 +146,7 @@ bool applyHostXcelSeparation(
       }
     }
   }
-  for (auto callOp : top_func.getOps<CallOp>()) {
+  for (auto callOp : xcel_top.getOps<CallOp>()) {
     auto input_names =
         callOp->getAttr("inputs").cast<StringAttr>().getValue().str();
     std::vector<std::string> args = split_names(input_names);
@@ -159,8 +155,8 @@ bool applyHostXcelSeparation(
       if (it.index() == callOp.getArgOperands().size() - 1) // skip return
         break;
       std::string arg = args[it.index()];
-      if (defMap.count(arg + "_device") > 0) {
-        auto def = defMap[arg + "_device"];
+      if (defMap.count(arg + "_xcel") > 0) {
+        auto def = defMap[arg + "_xcel"];
         callOp->replaceUsesOfWith(it.value(), def);
       } else if (defMap.count(arg) > 0) {
         auto def = defMap[arg];
@@ -168,18 +164,41 @@ bool applyHostXcelSeparation(
       }
     }
   }
-  // fix device return
-  for (auto output : subgraph_outputs) {
-    auto stage_ret = *(std::prev(callMap[output].arg_operand_end()));
-    OpBuilder builder(device_retOp);
-    builder.create<ReturnOp>(device_retOp->getLoc(), stage_ret);
-    break;
+  // fix xcel return
+  if (subgraph_outputs.size() != 0) {
+    for (auto output : subgraph_outputs) {
+      auto stage_ret = *(std::prev(callMap[output].arg_operand_end()));
+      OpBuilder builder(xcel_retOp);
+      builder.create<ReturnOp>(xcel_retOp->getLoc(), stage_ret);
+      break;
+    }
+  } else {
+    OpBuilder builder(xcel_retOp);
+    builder.create<ReturnOp>(xcel_retOp->getLoc());
+    // erase block arguments
+    SmallVector<unsigned> argIdx;
+    // func.front() is a block
+    unsigned numArgs = xcel_top.front().getNumArguments();
+    for (unsigned i = 0; i < numArgs; ++i)
+      argIdx.push_back(i);
+    xcel_top.front().eraseArguments(argIdx);
+    // remove the host call
+    call_top.erase();
   }
+  // move stages to extern module
+  for (auto func_op : xcel_mod.getOps<FuncOp>()) {
+    if (func_op->hasAttr("systolic")) {
+      func_op->moveBefore(extern_top);
+      break; // only support placement for one kernel
+    }
+  }
+  extern_top.erase();
   // remove original output
-  device_retOp.erase();
+  xcel_retOp.erase();
   // set module name
   host_mod.setName("host");
-  device_mod.setName("device");
+  xcel_mod.setName("xcel");
+  extern_mod.setName("extern");
   return true;
 }
 

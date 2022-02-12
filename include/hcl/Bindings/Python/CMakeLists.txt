@@ -57,20 +57,22 @@ declare_mlir_dialect_python_bindings(
 declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   MODULE_NAME _hcl
   ADD_TO_PARENT HCLMLIRPythonExtensions
+  ROOT_DIR "${HCL_PYTHON_SOURCE_DIR}"
   SOURCES
-    ${HCL_PYTHON_SOURCE_DIR}/HCLModule.cpp
-    ${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
-    ${HCL_PYTHON_SOURCE_DIR}/HCLAttributes.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/IRCore.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/IRModule.cpp
-    ${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
+    HCLModule.cpp
+    HCLTypes.cpp
+    HCLAttributes.cpp
+    #${MLIR_PYTHON_SOURCE_DIR}/IRCore.cpp
+    #${MLIR_PYTHON_SOURCE_DIR}/IRModule.cpp
+    #${MLIR_PYTHON_SOURCE_DIR}/PybindUtils.cpp
   EMBED_CAPI_LINK_LIBS
-    MLIRHCLCAPIHLSCpp
+    MLIRHCLCAPI
     MLIRHCLPasses
     MLIRHCLCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
     MLIRCAPIDebug
     MLIRCAPIIR
+    #MLIRCAPIStandard
     MLIRCAPIRegistration
     LLVMSupport
 )
@@ -91,7 +93,8 @@ add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI
   INSTALL_DESTINATION python_packages/hcl_core/hcl_mlir/_mlir_libs
   OUTPUT_DIRECTORY "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_core/hcl_mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
-  DECLARED_SOURCES ${_source_components}
+  DECLARED_SOURCES
+    ${_source_components}
 )
 
 add_mlir_python_modules(HCLMLIRPythonModules

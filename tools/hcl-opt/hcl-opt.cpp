@@ -26,11 +26,12 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "mlir/IR/BuiltinOps.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "hcl/Conversion/HCLToLLVM.h"
-#include "hcl/Transforms/LoopTransformations.h"
+#include "hcl/Transforms/Passes.h"
 
 #include <iostream>
 
@@ -81,19 +82,8 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"),
                                   llvm::cl::init(false));
 
-int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module) {
-  // Set up the input and output file
-  std::string errorMessage;
-  auto infile = mlir::openInputFile(inputFilename, &errorMessage);
-  if (!infile) {
-    llvm::errs() << errorMessage << "\n";
-    return 1;
-  }
-
-  // Parse the input MLIR
-  llvm::SourceMgr sourceMgr;
-  sourceMgr.AddNewSourceBuffer(std::move(infile), llvm::SMLoc());
-  module = mlir::parseSourceFile(sourceMgr, &context);
+int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
+  module = parseSourceFile(inputFilename, &context);
   if (!module) {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
     return 3;
@@ -143,14 +133,14 @@ int main(int argc, char **argv) {
   context.loadAllAvailableDialects();
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::registerAllPasses();
-  mlir::hcl::registerHCLLoopTransformationPass();
+  mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();
 
   // Parse pass names in main to ensure static initialization completed
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "MLIR modular optimizer driver\n");
 
-  mlir::OwningModuleRef module;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
   if (int error = loadMLIR(context, module))
     return error;
 
@@ -161,7 +151,7 @@ int main(int argc, char **argv) {
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt || runJiT) {
-    pm.addPass(mlir::hcl::createHCLLoopTransformationPass());
+    pm.addPass(mlir::hcl::createLoopTransformationPass());
   }
 
   if (enableNormalize) {
@@ -176,7 +166,7 @@ int main(int argc, char **argv) {
     // optPM.addPass(mlir::createSimplifyAffineStructuresPass());
 
     // To simplify the memory accessing.
-    pm.addPass(mlir::createNormalizeMemRefsPass());
+    pm.addPass(mlir::memref::createNormalizeMemRefsPass());
 
     // Generic common sub expression elimination.
     // pm.addPass(mlir::createCSEPass());

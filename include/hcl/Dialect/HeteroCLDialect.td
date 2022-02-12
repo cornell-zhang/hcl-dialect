@@ -30,7 +30,7 @@ def HeteroCL_Dialect : Dialect {
 // Base hcl operation definition.
 //===----------------------------------------------------------------------===//
 
-class HeteroCL_Op<string mnemonic, list<OpTrait> traits = []> :
+class HeteroCL_Op<string mnemonic, list<Trait> traits = []> :
         Op<HeteroCL_Dialect, mnemonic, traits>;
 
 class HeteroCL_Type<string mnemonic, list<Trait> traits = []> : 

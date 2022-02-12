@@ -13,6 +13,7 @@ include "hcl/Dialect/HeteroCLDialect.td"
 include "hcl/Dialect/HeteroCLTypes.td"
 include "hcl/Dialect/HeteroCLAttrs.td"
 
+include "mlir/IR/BuiltinTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
@@ -344,14 +345,10 @@ def FixedLike: TypeConstraint<Or<[AnyFixed.predicate,
         VectorOf<[AnyFixed]>.predicate, TensorOf<[AnyFixed]>.predicate]>,
     "fixed-point-like">;
 
-class FixedBinaryOp<string mnemonic, list<OpTrait> traits = []> :
-    Op<HeteroCL_Dialect, mnemonic, traits # [NoSideEffect,
-        SameOperandsAndResultType] #
-        ElementwiseMappable.traits>,
-    Arguments<(ins FixedLike:$lhs, FixedLike:$rhs)> {
-
-  let results = (outs AnyType:$result);
-}
+class FixedBinaryOp<string mnemonic, list<Trait> traits = []> :
+    Op<HeteroCL_Dialect, mnemonic, traits>,
+    Arguments<(ins FixedLike:$lhs, FixedLike:$rhs)>,
+    Results<(outs FixedLike:$result)>;
 
 def AddFixedOp : FixedBinaryOp<"add_fixed"> {
   let summary = "fixed point addition operation";
@@ -363,6 +360,49 @@ def SubFixedOp : FixedBinaryOp<"sub_fixed"> {
 
 def MulFixedOp : FixedBinaryOp<"mul_fixed"> {
   let summary = "fixed point mulplication operation";
+}
+
+def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, TypesMatchWith<
+    "result type has i1 element type and same shape as operands",
+    "lhs", "result", "getI1SameShape($_self)">] # ElementwiseMappable.traits> {
+  let summary = "fixed-point comparison operation";
+
+  let arguments = (ins
+      CmpFixedPredicateAttr:$predicate,
+      FixedLike:$lhs,
+      FixedLike:$rhs
+  );
+  let results = (outs BoolLike:$result);
+
+  let builders = [
+    OpBuilder<(ins "CmpFixedPredicate":$predicate, "Value":$lhs,
+                 "Value":$rhs), [{
+      mlir::hcl::buildCmpFixedOp($_builder, $_state, predicate, lhs, rhs);
+    }]>];
+
+  let extraClassDeclaration = [{
+    static StringRef getPredicateAttrName() { return "predicate"; }
+    static CmpFixedPredicate getPredicateByName(StringRef name);
+
+    CmpFixedPredicate getPredicate() {
+      return (CmpFixedPredicate)(*this)->getAttrOfType<IntegerAttr>(
+          getPredicateAttrName()).getInt();
+    }
+  }];
+
+  let verifier = [{ return success(); }];
+
+  let assemblyFormat = "$predicate `,` $lhs `,` $rhs attr-dict `:` type($lhs)";
+}
+
+// Bitwise operators
+def GetIntBitOp : HeteroCL_Op<"get_bit"> {
+    let summary = "get bit of an integer";
+    let arguments = (ins SignlessIntegerLike:$val, Builtin_Index:$index);
+    let results = (outs BoolLike:$result);
+    let assemblyFormat = [{
+        `(` $val `:` type($val) `,` $index `)` attr-dict `->` type($result)
+    }];
 }
 
 #endif // HCL_OPS

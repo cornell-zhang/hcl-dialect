@@ -10,10 +10,12 @@
 #define HCL_DIALECT_HLSCPP_VISITOR_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
@@ -41,28 +43,31 @@ public:
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
             memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
-            memref::ViewOp, memref::SubViewOp, AtomicRMWOp, GenericAtomicRMWOp,
-            AtomicYieldOp,
+            memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
             // Tensor-related statements.
-            tensor::ExtractOp, tensor::InsertOp, memref::TensorLoadOp,
-            memref::TensorStoreOp, memref::BufferCastOp, SplatOp, memref::DimOp,
-            RankOp,
+            tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp, SplatOp,
+            memref::DimOp, memref::RankOp,
             // Unary expressions.
             math::CosOp, math::SinOp, math::TanhOp, math::SqrtOp, math::RsqrtOp,
             math::ExpOp, math::Exp2Op, math::LogOp, math::Log2Op, math::Log10Op,
-            NegFOp,
+            arith::NegFOp,
             // Float binary expressions.
-            CmpFOp, AddFOp, SubFOp, MulFOp, DivFOp, RemFOp, SignedDivIOp,
-            SignedFloorDivIOp,
+            arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
+            arith::DivFOp, arith::RemFOp,
             // Integer binary expressions.
-            CmpIOp, AddIOp, SubIOp, MulIOp,
+            arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
+            arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
+            // Logical expressions.
+            arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
+            arith::ShRSIOp, arith::ShRUIOp, GetIntBitOp,
             // Special operations.
-            CallOp, ReturnOp, SelectOp, ConstantOp, IndexCastOp, UIToFPOp,
-            SIToFPOp, FPToSIOp, FPToUIOp,
-            UnrealizedConversionCastOp,
+            CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
+            arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
+            arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
+            arith::FPToSIOp, arith::FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
-            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp,
-            hcl::AddFixedOp, hcl::SubFixedOp, hcl::MulFixedOp>(
+            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -119,21 +124,17 @@ public:
   HANDLE(memref::DeallocOp);
   HANDLE(memref::DmaStartOp);
   HANDLE(memref::DmaWaitOp);
-  HANDLE(AtomicRMWOp);
-  HANDLE(GenericAtomicRMWOp);
-  HANDLE(AtomicYieldOp);
+  HANDLE(memref::AtomicRMWOp);
   HANDLE(memref::ViewOp);
   HANDLE(memref::SubViewOp);
 
   // Tensor-related statements.
   HANDLE(tensor::ExtractOp);
   HANDLE(tensor::InsertOp);
-  HANDLE(memref::TensorLoadOp);
   HANDLE(memref::TensorStoreOp);
-  HANDLE(memref::BufferCastOp);
   HANDLE(SplatOp);
   HANDLE(memref::DimOp);
-  HANDLE(RankOp);
+  HANDLE(memref::RankOp);
 
   // Unary expressions.
   HANDLE(math::CosOp);
@@ -146,34 +147,51 @@ public:
   HANDLE(math::LogOp);
   HANDLE(math::Log2Op);
   HANDLE(math::Log10Op);
-  HANDLE(NegFOp);
+  HANDLE(arith::NegFOp);
 
   // Float binary expressions.
-  HANDLE(CmpFOp);
-  HANDLE(AddFOp);
-  HANDLE(SubFOp);
-  HANDLE(MulFOp);
-  HANDLE(DivFOp);
-  HANDLE(RemFOp);
+  HANDLE(arith::CmpFOp);
+  HANDLE(arith::AddFOp);
+  HANDLE(arith::SubFOp);
+  HANDLE(arith::MulFOp);
+  HANDLE(arith::DivFOp);
+  HANDLE(arith::RemFOp);
 
   // Integer binary expressions.
-  HANDLE(CmpIOp);
-  HANDLE(AddIOp);
-  HANDLE(SubIOp);
-  HANDLE(MulIOp);
-  HANDLE(SignedDivIOp);
-  HANDLE(SignedFloorDivIOp);
+  HANDLE(arith::CmpIOp);
+  HANDLE(arith::AddIOp);
+  HANDLE(arith::SubIOp);
+  HANDLE(arith::MulIOp);
+  HANDLE(arith::DivSIOp);
+  HANDLE(arith::RemSIOp);
+  HANDLE(arith::DivUIOp);
+  HANDLE(arith::RemUIOp);
+
+  // Logical expressions.
+  HANDLE(arith::XOrIOp);
+  HANDLE(arith::AndIOp);
+  HANDLE(arith::OrIOp);
+  HANDLE(arith::ShLIOp);
+  HANDLE(arith::ShRSIOp);
+  HANDLE(arith::ShRUIOp);
+  HANDLE(GetIntBitOp);
 
   // Special operations.
   HANDLE(CallOp);
   HANDLE(ReturnOp);
   HANDLE(SelectOp);
   HANDLE(ConstantOp);
-  HANDLE(IndexCastOp);
-  HANDLE(UIToFPOp);
-  HANDLE(SIToFPOp);
-  HANDLE(FPToUIOp);
-  HANDLE(FPToSIOp);
+  HANDLE(arith::ConstantOp);
+  HANDLE(arith::TruncIOp);
+  HANDLE(arith::TruncFOp);
+  HANDLE(arith::ExtUIOp);
+  HANDLE(arith::ExtSIOp);
+  HANDLE(arith::ExtFOp);
+  HANDLE(arith::IndexCastOp);
+  HANDLE(arith::UIToFPOp);
+  HANDLE(arith::SIToFPOp);
+  HANDLE(arith::FPToUIOp);
+  HANDLE(arith::FPToSIOp);
   HANDLE(UnrealizedConversionCastOp);
 
   // HCL operations
@@ -184,6 +202,7 @@ public:
   HANDLE(hcl::AddFixedOp);
   HANDLE(hcl::SubFixedOp);
   HANDLE(hcl::MulFixedOp);
+  HANDLE(hcl::CmpFixedOp);
 
 #undef HANDLE
 };

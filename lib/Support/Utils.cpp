@@ -7,10 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Support/Utils.h"
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/LoopAnalysis.h"
-#include "mlir/Analysis/Utils.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -35,6 +31,17 @@ void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
 void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
   forOp->setAttr("stage_name",
                  StringAttr::get(forOp->getContext(), stage_name));
+}
+
+std::vector<std::string> hcl::split_names(const std::string &arg_names) {
+  std::stringstream ss(arg_names);
+  std::vector<std::string> args;
+  while (ss.good()) {
+    std::string substr;
+    getline(ss, substr, ',');
+    args.push_back(substr);
+  }
+  return args;
 }
 
 /// Parse other attributes.
@@ -160,19 +167,19 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
 }
 
 /// Collect all load and store operations in the block and return them in "map".
-void hcl::getMemAccessesMap(Block &block, MemAccessesMap &map) {
-  for (auto &op : block) {
-    if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
-      map[MemRefAccess(&op).memref].push_back(&op);
+// void hcl::getMemAccessesMap(Block &block, MemAccessesMap &map) {
+//   for (auto &op : block) {
+//     if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op))
+//       map[MemRefAccess(&op).memref].push_back(&op);
 
-    else if (op.getNumRegions()) {
-      // Recursively collect memory access operations in each block.
-      for (auto &region : op.getRegions())
-        for (auto &block : region)
-          getMemAccessesMap(block, map);
-    }
-  }
-}
+//     else if (op.getNumRegions()) {
+//       // Recursively collect memory access operations in each block.
+//       for (auto &region : op.getRegions())
+//         for (auto &block : region)
+//           getMemAccessesMap(block, map);
+//     }
+//   }
+// }
 
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
@@ -296,11 +303,11 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
 /// Return the layout map of "memrefType".
 AffineMap hcl::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
-  auto memrefMaps = memrefType.getAffineMaps();
-  if (memrefMaps.empty())
+  auto memrefMaps = memrefType.getLayout();
+  if (!memrefMaps.getAffineMap())
     return (AffineMap) nullptr;
 
-  return memrefMaps.back();
+  return memrefMaps.getAffineMap();
 }
 
 bool hcl::isFullyPartitioned(MemRefType memrefType, int axis) {
@@ -502,8 +509,8 @@ bool hcl::checkDependence(Operation *A, Operation *B) {
 }
 
 static bool gatherLoadOpsAndStoreOps(AffineForOp forOp,
-                                 SmallVectorImpl<Operation *> &loadOps,
-                                 SmallVectorImpl<Operation *> &storeOps) {
+                                     SmallVectorImpl<Operation *> &loadOps,
+                                     SmallVectorImpl<Operation *> &storeOps) {
   bool hasIfOp = false;
   forOp.walk([&](Operation *op) {
     if (auto load = dyn_cast<AffineReadOpInterface>(op))

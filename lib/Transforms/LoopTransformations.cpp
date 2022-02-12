@@ -9,22 +9,19 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
-#include "hcl/Transforms/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
 
-#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/LoopFusionUtils.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
-#include "mlir/IR/FunctionSupport.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/LoopFusionUtils.h"
-#include "mlir/Transforms/LoopUtils.h"
-#include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
 
 #include <algorithm>
@@ -36,15 +33,6 @@ using namespace mlir;
 using namespace hcl;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
-
-//===----------------------------------------------------------------------===//
-// Pass registration
-//===----------------------------------------------------------------------===//
-
-namespace {
-#define GEN_PASS_CLASSES
-#include "hcl/Transforms/Passes.h.inc"
-} // end namespace
 
 //===----------------------------------------------------------------------===//
 // Loop transformation
@@ -573,7 +561,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
   for (AffineForOp loop : loops) {
     auto cstUb = loop.getConstantUpperBound();
     prod *= cstUb;
-    auto cstOp = builder.create<ConstantIndexOp>(loc, cstUb);
+    auto cstOp = builder.create<arith::ConstantIndexOp>(loc, cstUb);
     upperBoundSymbols.push_back(cstOp);
     // hoist to the outermost
     cstOp->moveBefore(stageLoop);
@@ -863,7 +851,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // 3) Construct new memory layout map
   auto builder = Builder(array.getContext());
   auto arrayType = array.getType().dyn_cast<MemRefType>();
-  auto layouts = arrayType.getAffineMaps();
+  auto layout = arrayType.getLayout().getAffineMap();
 
   // Walk through each dimension of the current memory
   SmallVector<AffineExpr, 4> partitionIndices;
@@ -871,14 +859,15 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
 
   // first N: partition index
   // last N : physical index
-  for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
+  unsigned rank = arrayType.getRank();
+  if (layout.getNumResults() != rank) {
+    // TODO: not sure why warning does not work (no output)
+    // partitionOp.emitWarning
+    partitionOp.emitError("Partition on the array partitioned before. "
+                          "The original layout map will be rewritten!");
+  }
+  for (int64_t dim = 0; dim < rank; ++dim) {
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
-      if (layouts.size() != 0) {
-        // TODO: not sure why warning does not work (no output)
-        // partitionOp.emitWarning
-        partitionOp.emitError("Partition on the array partitioned before."
-                              "The original layout map will be rewritten!");
-      }
       if (kind == PartitionKindEnum::CyclicPartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 0, 1
@@ -906,12 +895,12 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
         return failure();
       }
     } else {
-      if (layouts.size() == 0) {
+      if (layout.getNumResults() == rank) {
         partitionIndices.push_back(builder.getAffineConstantExpr(0));
         addressIndices.push_back(builder.getAffineDimExpr(dim));
       } else { // already had one layout map before
-        partitionIndices.push_back(layouts[0].getResult(dim));
-        addressIndices.push_back(layouts[0].getResult(dim));
+        partitionIndices.push_back(layout.getResult(dim));
+        addressIndices.push_back(layout.getResult(dim));
       }
     }
   }
@@ -1241,10 +1230,10 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
     // buffer only has one element
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get({1}, elementType));
-    auto zero = builder.create<ConstantOp>(
+    auto zero = builder.create<arith::ConstantOp>(
         loc_front, elementType, createZeroAttr(builder, elementType));
     // no need to create an explicit loop
-    auto idx = builder.create<ConstantIndexOp>(loc_front, 0);
+    auto idx = builder.create<arith::ConstantIndexOp>(loc_front, 0);
     memIndices.push_back(idx);
     builder.create<AffineStoreOp>(loc_front, zero, buf, memIndices);
 
@@ -1309,7 +1298,7 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
     // a.1) Allocate buffer
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get(ubs, elementType));
-    auto zero = builder.create<ConstantOp>(
+    auto zero = builder.create<arith::ConstantOp>(
         loc_front, elementType, createZeroAttr(builder, elementType));
 
     // a.2) Create initialization loop
@@ -1440,8 +1429,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
       fifo_depth *= size;
   }
   auto newType = MemRefType::get(
-      arrayType.getShape(), arrayType.getElementType(),
-      arrayType.getAffineMaps(),
+      arrayType.getShape(), arrayType.getElementType(), arrayType.getLayout(),
       StringAttr::get(arrayToStream.getDefiningOp()->getContext(),
                       "stream:" + std::to_string(fifo_depth)));
 
@@ -1497,7 +1485,7 @@ bool runSchedule(
           .stage_name()
           .str();
   if (funcMap.count(stage_name) > 0) {
-    if (!failed(schedule_func(funcMap["stage_name"], op)))
+    if (!failed(schedule_func(funcMap[stage_name], op)))
       return true;
   }
   return false;
@@ -1679,17 +1667,8 @@ struct HCLLoopTransformation
 namespace mlir {
 namespace hcl {
 
-// Register Loop Transformation Pass
-void registerHCLLoopTransformationPass() {
-  ::registerPasses();
-  // mlir::PassPipelineRegistration<>(
-  //     "loop-opt", "Loop transformation pass", [](OpPassManager &pm) {
-  //       pm.addPass(std::make_unique<HCLLoopTransformation>());
-  //     });
-}
-
 // Create A Loop Transformation Pass
-std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
+std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
 

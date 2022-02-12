@@ -8,12 +8,12 @@ This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](htt
 - gcc >= 5.4
 - cmake >= 3.13.4
 
-### Install LLVM 13.0.0
-- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-13.0.0) or checkout the Github branch
+### Install LLVM 14.0.0
+- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.0-rc1) or checkout the Github branch
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout tags/llvmorg-13.0.0 -b v13.0.0
+git checkout tags/llvmorg-14.0.0-rc1
 ```
 
 - Build
@@ -128,7 +128,7 @@ cd heterocl-mlir
 git checkout hcl-mlir
 
 # set up LLVM and cmake paths in Makefile.config
-# You can reuse the built LLVM 13 above, just set
+# You can reuse the built LLVM 14 above, just set
 # LLVM_CONFIG = $BUILD_DIR/bin/llvm-config
 # ...
 

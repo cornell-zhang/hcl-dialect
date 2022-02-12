@@ -1,15 +1,18 @@
-file(GLOB globbed *.cpp)
-
-add_mlir_dialect_library(MLIRHCLPasses
-    ${globbed}
+add_mlir_library(MLIRHCLPasses
+    LoopTransformations.cpp
+    HostXcelSeparation.cpp
+    Passes.cpp
 
     ADDITIONAL_HEADER_DIRS
-    ${PROJECT_SOURCE_DIR}/include/hcl/Transforms
+    ${PROJECT_SOURCE_DIR}/include/hcl
 
     DEPENDS
     MLIRHeteroCLOpsIncGen
     MLIRHeteroCLTypesIncGen
     MLIRHeteroCLPassesIncGen
+
+    LINK_COMPONENTS
+    Core
 
     LINK_LIBS PUBLIC
     MLIRIR

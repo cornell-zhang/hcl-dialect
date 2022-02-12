@@ -17,6 +17,7 @@ set(LIBS
         MLIRIR
         MLIROptLib
         MLIRHeteroCL
+        MLIRHCLPasses
         )
 add_llvm_executable(hcl-opt hcl-opt.cpp)
 

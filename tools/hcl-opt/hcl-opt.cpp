@@ -31,7 +31,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "hcl/Conversion/HCLToLLVM.h"
-#include "hcl/Transforms/LoopTransformations.h"
+#include "hcl/Transforms/Passes.h"
 
 #include <iostream>
 
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
   context.loadAllAvailableDialects();
   context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
   mlir::registerAllPasses();
-  mlir::hcl::registerHCLLoopTransformationPass();
+  mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();
 
   // Parse pass names in main to ensure static initialization completed
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt || runJiT) {
-    pm.addPass(mlir::hcl::createHCLLoopTransformationPass());
+    pm.addPass(mlir::hcl::createLoopTransformationPass());
   }
 
   if (enableNormalize) {

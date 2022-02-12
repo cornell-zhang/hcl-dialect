@@ -9,14 +9,13 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
-#include "hcl/Transforms/LoopTransformations.h"
 #include "hcl/Transforms/Passes.h"
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
-#include "mlir/Dialect/Affine/LoopUtils.h"
-#include "mlir/Dialect/Affine/LoopFusionUtils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/LoopFusionUtils.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -34,15 +33,6 @@ using namespace mlir;
 using namespace hcl;
 
 using AffineLoopBand = SmallVector<AffineForOp, 6>;
-
-//===----------------------------------------------------------------------===//
-// Pass registration
-//===----------------------------------------------------------------------===//
-
-namespace {
-#define GEN_PASS_CLASSES
-#include "hcl/Transforms/Passes.h.inc"
-} // end namespace
 
 //===----------------------------------------------------------------------===//
 // Loop transformation
@@ -869,14 +859,15 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
 
   // first N: partition index
   // last N : physical index
-  for (int64_t dim = 0; dim < arrayType.getRank(); ++dim) {
+  unsigned rank = arrayType.getRank();
+  if (layout.getNumResults() != rank) {
+    // TODO: not sure why warning does not work (no output)
+    // partitionOp.emitWarning
+    partitionOp.emitError("Partition on the array partitioned before. "
+                          "The original layout map will be rewritten!");
+  }
+  for (int64_t dim = 0; dim < rank; ++dim) {
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {
-      if (!layout.isEmpty()) {
-        // TODO: not sure why warning does not work (no output)
-        // partitionOp.emitWarning
-        partitionOp.emitError("Partition on the array partitioned before. "
-                              "The original layout map will be rewritten!");
-      }
       if (kind == PartitionKindEnum::CyclicPartition) {
         // original index:  0, 1, 2, 3
         // bank (factor 2): 0, 1, 0, 1
@@ -904,7 +895,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
         return failure();
       }
     } else {
-      if (layout.isEmpty()) {
+      if (layout.getNumResults() == rank) {
         partitionIndices.push_back(builder.getAffineConstantExpr(0));
         addressIndices.push_back(builder.getAffineDimExpr(dim));
       } else { // already had one layout map before
@@ -1438,8 +1429,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
       fifo_depth *= size;
   }
   auto newType = MemRefType::get(
-      arrayType.getShape(), arrayType.getElementType(),
-      arrayType.getLayout(),
+      arrayType.getShape(), arrayType.getElementType(), arrayType.getLayout(),
       StringAttr::get(arrayToStream.getDefiningOp()->getContext(),
                       "stream:" + std::to_string(fifo_depth)));
 
@@ -1677,18 +1667,8 @@ struct HCLLoopTransformation
 namespace mlir {
 namespace hcl {
 
-// Register Loop Transformation Pass
-void registerHCLLoopTransformationPass() {
-  // ::registerPasses();
-  PassRegistration<HCLLoopTransformation>();
-  // mlir::PassPipelineRegistration<>(
-  //     "loop-opt", "Loop transformation pass", [](OpPassManager &pm) {
-  //       pm.addPass(std::make_unique<HCLLoopTransformation>());
-  //     });
-}
-
 // Create A Loop Transformation Pass
-std::unique_ptr<mlir::Pass> createHCLLoopTransformationPass() {
+std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass() {
   return std::make_unique<HCLLoopTransformation>();
 }
 

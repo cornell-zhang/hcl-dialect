@@ -4,10 +4,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Transforms/HostXcelSeparation.h"
+#include "PassDetail.h"
+
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Support/Utils.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"

@@ -40,11 +40,11 @@ using namespace hcl;
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-// static bool loopTransformation(PyModule &pymod) {
-//   py::gil_scoped_release();
-//   auto mod = unwrap(pymod.get());
-//   return applyLoopTransformation(mod);
-// }
+static bool loopTransformation(MlirModule &mlir_mod) {
+  py::gil_scoped_release();
+  auto mod = unwrap(mlir_mod);
+  return applyLoopTransformation(mod);
+}
 
 // static bool hostXcelSeparation(PyModule &pyhost, PyModule &pyxcel,
 //                                PyModule &pyextern, py::dict pydevice_map,
@@ -121,7 +121,7 @@ PYBIND11_MODULE(_hcl, m) {
   // populateHCLAttributes(m);
 
   // Loop transform APIs.
-  // m.def("loop_transformation", &loopTransformation);
+  hcl_m.def("loop_transformation", &loopTransformation);
   // m.def("host_device_separation", &hostXcelSeparation);
 
   // // Emission APIs.

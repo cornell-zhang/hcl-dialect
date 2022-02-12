@@ -22,6 +22,6 @@ void hclMlirRegisterAllDialects(MlirContext context) {
 }
 
 void hclMlirRegisterAllPasses() {
-  // mlir::hcl::registerHCLPasses();
+  mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();
 }

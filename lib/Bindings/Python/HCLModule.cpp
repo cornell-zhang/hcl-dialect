@@ -36,6 +36,35 @@ using namespace hcl;
 // Customized Python classes
 //===----------------------------------------------------------------------===//
 
+// PybindUtils.h
+class PyFileAccumulator {
+public:
+  PyFileAccumulator(const pybind11::object &fileObject, bool binary)
+      : pyWriteFunction(fileObject.attr("write")), binary(binary) {}
+
+  void *getUserData() { return this; }
+
+  MlirStringCallback getCallback() {
+    return [](MlirStringRef part, void *userData) {
+      pybind11::gil_scoped_acquire acquire;
+      PyFileAccumulator *accum = static_cast<PyFileAccumulator *>(userData);
+      if (accum->binary) {
+        // Note: Still has to copy and not avoidable with this API.
+        pybind11::bytes pyBytes(part.data, part.length);
+        accum->pyWriteFunction(pyBytes);
+      } else {
+        pybind11::str pyStr(part.data,
+                            part.length); // Decodes as UTF-8 by default.
+        accum->pyWriteFunction(pyStr);
+      }
+    };
+  }
+
+private:
+  pybind11::object pyWriteFunction;
+  bool binary;
+};
+
 //===----------------------------------------------------------------------===//
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
@@ -74,16 +103,16 @@ static bool loopTransformation(MlirModule &mlir_mod) {
 //                                  graph_roots, inputs, outputs);
 // }
 
-// //===----------------------------------------------------------------------===//
-// // Emission APIs
-// //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+// Emission APIs
+//===----------------------------------------------------------------------===//
 
-// static bool emitHlsCpp(PyModule &mod, py::object fileObject) {
-//   PyFileAccumulator accum(fileObject, false);
-//   py::gil_scoped_release();
-//   return mlirLogicalResultIsSuccess(
-//       mlirEmitHlsCpp(mod.get(), accum.getCallback(), accum.getUserData()));
-// }
+static bool emitHlsCpp(MlirModule &mod, py::object fileObject) {
+  PyFileAccumulator accum(fileObject, false);
+  py::gil_scoped_release();
+  return mlirLogicalResultIsSuccess(
+      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+}
 
 // //===----------------------------------------------------------------------===//
 // // Lowering APIs
@@ -124,8 +153,8 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("loop_transformation", &loopTransformation);
   // m.def("host_device_separation", &hostXcelSeparation);
 
-  // // Emission APIs.
-  // m.def("emit_hlscpp", &emitHlsCpp);
+  // Emission APIs.
+  hcl_m.def("emit_hlscpp", &emitHlsCpp);
 
   // m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
 }

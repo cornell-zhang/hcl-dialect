@@ -1176,7 +1176,8 @@ void ModuleEmitter::emitTensorStore(memref::TensorStoreOp op) {
 }
 
 void ModuleEmitter::emitDim(memref::DimOp op) {
-  if (auto constOp = dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
+  if (auto constOp =
+          dyn_cast<arith::ConstantOp>(op.getOperand(1).getDefiningOp())) {
     auto constVal = constOp.getValue().cast<IntegerAttr>().getInt();
     auto type = op.getOperand(0).getType().cast<ShapedType>();
 
@@ -1896,8 +1897,17 @@ LogicalResult hcl::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
 void hcl::registerEmitHLSCppTranslation() {
   static TranslateFromMLIRRegistration toHLSCpp(
       "emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
-        registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
-                        tensor::TensorDialect, mlir::AffineDialect,
-                        mlir::math::MathDialect, mlir::memref::MemRefDialect>();
+        // clang-format off
+        registry.insert<
+          mlir::hcl::HeteroCLDialect,
+          mlir::StandardOpsDialect,
+          mlir::arith::ArithmeticDialect,
+          mlir::tensor::TensorDialect,
+          mlir::scf::SCFDialect,
+          mlir::AffineDialect,
+          mlir::math::MathDialect,
+          mlir::memref::MemRefDialect
+        >();
+        // clang-format on
       });
 }

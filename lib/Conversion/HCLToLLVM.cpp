@@ -120,7 +120,7 @@ void registerHCLToLLVMLoweringPass() {
   PassRegistration<HCLToLLVMLoweringPass>();
 }
 
-std::unique_ptr<mlir::Pass> createHCLToLLVMLoweringPass() {
+std::unique_ptr<OperationPass<ModuleOp>> createHCLToLLVMLoweringPass() {
   return std::make_unique<HCLToLLVMLoweringPass>();
 }
 

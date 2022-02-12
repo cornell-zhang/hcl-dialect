@@ -4,8 +4,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IRModule.h"
-#include "PybindUtils.h"
+// #include "IRModule.h"
+// #include "PybindUtils.h"
+#include "mlir/Bindings/Python/PybindAdaptors.h"
+#include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 #include "mlir/CAPI/IR.h"

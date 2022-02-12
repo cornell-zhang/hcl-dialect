@@ -1,7 +1,8 @@
 #ifndef HCL_BINDINGS_PYTHON_IRMODULES_H
 #define HCL_BINDINGS_PYTHON_IRMODULES_H
 
-#include "PybindUtils.h"
+// #include "PybindUtils.h"
+#include "mlir/Bindings/Python/PybindAdaptors.h"
 
 namespace mlir {
 namespace python {

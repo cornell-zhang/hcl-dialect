@@ -18,7 +18,7 @@ namespace hcl {
 
 // HeteroCL Dialect -> LLVM Dialect
 void registerHCLToLLVMLoweringPass();
-std::unique_ptr<mlir::Pass> createHCLToLLVMLoweringPass();
+std::unique_ptr<OperationPass<ModuleOp>> createHCLToLLVMLoweringPass();
 
 bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context);
 

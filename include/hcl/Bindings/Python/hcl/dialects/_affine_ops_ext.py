@@ -3,7 +3,11 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 try:
-    from mlir.ir import *
+    from ..ir import *
+    from ._ods_common import (
+        get_op_result_or_value as _get_op_result_or_value,
+        get_op_results_or_values as _get_op_results_or_values,
+    )
 except ImportError as e:
     raise RuntimeError("Error loading imports from extension module") from e
 
@@ -89,6 +93,16 @@ class AffineForOp:
         return self.body.arguments[1:]
 
 
+class AffineLoadOp:
+    """Specialization for the MemRef load operation."""
+
+    def __init__(self, memref, indices, map=None, *, loc=None, ip=None):
+        memref_resolved = _get_op_result_or_value(memref)
+        indices_resolved = [] if indices is None else _get_op_results_or_values(indices)
+        return_type = MemRefType(memref_resolved.type).element_type
+        super().__init__(return_type, memref, indices_resolved, map, loc=loc, ip=ip)
+
+
 class AffineStoreOp:
     def __init__(self, value, memref, indices, affine_attr=None, *, loc=None, ip=None):
         operands = []
@@ -126,7 +140,11 @@ class AffineStoreOp:
 
 
 class AffineIfOp:
-    def __init__(self, cond, set_operands, *, loc=None, ip=None):
+    """
+    The affine.if operation contains two regions for the “then” and “else” clauses. affine.if may return results that are defined in its regions. The values defined are determined by which execution path is taken. Each region of the affine.if must contain a single block with no arguments, and be terminated by affine.yield. If affine.if defines no values, the affine.yield can be left out, and will be inserted implicitly. Otherwise, it must be explicit. If no values are defined, the else block may be empty (i.e. contain no blocks).
+    """
+
+    def __init__(self, cond, set_operands, withElseRegion=False, *, loc=None, ip=None):
         operands = []
         results = []
         operands.extend(set_operands)
@@ -141,8 +159,9 @@ class AffineIfOp:
                 ip=ip,
             )
         )
-        self.regions[0].blocks.append(IndexType.get(), *results)
-        self.regions[1].blocks.append(IndexType.get(), *results)
+        self.regions[0].blocks.append(*results)
+        if withElseRegion:
+            self.regions[1].blocks.append(*results)
 
     @property
     def then_block(self):

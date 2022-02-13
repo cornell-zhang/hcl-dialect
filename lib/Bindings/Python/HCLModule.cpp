@@ -7,7 +7,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 #include "hcl/Bindings/Python/HCLModule.h"
-#include "IRModule.h"
+#include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "hcl-c/Dialect/Dialects.h"
 #include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/HCLTypes.h"
@@ -25,6 +25,7 @@
 #include "llvm/Support/Signals.h"
 
 namespace py = pybind11;
+using namespace mlir::python::adaptors;
 
 using namespace mlir;
 using namespace mlir::python;
@@ -34,23 +35,52 @@ using namespace hcl;
 // Customized Python classes
 //===----------------------------------------------------------------------===//
 
+// PybindUtils.h
+class PyFileAccumulator {
+public:
+  PyFileAccumulator(const pybind11::object &fileObject, bool binary)
+      : pyWriteFunction(fileObject.attr("write")), binary(binary) {}
+
+  void *getUserData() { return this; }
+
+  MlirStringCallback getCallback() {
+    return [](MlirStringRef part, void *userData) {
+      pybind11::gil_scoped_acquire acquire;
+      PyFileAccumulator *accum = static_cast<PyFileAccumulator *>(userData);
+      if (accum->binary) {
+        // Note: Still has to copy and not avoidable with this API.
+        pybind11::bytes pyBytes(part.data, part.length);
+        accum->pyWriteFunction(pyBytes);
+      } else {
+        pybind11::str pyStr(part.data,
+                            part.length); // Decodes as UTF-8 by default.
+        accum->pyWriteFunction(pyStr);
+      }
+    };
+  }
+
+private:
+  pybind11::object pyWriteFunction;
+  bool binary;
+};
+
 //===----------------------------------------------------------------------===//
 // Loop transform APIs
 //===----------------------------------------------------------------------===//
 
-static bool loopTransformation(PyModule &pymod) {
+static bool loopTransformation(MlirModule &mlir_mod) {
   py::gil_scoped_release();
-  auto mod = unwrap(pymod.get());
+  auto mod = unwrap(mlir_mod);
   return applyLoopTransformation(mod);
 }
 
-static bool hostXcelSeparation(PyModule &pyhost, PyModule &pyxcel,
-                               PyModule &pyextern, py::dict pydevice_map,
+static bool hostXcelSeparation(MlirModule &pyhost, MlirModule &pyxcel,
+                               MlirModule &pyextern, py::dict pydevice_map,
                                py::list pygraph_roots, py::dict subgraph) {
   py::gil_scoped_release();
-  auto host_mod = unwrap(pyhost.get());
-  auto xcel_mod = unwrap(pyxcel.get());
-  auto extern_mod = unwrap(pyextern.get());
+  auto host_mod = unwrap(pyhost);
+  auto xcel_mod = unwrap(pyxcel);
+  auto extern_mod = unwrap(pyextern);
   std::map<std::string, std::string> device_map;
   for (auto item : pydevice_map) {
     device_map[item.first.cast<std::string>()] =
@@ -76,20 +106,20 @@ static bool hostXcelSeparation(PyModule &pyhost, PyModule &pyxcel,
 // Emission APIs
 //===----------------------------------------------------------------------===//
 
-static bool emitHlsCpp(PyModule &mod, py::object fileObject) {
+static bool emitHlsCpp(MlirModule &mod, py::object fileObject) {
   PyFileAccumulator accum(fileObject, false);
   py::gil_scoped_release();
   return mlirLogicalResultIsSuccess(
-      mlirEmitHlsCpp(mod.get(), accum.getCallback(), accum.getUserData()));
+      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
 }
 
 //===----------------------------------------------------------------------===//
 // Lowering APIs
 //===----------------------------------------------------------------------===//
 
-static bool lowerHCLToLLVM(PyModule &module, PyMlirContext &context) {
-  auto mod = unwrap(module.get());
-  auto ctx = unwrap(context.get());
+static bool lowerHCLToLLVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
+  auto mod = unwrap(mlir_mod);
+  auto ctx = unwrap(mlir_ctx);
   return applyHCLToLLVMLoweringPass(mod, *ctx);
 }
 
@@ -105,28 +135,27 @@ PYBIND11_MODULE(_hcl, m) {
   // register passes
   hclMlirRegisterAllPasses();
 
+  auto hcl_m = m.def_submodule("hcl");
+
   // register dialects
-  m.def("register_dialects", [](py::object capsule) {
-    // Get the MlirContext capsule from PyMlirContext capsule.
-    auto wrappedCapsule = capsule.attr(MLIR_PYTHON_CAPI_PTR_ATTR);
-    MlirContext context = mlirPythonCapsuleToContext(wrappedCapsule.ptr());
+  hcl_m.def(
+      "register_dialect",
+      [](MlirContext context) {
+        MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
+        mlirDialectHandleRegisterDialect(hcl, context);
+        mlirDialectHandleLoadDialect(hcl, context);
+      },
+      py::arg("context") = py::none());
 
-    // hclMlirRegisterAllDialects(context);
-    MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
-    mlirDialectHandleRegisterDialect(hcl, context);
-    mlirDialectHandleLoadDialect(hcl, context);
-  });
-
-  // Type construction APIs.
-  populateHCLIRTypes(m);
-  populateHCLAttributes(m);
+  // Declare customized types and attributes
+  populateHCLIRTypes(hcl_m);
+  populateHCLAttributes(hcl_m);
 
   // Loop transform APIs.
-  m.def("loop_transformation", &loopTransformation);
-  m.def("host_device_separation", &hostXcelSeparation);
+  hcl_m.def("loop_transformation", &loopTransformation);
+  hcl_m.def("host_device_separation", &hostXcelSeparation);
 
-  // Emission APIs.
-  m.def("emit_hlscpp", &emitHlsCpp);
-
-  m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
+  // Codegen APIs.
+  hcl_m.def("emit_hlscpp", &emitHlsCpp);
+  hcl_m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
 }

@@ -11,9 +11,9 @@
 using namespace mlir;
 using namespace hcl;
 
-bool mlirAttributeIsAIntegerSet(MlirAttribute attr) {
-  return unwrap(attr).isa<IntegerSetAttr>();
-}
+// bool mlirAttributeIsAIntegerSet(MlirAttribute attr) {
+//   return unwrap(attr).isa<IntegerSetAttr>();
+// }
 
 MlirAttribute mlirIntegerSetAttrGet(MlirIntegerSet set) {
   return wrap(IntegerSetAttr::get(unwrap(set)));

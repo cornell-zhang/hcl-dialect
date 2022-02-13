@@ -21,7 +21,7 @@ config.name = 'HETEROCL'
 config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
 
 # suffixes: A list of file extensions to treat as test files.
-config.suffixes = ['.mlir']
+config.suffixes = ['.mlir', '.py']
 
 # test_source_root: The root path where tests are located.
 config.test_source_root = os.path.dirname(__file__)
@@ -40,7 +40,10 @@ llvm_config.use_default_substitutions()
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
 # directories.
-config.excludes = ['Inputs', 'Examples', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt', 'cpu']
+config.excludes = ['lit.cfg.py', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt', 'Translation']
+
+# Unsupported tests
+config.excludes += ['test_llvm.py']
 
 # test_source_root: The root path where tests are located.
 config.test_source_root = os.path.dirname(__file__)
@@ -55,7 +58,12 @@ llvm_config.with_environment('PATH', config.llvm_tools_dir, append_path=True)
 tool_dirs = [config.standalone_tools_dir, config.llvm_tools_dir]
 tools = [
     'hcl-opt',
-    'hcl-translate'
+    'hcl-translate',
+    ToolSubst('%PYTHON', config.python_executable, unresolved='ignore'),
 ]
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
+
+llvm_config.with_environment('PYTHONPATH', [
+    os.path.join(config.mlir_binary_dir, 'tools/hcl/python_packages/hcl_core'),
+], append_path=True)

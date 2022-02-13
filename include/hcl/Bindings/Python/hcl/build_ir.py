@@ -3,14 +3,13 @@
 # Copyright 2021-2022 The HCL-MLIR Authors.
 #
 # ===----------------------------------------------------------------------=== #
+
 from contextvars import ContextVar
 
-from mlir.dialects import builtin, math, memref, std
-from mlir.ir import *
+from hcl_mlir.ir import *
+from hcl_mlir.dialects import builtin, arith, math, memref, std, affine
+from hcl_mlir.dialects import hcl as hcl_d
 
-from . import affine
-from ._hcl_ops_gen import *
-from ._mlir_libs._hcl import *
 
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
@@ -25,7 +24,7 @@ ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount", default=1)
 ImperativeLoopDepth = ContextVar("ImperativeLoopDepth", default=0)
 StageName = ContextVar("StageName", default="")
 
-register_dialects(global_ctx)
+hcl_d.register_dialect(global_ctx)
 
 
 class HCLFlags(object):
@@ -88,7 +87,7 @@ def is_integer_type(dtype):
 
 
 def is_fixed_type(dtype):
-    return isinstance(dtype, (FixedType, UFixedType))
+    return isinstance(dtype, (hcl_d.FixedType, hcl_d.UFixedType))
 
 
 def is_index_type(dtype):
@@ -112,7 +111,7 @@ def get_mlir_type(dtype):
     elif isinstance(dtype, str):
         with get_context() as ctx:
             if dtype[0:3] == "int":
-                return IntegerType.get_signless(int(dtype[3:]))
+                return IntegerType.get_signless(int(dtype[3:]), context=ctx)
             elif dtype[0:4] == "uint":
                 # TODO: Support signedness
                 return IntegerType.get_signless(int(dtype[4:]))
@@ -127,10 +126,10 @@ def get_mlir_type(dtype):
                     raise RuntimeError("Not supported floating point type")
             elif dtype[0:5] == "fixed":
                 strs = dtype[5:].split("_")
-                return FixedType.get(int(strs[0]), int(strs[1]), ctx)
+                return hcl_d.FixedType.get(int(strs[0]), int(strs[1]), ctx)
             elif dtype[0:6] == "ufixed":
                 strs = dtype[6:].split("_")
-                return UFixedType.get(int(strs[0]), int(strs[1]), ctx)
+                return hcl_d.UFixedType.get(int(strs[0]), int(strs[1]), ctx)
             else:
                 raise RuntimeError("Unrecognized data type")
     else:
@@ -156,9 +155,9 @@ def print_mlir_type(dtype):
         else:
             return "ap_int<{}>".format(dtype.width)
     elif is_fixed_type(dtype):
-        if isinstance(dtype, FixedType):
+        if isinstance(dtype, hcl_d.FixedType):
             return "ap_fixed<{}, {}>".format(dtype.width, dtype.frac)
-        elif isinstance(dtype, UFixedType):
+        elif isinstance(dtype, hcl_d.UFixedType):
             return "ap_ufixed<{}, {}>".format(dtype.width, dtype.frac)
         else:
             raise RuntimeError("Not supported data type")
@@ -257,7 +256,7 @@ def cast_types(lhs, rhs):
     elif is_fixed_type(ltype):
         # TODO: UFixed type
         if is_integer_type(rtype):
-            res_type = FixedType.get(rtype.width, ltype.frac, global_ctx)
+            res_type = hcl_d.FixedType.get(rtype.width, ltype.frac, global_ctx)
         else:
             raise RuntimeError("Type conversion not implemented")
     else:
@@ -278,11 +277,11 @@ def regularize_fixed_type(lhs, rhs):
     lwidth = lhs.dtype.width
     rwidth = rhs.dtype.width
     if lwidth < rwidth:
-        res_type = FixedType.get(rwidth, lhs.dtype.frac, global_ctx)
+        res_type = hcl_d.FixedType.get(rwidth, lhs.dtype.frac, global_ctx)
         cast = CastOp(lhs, res_type)
         return cast, rhs
     elif lwidth > rwidth:
-        res_type = FixedType.get(lwidth, rhs.dtype.frac, global_ctx)
+        res_type = hcl_d.FixedType.get(lwidth, rhs.dtype.frac, global_ctx)
         cast = CastOp(rhs, res_type)
         return lhs, cast
     else:
@@ -519,7 +518,7 @@ class ReduceVar(IterVar):
 
 class ConstantOp(ExprOp):
     def __init__(self, dtype, val):
-        super().__init__(std.ConstantOp)
+        super().__init__(arith.ConstantOp)
         self.val = val
         self.dtype = get_mlir_type(dtype)
         if flags.BUILD_INPLACE:
@@ -628,7 +627,7 @@ class TensorOp(ExprOp):
     def build(self):
         memref_type = self.get_memref_type()
         self.built_op = self.op(
-            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
         )
         self.built_op.attributes["name"] = StringAttr.get(self.name)
         return self.built_op
@@ -754,7 +753,7 @@ class BinaryOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(
-            self.dtype, self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
+            self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
         )
         return self.built_op
 
@@ -764,9 +763,9 @@ class CmpOp(BinaryOp):
         self.arg = arg
         dtype = lhs.dtype
         if is_integer_type(dtype) or is_index_type(dtype):
-            self.op = std.CmpIOp
+            self.op = arith.CmpIOp
         elif is_floating_point_type(dtype):
-            self.op = std.CmpFOp
+            self.op = arith.CmpFOp
         elif is_fixed_type(dtype):
             self.op = CmpFixedOp
         else:
@@ -807,7 +806,7 @@ class CmpOp(BinaryOp):
 class AddOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": std.AddFOp, "int": std.AddIOp, "fixed": AddFixedOp},
+            {"float": arith.AddFOp, "int": arith.AddIOp, "fixed": hcl_d.AddFixedOp},
             dtype,
             lhs,
             rhs,
@@ -817,7 +816,7 @@ class AddOp(BinaryOp):
 class SubOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": std.SubFOp, "int": std.SubIOp, "fixed": SubFixedOp},
+            {"float": arith.SubFOp, "int": arith.SubIOp, "fixed": hcl_d.SubFixedOp},
             dtype,
             lhs,
             rhs,
@@ -827,7 +826,7 @@ class SubOp(BinaryOp):
 class MulOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": std.MulFOp, "int": std.MulIOp, "fixed": MulFixedOp},
+            {"float": arith.MulFOp, "int": arith.MulIOp, "fixed": hcl_d.MulFixedOp},
             dtype,
             lhs,
             rhs,
@@ -837,17 +836,14 @@ class MulOp(BinaryOp):
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": std.DivFOp, "int": std.SignedDivIOp}, dtype, lhs, rhs
+            {"float": arith.DivFOp, "int": arith.DivUIOp}, dtype, lhs, rhs
         )
 
 
 class FloorDivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {
-                "float": std.SignedFloorDivIOp,
-                "int": std.SignedFloorDivIOp,
-            },  # not supported!
+            {"float": arith.DivFOp, "int": arith.DivUIOp},  # not supported!
             dtype,
             lhs,
             rhs,
@@ -857,39 +853,39 @@ class FloorDivOp(BinaryOp):
 class RemOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": std.RemFOp, "int": std.SignedRemIOp}, dtype, lhs, rhs
+            {"float": arith.RemFOp, "int": arith.RemUIOp}, dtype, lhs, rhs
         )
 
 
 class LeftShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.ShiftLeftOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.ShLIOp, lhs.dtype, lhs, rhs)
 
 
 class RightShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.SignedShiftRightOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.ShRUIOp, lhs.dtype, lhs, rhs)
 
 
 class AndOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.AndOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.AndIOp, lhs.dtype, lhs, rhs)
 
 
 class OrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.OrOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.OrIOp, lhs.dtype, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(std.XOrOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.XOrOOp, lhs.dtype, lhs, rhs)
 
 
 class NegOp(UnaryOp):
     def __init__(self, dtype, val):
         super().__init__(
-            {"float": std.NegFOp, "int": std.NegFOp}, dtype, val
+            {"float": arith.NegFOp, "int": arith.NegFOp}, dtype, val
         )  # use the same op
 
 
@@ -939,7 +935,7 @@ class CastOp(ExprOp):
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
         if is_index_type(res_type) and is_integer_type(self.val.dtype):
-            op = std.IndexCastOp
+            op = arith.IndexCastOp
         else:
             op = builtin.UnrealizedConversionCastOp
         super().__init__(op, res_type)
@@ -947,7 +943,7 @@ class CastOp(ExprOp):
             self.build()
 
     def build(self):
-        if self.op == std.IndexCastOp:
+        if self.op == arith.IndexCastOp:
             self.built_op = self.op(
                 self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
             )
@@ -960,7 +956,7 @@ class CastOp(ExprOp):
 
 class GetBitOp(ExprOp):
     def __init__(self, val, index):
-        super().__init__(GetIntBitOp, bool)
+        super().__init__(hcl_d.GetIntBitOp, bool)
         self.val = val
         self.index = index
         if not isinstance(self.index.dtype, IndexType):
@@ -1003,7 +999,6 @@ class LoadOp(ExprOp):
 
     def build_affine(self, indices, affine_attr):
         self.built_op = self.op(
-            self.dtype,
             self.tensor.result,
             indices,
             affine_attr,
@@ -1258,34 +1253,34 @@ class ASTBuilder:
         dtype = expr.dtype
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(
-            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
         )
         if isinstance(expr, SumOp):
             prefix = "sum"
             init_val = 0
-            reduce_op = {"float": std.AddFOp, "int": std.AddIOp, "fixed": AddFixedOp}
+            reduce_op = {"float": arith.AddFOp, "int": arith.AddIOp, "fixed": hcl_d.AddFixedOp}
         elif isinstance(expr, MinOp):
             prefix = "min"
             init_val = 0x3F3F3F3F  # magic large number
-            raise RuntimeError("Need to upgrade to LLVM 14!")
+            reduce_op = {"float": arith.MinFOp, "int": arith.MinUIOp, "fixed": hcl_d.MinFixedOp}
         elif isinstance(expr, MaxOp):
             prefix = "max"
             init_val = -0x3F3F3F3F
-            raise RuntimeError("Need to upgrade to LLVM 14!")
+            reduce_op = {"float": arith.MaxFOp, "int": arith.MaxUIOp, "fixed": hcl_d.MaxFixedOp}
         else:
             raise RuntimeError("Should not in this branch")
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
         # initialize the single-element register
-        zero_idx = std.ConstantOp(
+        zero_idx = arith.ConstantOp(
             idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
         )
         # initialize the original value of the reducer
         if is_floating_point_type(dtype):
-            zero_value = std.ConstantOp(
+            zero_value = arith.ConstantOp(
                 dtype, FloatAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
         elif is_integer_type(dtype) or is_fixed_type(dtype):
-            zero_value = std.ConstantOp(
+            zero_value = arith.ConstantOp(
                 dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
         else:
@@ -1326,7 +1321,7 @@ class ASTBuilder:
 
         # load register value and reduce
         load = affine.AffineLoadOp(
-            dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+            rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         load.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
         if is_floating_point_type(dtype):
@@ -1344,7 +1339,7 @@ class ASTBuilder:
                 )
             )
         iter_reduction = reduce_op(
-            dtype, data.result, load.result, ip=GlobalInsertionPoint.get()
+            data.result, load.result, ip=GlobalInsertionPoint.get()
         )
 
         # store the result back to register
@@ -1364,7 +1359,7 @@ class ASTBuilder:
         return rv
 
 
-def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):
+def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None):
     # Construct lower bound
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
@@ -1403,6 +1398,7 @@ def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None)
         stage=("" if stage == "" else StringAttr.get(stage)),
         reduction=(IntegerAttr.get(i32, 1) if reduction else None),
         ip=ip,
+        loc=loc
     )
 
     return forOp
@@ -1413,7 +1409,7 @@ def make_if(cond, ip=None):
     d0 = AffineDimExpr.get(0)
     c1 = AffineConstantExpr.get(1)
     if_cond_set = IntegerSet.get(1, 0, [d0 - c1], [True])  # d0 - 1 == 0
-    attr = IntegerSetAttr.get(if_cond_set)
+    attr = hcl_d.IntegerSetAttr.get(if_cond_set)
     cast = CastOp(cond, idx_type)
     set_operands = [cast.result]
 

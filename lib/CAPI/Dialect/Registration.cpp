@@ -13,10 +13,10 @@
 
 void hclMlirRegisterAllDialects(MlirContext context) {
   mlir::DialectRegistry registry;
-  registry.insert<mlir::hcl::HeteroCLDialect>();
-  // registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
-  //                 mlir::AffineDialect, mlir::math::MathDialect,
-  //                 mlir::memref::MemRefDialect>();
+  registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
+                        mlir::arith::ArithmeticDialect, mlir::tensor::TensorDialect,
+                        mlir::AffineDialect, mlir::math::MathDialect,
+                        mlir::memref::MemRefDialect>();
   unwrap(context)->appendDialectRegistry(registry);
   unwrap(context)->loadAllAvailableDialects();
 }

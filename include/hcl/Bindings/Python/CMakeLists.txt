@@ -32,7 +32,8 @@ declare_mlir_dialect_python_bindings(
   SOURCES
     dialects/hcl.py
     dialects/_ods_common.py
-    #build_ir.py
+    build_ir.py
+    __init__.py
   DIALECT_NAME hcl
 )
 
@@ -60,7 +61,7 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   ROOT_DIR "/"
   SOURCES
     ${HCL_PYTHON_SOURCE_DIR}/HCLModule.cpp
-    #${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
+    ${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
     #${HCL_PYTHON_SOURCE_DIR}/HCLAttributes.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRCAPIIR
@@ -84,6 +85,7 @@ set(_source_components
   HCLMLIRPythonSources
   HCLMLIRPythonExtensions
   MLIRPythonSources.Core
+  MLIRPythonSources.Dialects
 )
 
 add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI

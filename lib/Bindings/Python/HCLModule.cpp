@@ -8,7 +8,6 @@
 
 #include "hcl/Bindings/Python/HCLModule.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
-// #include "IRModule.h"
 #include "hcl-c/Dialect/Dialects.h"
 #include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/HCLTypes.h"
@@ -149,7 +148,7 @@ PYBIND11_MODULE(_hcl, m) {
       py::arg("context") = py::none());
 
   // populateIRCore(m);
-  // populateHCLIRTypes(m);
+  populateHCLIRTypes(hcl_m);
   // populateHCLAttributes(m);
 
   // Loop transform APIs.

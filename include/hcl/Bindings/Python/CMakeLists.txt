@@ -31,7 +31,6 @@ declare_mlir_dialect_python_bindings(
   TD_FILE dialects/HeteroCLBinding.td
   SOURCES
     dialects/hcl.py
-    dialects/_ods_common.py
     build_ir.py
     __init__.py
   DIALECT_NAME hcl
@@ -39,17 +38,16 @@ declare_mlir_dialect_python_bindings(
 
 # Only a temporal solution for Affine dialect Python binding
 # Ref: https://github.com/llvm/llvm-project/commit/8c1b785ce110b754c2112906021a929ddd32f587
-#declare_mlir_dialect_python_bindings(
-#  ADD_TO_PARENT HCLMLIRPythonSources.Dialects
-#  ROOT_DIR "${HCL_MLIR_PYTHON_ROOT_DIR}"
-#  #TD_FILE affine/AffineOps.td
-#  SOURCES
-#    affine/__init__.py
-#    affine/_ods_common.py
-#    affine/_affine_ops_ext.py
-#    affine/_affine_ops_gen.py
-#  DIALECT_NAME affine
-#)
+declare_mlir_dialect_python_bindings(
+  ADD_TO_PARENT HCLMLIRPythonSources.Dialects
+  ROOT_DIR "${HCL_MLIR_PYTHON_ROOT_DIR}"
+  #TD_FILE dialects/AffineOps.td
+  SOURCES
+    dialects/affine.py
+    dialects/_affine_ops_ext.py
+    dialects/_affine_ops_gen.py
+  DIALECT_NAME affine
+)
 
 ################################################################################
 # Extensions

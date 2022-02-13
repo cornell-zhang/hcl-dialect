@@ -3,14 +3,16 @@
 # Copyright 2021-2022 The HCL-MLIR Authors.
 #
 # ===----------------------------------------------------------------------=== #
+
 from contextvars import ContextVar
 
-from mlir.dialects import builtin, math, memref, std
-from mlir.ir import *
+from hcl_mlir.ir import *
+from hcl_mlir.dialects import builtin, math, memref, std, affine
+from hcl_mlir.dialects import hcl as hcl_d
 
-from . import affine
-from ._hcl_ops_gen import *
-from ._mlir_libs._hcl import *
+# from . import affine
+# from ._hcl_ops_gen import *
+# from ._mlir_libs._hcl import *
 
 global_ctx = Context()
 global_loc = Location.unknown(global_ctx)
@@ -25,7 +27,7 @@ ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount", default=1)
 ImperativeLoopDepth = ContextVar("ImperativeLoopDepth", default=0)
 StageName = ContextVar("StageName", default="")
 
-register_dialects(global_ctx)
+hcl_d.register_dialect(global_ctx)
 
 
 class HCLFlags(object):
@@ -112,7 +114,7 @@ def get_mlir_type(dtype):
     elif isinstance(dtype, str):
         with get_context() as ctx:
             if dtype[0:3] == "int":
-                return IntegerType.get_signless(int(dtype[3:]))
+                return IntegerType.get_signless(int(dtype[3:]), context=ctx)
             elif dtype[0:4] == "uint":
                 # TODO: Support signedness
                 return IntegerType.get_signless(int(dtype[4:]))
@@ -1364,7 +1366,7 @@ class ASTBuilder:
         return rv
 
 
-def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None):
+def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None):
     # Construct lower bound
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
@@ -1403,6 +1405,7 @@ def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None)
         stage=("" if stage == "" else StringAttr.get(stage)),
         reduction=(IntegerAttr.get(i32, 1) if reduction else None),
         ip=ip,
+        loc=loc
     )
 
     return forOp

@@ -1,3 +1,5 @@
+# RUN: %PYTHON %s
+
 from hcl_mlir.ir import *
 from hcl_mlir.dialects import builtin, arith, memref, affine
 from hcl_mlir.dialects import hcl as hcl_d

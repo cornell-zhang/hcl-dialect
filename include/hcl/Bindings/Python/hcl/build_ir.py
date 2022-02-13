@@ -627,7 +627,7 @@ class TensorOp(ExprOp):
     def build(self):
         memref_type = self.get_memref_type()
         self.built_op = self.op(
-            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
         )
         self.built_op.attributes["name"] = StringAttr.get(self.name)
         return self.built_op
@@ -753,7 +753,7 @@ class BinaryOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(
-            self.dtype, self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
+            self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
         )
         return self.built_op
 
@@ -999,7 +999,6 @@ class LoadOp(ExprOp):
 
     def build_affine(self, indices, affine_attr):
         self.built_op = self.op(
-            self.dtype,
             self.tensor.result,
             indices,
             affine_attr,
@@ -1254,7 +1253,7 @@ class ASTBuilder:
         dtype = expr.dtype
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(
-            memref_type, None, None, None, ip=GlobalInsertionPoint.get()
+            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
         )
         if isinstance(expr, SumOp):
             prefix = "sum"
@@ -1322,7 +1321,7 @@ class ASTBuilder:
 
         # load register value and reduce
         load = affine.AffineLoadOp(
-            dtype, rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+            rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         load.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
         if is_floating_point_type(dtype):
@@ -1340,7 +1339,7 @@ class ASTBuilder:
                 )
             )
         iter_reduction = reduce_op(
-            dtype, data.result, load.result, ip=GlobalInsertionPoint.get()
+            data.result, load.result, ip=GlobalInsertionPoint.get()
         )
 
         # store the result back to register

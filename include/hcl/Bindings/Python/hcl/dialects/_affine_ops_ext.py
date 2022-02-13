@@ -96,11 +96,11 @@ class AffineForOp:
 class AffineLoadOp:
     """Specialization for the MemRef load operation."""
 
-    def __init__(self, memref, indices, *, loc=None, ip=None):
+    def __init__(self, memref, indices, map=None, *, loc=None, ip=None):
         memref_resolved = _get_op_result_or_value(memref)
         indices_resolved = [] if indices is None else _get_op_results_or_values(indices)
         return_type = MemRefType(memref_resolved.type).element_type
-        super().__init__(return_type, memref, indices_resolved, loc=loc, ip=ip)
+        super().__init__(return_type, memref, indices_resolved, map, loc=loc, ip=ip)
 
 
 class AffineStoreOp:

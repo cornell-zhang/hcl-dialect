@@ -140,7 +140,11 @@ class AffineStoreOp:
 
 
 class AffineIfOp:
-    def __init__(self, cond, set_operands, *, loc=None, ip=None):
+    """
+    The affine.if operation contains two regions for the “then” and “else” clauses. affine.if may return results that are defined in its regions. The values defined are determined by which execution path is taken. Each region of the affine.if must contain a single block with no arguments, and be terminated by affine.yield. If affine.if defines no values, the affine.yield can be left out, and will be inserted implicitly. Otherwise, it must be explicit. If no values are defined, the else block may be empty (i.e. contain no blocks).
+    """
+
+    def __init__(self, cond, set_operands, withElseRegion=False, *, loc=None, ip=None):
         operands = []
         results = []
         operands.extend(set_operands)
@@ -155,8 +159,9 @@ class AffineIfOp:
                 ip=ip,
             )
         )
-        self.regions[0].blocks.append(IndexType.get(), *results)
-        self.regions[1].blocks.append(IndexType.get(), *results)
+        self.regions[0].blocks.append(*results)
+        if withElseRegion:
+            self.regions[1].blocks.append(*results)
 
     @property
     def then_block(self):

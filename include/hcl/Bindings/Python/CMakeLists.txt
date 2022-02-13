@@ -60,7 +60,7 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   SOURCES
     ${HCL_PYTHON_SOURCE_DIR}/HCLModule.cpp
     ${HCL_PYTHON_SOURCE_DIR}/HCLTypes.cpp
-    #${HCL_PYTHON_SOURCE_DIR}/HCLAttributes.cpp
+    ${HCL_PYTHON_SOURCE_DIR}/HCLAttributes.cpp
   EMBED_CAPI_LINK_LIBS
     MLIRCAPIIR
     MLIRCAPIDebug

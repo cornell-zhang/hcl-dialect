@@ -147,9 +147,9 @@ PYBIND11_MODULE(_hcl, m) {
       },
       py::arg("context") = py::none());
 
-  // populateIRCore(m);
+  // Declare customized types and attributes
   populateHCLIRTypes(hcl_m);
-  // populateHCLAttributes(m);
+  populateHCLAttributes(hcl_m);
 
   // Loop transform APIs.
   hcl_m.def("loop_transformation", &loopTransformation);

@@ -108,8 +108,7 @@ def get_mlir_type(dtype):
             if dtype[0:3] == "int":
                 return IntegerType.get_signless(int(dtype[3:]), context=ctx)
             elif dtype[0:4] == "uint":
-                # TODO: Support signedness
-                return IntegerType.get_signless(int(dtype[4:]))
+                return IntegerType.get_unsigned(int(dtype[4:]))
             elif dtype[0:5] == "float":
                 if dtype[5:] == "16":
                     return F16Type.get()

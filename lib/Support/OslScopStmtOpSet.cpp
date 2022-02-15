@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScopStmtOpSet.cc --------------------------------------*- C++ -*-===//
 //
 // This file implements the class OslScopStmtOpSet.
@@ -6,9 +14,10 @@
 
 #include "hcl/Support/OslScopStmtOpSet.h"
 
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/AffineStructures.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
+//#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/Support/LogicalResult.h"
@@ -17,8 +26,8 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 
-using namespace llvm;
 using namespace mlir;
+using namespace llvm;
 using namespace hcl;
 
 void OslScopStmtOpSet::insert(mlir::Operation *op) {

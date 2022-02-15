@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScop.cc -----------------------------------------------*- C++ -*-===//
 //
 // This file implements the C++ wrapper for the Scop struct in OpenScop.
@@ -8,10 +16,10 @@
 #include "hcl/Support/ScatteringUtils.h"
 #include "hcl/Support/ScopStmt.h"
 
-#include "osl/osl.h" // NOT SURE FROM WHERE IT WILL COME DEBJIT
+#include "osl/osl.h"
 
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/AffineStructures.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
@@ -30,9 +38,9 @@
 
 #include <vector>
 
-using namespace hcl;
 using namespace mlir;
 using namespace llvm;
+using namespace hcl;
 
 #define DEBUG_TYPE "oslscop"
 

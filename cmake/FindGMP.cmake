@@ -7,6 +7,14 @@
 #
 #===----------------------------------------------------------------------===//
 
+#===----------------------------------------------------------------------===//
+#
+# Copyright 2021-2022 The HCL-MLIR Authors.
+#
+# Modified from the Polymer project [https://github.com/kumasento/polymer]
+#
+#===----------------------------------------------------------------------===//
+
 set(GMP_PREFIX "" CACHE PATH "path ")
 
 find_path(GMP_INCLUDE_DIR gmp.h gmpxx.h 

@@ -2,7 +2,7 @@
 //
 // Copyright 2021-2022 The HCL-MLIR Authors.
 //
-// Modified from the Polymer project
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,30 +17,54 @@
 #define HCL_TARGET_OPENSCOP_H
 
 #include <memory>
-#include <iostream>
 
 #include "mlir/Support/LLVM.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
+
+#define SCOP_STMT_ATTR_NAME "scop.stmt"
+
+namespace mlir {
+class OwningModuleRef;
+class MLIRContext;
+class ModuleOp;
+class FuncOp;
+struct LogicalResult;
+class Operation;
+class Value;
+} // namespace mlir
 
 namespace mlir {
 namespace hcl {
 
 class OslScop;
+class OslSymbolTable;
 
-LogicalResult translateModuleToOpenScop(
-    mlir::ModuleOp module,
-    llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
-    llvm::raw_ostream &os);
+std::unique_ptr<OslScop> createOpenScopFromFuncOp(
+        mlir::FuncOp funcOp,
+        OslSymbolTable &symTable
+        );
 
-LogicalResult emitOpenScop(
-    ModuleOp module, 
-    llvm::raw_ostream &os);
-
-void registerToOpenScopTranslation();
+/// Create a function (FuncOp) from the given OpenScop object in the given
+/// module (ModuleOp).
+//mlir::Operation *
+//createFuncOpFromOpenScop(std::unique_ptr<OslScop> scop, mlir::ModuleOp module,
+//                         OslSymbolTable &symTable, mlir::MLIRContext *context,
+//                         PlutoProg *prog = nullptr,
+//                         const char *dumpClastAfterPluto = nullptr);
+//
+//mlir::OwningModuleRef translateOpenScopToModule(std::unique_ptr<OslScop> scop,
+//                                                mlir::MLIRContext *context);
+//
+//mlir::LogicalResult translateModuleToOpenScop(
+//    mlir::ModuleOp module,
+//    llvm::SmallVectorImpl<std::unique_ptr<OslScop>> &scops,
+//    llvm::raw_ostream &os);
+//
+//void registerToOpenScopTranslation();
+//void registerFromOpenScopTranslation();
 
 } // namespace hcl
 } // namespace mlir
 
-#endif // HCL_TARGET_OPENSCOP_H
+#endif

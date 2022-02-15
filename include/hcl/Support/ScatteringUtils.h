@@ -1,10 +1,18 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- ScatteringUtils.h ----------------------------------------*- C++ -*-===//
 //
 // This file declares the C++ wrapper for the Scop scattering.
 //
 //===----------------------------------------------------------------------===//
-#ifndef POLYMER_SUPPORT_SCATTERINGUTILS_H
-#define POLYMER_SUPPORT_SCATTERINGUTILS_H
+#ifndef HCL_SUPPORT_SCATTERINGUTILS_H
+#define HCL_SUPPORT_SCATTERINGUTILS_H
 
 #include <memory>
 
@@ -16,7 +24,8 @@ class Value;
 class Operation;
 } // namespace mlir
 
-namespace polymer {
+namespace mlir {
+namespace hcl {
 
 class ScatTreeNodeImpl;
 
@@ -43,6 +52,7 @@ private:
   std::unique_ptr<ScatTreeNodeImpl> impl;
 };
 
-} // namespace polymer
+} // namespace hcl
+} // namespace mlir
 
 #endif

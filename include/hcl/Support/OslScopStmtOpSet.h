@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScopStmtOpSet.h ---------------------------------------*- C++ -*-===//
 //
 // This file declares the class OslScopStmtOpSet.
@@ -16,7 +24,8 @@ struct LogicalResult;
 class FlatAffineValueConstraints;
 } // namespace mlir
 
-namespace polymer {
+namespace mlir {
+namespace hcl {
 
 /// This class contains a set of operations that will correspond to a single
 /// OpenScop statement body. The underlying data structure is SetVector.
@@ -68,5 +77,6 @@ private:
 };
 
 } // namespace hcl
+} // namespece mlir
 
 #endif

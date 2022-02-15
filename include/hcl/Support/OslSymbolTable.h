@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslSymbolTable.h -----------------------------------------*- C++ -*-===//
 //
 // This file declares the OslSymbolTable class that stores the mapping between
@@ -19,6 +27,7 @@ class Operation;
 class Value;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class OslScopStmtOpSet;
@@ -53,5 +62,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- ScopStmt.cc ----------------------------------------------*- C++ -*-===//
 //
 // This file declares the class ScopStmt.
@@ -6,9 +14,10 @@
 
 #include "hcl/Support/ScopStmt.h"
 
-#include "mlir/Analysis/AffineAnalysis.h"
-#include "mlir/Analysis/AffineStructures.h"
-#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
+//#include "mlir/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
@@ -28,9 +37,7 @@ using namespace llvm;
 using namespace mlir;
 using namespace hcl;
 
-namespace hcl {
-
-class ScopStmtImpl {
+class mlir::hcl::ScopStmtImpl {
 public:
   using EnclosingOpList = SmallVector<Operation *, 8>;
 
@@ -58,8 +65,6 @@ public:
   /// Enclosing for/if operations for the caller.
   EnclosingOpList enclosingOps;
 };
-
-} // namespace hcl
 
 /// Create ScopStmtImpl from only the caller/callee pair.
 std::unique_ptr<ScopStmtImpl> ScopStmtImpl::get(mlir::Operation *callerOp,

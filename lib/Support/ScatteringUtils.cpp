@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- ScatteringUtils.cc ---------------------------------------*- C++ -*-===//
 //
 // This file declares the C++ wrapper for the Scop scattering.
@@ -13,13 +21,11 @@
 #include "mlir/IR/Value.h"
 #include "llvm/ADT/DenseMap.h"
 
-using namespace hcl;
 using namespace mlir;
 using namespace llvm;
+using namespace hcl;
 
-namespace hcl {
-
-class ScatTreeNodeImpl {
+class mlir::hcl::ScatTreeNodeImpl {
 public:
   ScatTreeNodeImpl() {}
   ScatTreeNodeImpl(mlir::Value iv) : iv(iv) {}
@@ -115,5 +121,3 @@ void ScatTreeNode::insertScopStmt(llvm::ArrayRef<mlir::Operation *> ops,
 }
 
 unsigned ScatTreeNode::getDepth() const { return impl->getDepth(impl.get()); }
-
-} // namespace hcl

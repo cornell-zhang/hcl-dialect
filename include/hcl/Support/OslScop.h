@@ -1,10 +1,18 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- OslScop.h ------------------------------------------------*- C++ -*-===//
 //
 // This file declares the C++ wrapper for the Scop struct in OpenScop.
 //
 //===----------------------------------------------------------------------===//
-#ifndef POLYMER_SUPPORT_OSLSCOP_H
-#define POLYMER_SUPPORT_OSLSCOP_H
+#ifndef HCL_SUPPORT_OSLSCOP_H
+#define HCL_SUPPORT_OSLSCOP_H
 
 #include "mlir/Support/LLVM.h"
 
@@ -32,6 +40,7 @@ class Value;
 class FuncOp;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
 
 class ScopStmt;
@@ -161,5 +170,6 @@ private:
 };
 
 } // namespace hcl
+} // namespace mlir
 
 #endif

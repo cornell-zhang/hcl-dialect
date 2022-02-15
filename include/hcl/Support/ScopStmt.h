@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+// Copyright 2021-2022 The HCL-MLIR Authors.
+//
+// Modified from the Polymer project [https://github.com/kumasento/polymer]
+//
+//===----------------------------------------------------------------------===//
+
 //===- ScopStmt.h -----------------------------------------------*- C++ -*-===//
 //
 // This file declares the class ScopStmt.
@@ -20,7 +28,9 @@ class CallOp;
 class Value;
 } // namespace mlir
 
+namespace mlir {
 namespace hcl {
+
 class ScopStmtImpl;
 
 /// Class that stores all the essential information for a Scop statement,
@@ -54,5 +64,6 @@ private:
   std::unique_ptr<ScopStmtImpl> impl;
 };
 } // namespace hcl
+} // namespace mlir
 
 #endif

@@ -762,7 +762,7 @@ class CmpOp(BinaryOp):
         elif is_floating_point_type(dtype):
             self.op = arith.CmpFOp
         elif is_fixed_type(dtype):
-            self.op = CmpFixedOp
+            self.op = hcl_d.CmpFixedOp
         else:
             raise RuntimeError("Unsupported types")
         super().__init__(self.op, bool, lhs, rhs)
@@ -870,7 +870,7 @@ class OrOp(BinaryOp):
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(arith.XOrOOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.XOrIOp, lhs.dtype, lhs, rhs)
 
 
 class NegOp(UnaryOp):

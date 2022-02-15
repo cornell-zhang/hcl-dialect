@@ -1313,8 +1313,8 @@ class ASTBuilder:
             # update reduction variable
             axis.update_op(reduction_loop.induction_variable)
 
-        # update insertion point
-        GlobalInsertionPoint.save(body_ip)
+            # update insertion point
+            GlobalInsertionPoint.save(body_ip)
 
         # visit subexpressions
         data = self.visit(expr.op)
@@ -1352,10 +1352,10 @@ class ASTBuilder:
         store_reg.attributes["to"] = StringAttr.get("{}_rv".format(prefix))
 
         # set terminator
-        affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
-
-        # restore insertion point
-        GlobalInsertionPoint.restore()
+        for axis in new_axes:
+            affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
+            # restore insertion point
+            GlobalInsertionPoint.restore()
         return rv
 
 

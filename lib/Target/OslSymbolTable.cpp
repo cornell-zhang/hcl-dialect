@@ -13,8 +13,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Support/OslSymbolTable.h"
-#include "hcl/Support/OslScopStmtOpSet.h"
+#include "hcl/Target/OslSymbolTable.h"
+#include "hcl/Target/OslScopStmtOpSet.h"
 
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"

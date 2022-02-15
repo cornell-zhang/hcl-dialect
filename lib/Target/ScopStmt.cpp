@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Support/ScopStmt.h"
+#include "hcl/Target/ScopStmt.h"
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"

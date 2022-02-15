@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Support/ScatteringUtils.h"
+#include "hcl/Target/ScatteringUtils.h"
 
 #include <memory>
 

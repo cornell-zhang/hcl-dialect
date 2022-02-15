@@ -12,5 +12,14 @@ add_mlir_library(MLIRHCLEmitOpenSCoP
   MLIRAffine
   MLIRAffineUtils
   MLIRTranslation
+  MLIRParser
+  MLIRSPIRV
+  MLIRTranslation
+  MLIRHeteroCL
+  MLIRMemRef
+  MLIRAnalysis
+  # Needed for the OpenSCoPLib linkup.
+  # Can link up other Polyhedral tools as needed
   libosl
+  MLIRAffineAnalysis
 )

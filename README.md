@@ -80,7 +80,8 @@ mkdir build && cd build
 cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
-   -DPYTHON_BINDING=OFF
+   -DPYTHON_BINDING=OFF \
+   -DOPENSCOP=OFF
 make -j
 ```
 
@@ -90,15 +91,27 @@ cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
+   -DOPENSCOP=OFF
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
 make -j
-
-# Export the LD_LIBRARY_PATH for OpenSCoP library
-export LD_LIBRARY_PATH=$(pwd)/openscop/lib:$LD_LIBRARY_PATH
 
 # Export the generated HCL-MLIR Python library
 export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
+
+- Build with OpenSCoP extraction enabled
+```sh
+cmake -G "Unix Makefiles" .. \
+   -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
+   -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
+   -DPYTHON_BINDING=OFF \
+   -DOPENSCOP=ON
+make -j
+
+# Export the LD_LIBRARY_PATH for OpenSCoP library
+export LD_LIBRARY_PATH=$(pwd)/openscop/lib:$LD_LIBRARY_PATH
+```
+
 
 Lastly, you can use the following integration test to see whether your built dialect works properly.
 ```

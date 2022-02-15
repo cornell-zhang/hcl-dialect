@@ -6,10 +6,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Target/ExtractScopStmt.h"
-#include "hcl/Support/OslScop.h"
-#include "hcl/Support/OslScopStmtOpSet.h"
-#include "hcl/Support/OslSymbolTable.h"
-#include "hcl/Support/ScopStmt.h"
+#include "hcl/Target/OslScop.h"
+#include "hcl/Target/OslScopStmtOpSet.h"
+#include "hcl/Target/OslSymbolTable.h"
+#include "hcl/Target/ScopStmt.h"
 #include "hcl/Target/OpenScop.h"
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"

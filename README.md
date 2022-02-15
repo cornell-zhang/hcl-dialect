@@ -52,12 +52,15 @@ git checkout tags/llvmorg-14.0.0-rc1
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_UTILS=ON \
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-      -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
+      -DPython3_EXECUTABLE=`which python3`
    mkdir tools/mlir/python/dialects # Makefile bug
    make -j
 
    # Export the generated MLIR Python library
    export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
+
+   # Export the LLVM build directory
+   export LLVM_BUILD_DIR=$(pwd)
 
    # To enable better backtracing for debugging,
    # we suggest setting the following system path
@@ -65,7 +68,7 @@ git checkout tags/llvmorg-14.0.0-rc1
    ```
 
 ### Build HeteroCL Dialect
-This setup assumes that you have built LLVM and MLIR in `$BUILD_DIR` and installed them to `$PREFIX`. Please firstly clone our repository.
+This setup assumes that you have built LLVM and MLIR in `$LLVM_BUILD_DIR`. Please firstly clone our repository.
 ```sh
 git clone https://github.com/cornell-zhang/hcl-dialect-prototype.git
 cd hcl-dialect-prototype
@@ -75,8 +78,8 @@ mkdir build && cd build
 - Build without Python binding
 ```sh
 cmake -G "Unix Makefiles" .. \
-   -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
-   -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
+   -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
+   -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=OFF
 make -j
 ```
@@ -84,11 +87,10 @@ make -j
 - Build with Python binding
 ```sh
 cmake -G "Unix Makefiles" .. \
-   -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
-   -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
+   -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
+   -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
-mkdir include/hcl/Bindings/Python/affine # Makefile bug
 make -j
 
 # Export the LD_LIBRARY_PATH for OpenSCoP library
@@ -107,22 +109,25 @@ cmake --build . --target check-hcl
 ## Run HeteroCL Dialect
 ```sh
 # perform loop transformation passes
-./bin/hcl-opt -opt ../test/compute/tiling.mlir
+./bin/hcl-opt -opt ../test/Transforms/compute/tiling.mlir
 
 # generate C++ HLS code
-./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
+./bin/hcl-opt -opt ../test/Transforms/compute/tiling.mlir | \
 ./bin/hcl-translate -emit-hlscpp
 
 # generate OpenSCoP
 ./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
 ./bin/hcl-translate --extract-scop-stmt
+
+# run code on CPU
+./bin/hcl-opt -jit ../test/Translation/mm.mlir
 ```
 
 Or you can use our provided script to directly generate C++ HLS code from MLIR.
 
 ```sh
 cd ../examples
-make ../test/compute/tiling
+make ../test/Transforms/compute/tiling
 ```
 
 ## Integrate with upstream HeteroCL frontend

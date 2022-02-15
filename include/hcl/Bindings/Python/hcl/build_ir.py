@@ -4,7 +4,6 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-from contextvars import ContextVar
 
 from hcl_mlir.ir import *
 from hcl_mlir.dialects import builtin, arith, math, memref, std, affine
@@ -19,10 +18,6 @@ bool = IntegerType.get_signless(1, context=global_ctx)
 i32 = IntegerType.get_signless(32, context=global_ctx)
 i64 = IntegerType.get_signless(64, context=global_ctx)
 idx_type = IndexType.get(context=global_ctx)
-
-ImperativeLoopNestCount = ContextVar("ImperativeLoopNestCount", default=1)
-ImperativeLoopDepth = ContextVar("ImperativeLoopDepth", default=0)
-StageName = ContextVar("StageName", default="")
 
 hcl_d.register_dialect(global_ctx)
 
@@ -113,8 +108,7 @@ def get_mlir_type(dtype):
             if dtype[0:3] == "int":
                 return IntegerType.get_signless(int(dtype[3:]), context=ctx)
             elif dtype[0:4] == "uint":
-                # TODO: Support signedness
-                return IntegerType.get_signless(int(dtype[4:]))
+                return IntegerType.get_unsigned(int(dtype[4:]))
             elif dtype[0:5] == "float":
                 if dtype[5:] == "16":
                     return F16Type.get()
@@ -767,7 +761,7 @@ class CmpOp(BinaryOp):
         elif is_floating_point_type(dtype):
             self.op = arith.CmpFOp
         elif is_fixed_type(dtype):
-            self.op = CmpFixedOp
+            self.op = hcl_d.CmpFixedOp
         else:
             raise RuntimeError("Unsupported types")
         super().__init__(self.op, bool, lhs, rhs)
@@ -835,9 +829,7 @@ class MulOp(BinaryOp):
 
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__(
-            {"float": arith.DivFOp, "int": arith.DivUIOp}, dtype, lhs, rhs
-        )
+        super().__init__({"float": arith.DivFOp, "int": arith.DivUIOp}, dtype, lhs, rhs)
 
 
 class FloorDivOp(BinaryOp):
@@ -852,9 +844,7 @@ class FloorDivOp(BinaryOp):
 
 class RemOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__(
-            {"float": arith.RemFOp, "int": arith.RemUIOp}, dtype, lhs, rhs
-        )
+        super().__init__({"float": arith.RemFOp, "int": arith.RemUIOp}, dtype, lhs, rhs)
 
 
 class LeftShiftOp(BinaryOp):
@@ -879,7 +869,7 @@ class OrOp(BinaryOp):
 
 class XOrOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        super().__init__(arith.XOrOOp, lhs.dtype, lhs, rhs)
+        super().__init__(arith.XOrIOp, lhs.dtype, lhs, rhs)
 
 
 class NegOp(UnaryOp):
@@ -992,7 +982,7 @@ class LoadOp(ExprOp):
         for index in self.indices:
             new_indices.append(index.result)
         self.built_op = self.op(
-            self.dtype, self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
+            self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         return self.built_op
@@ -1110,7 +1100,6 @@ class SelectOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(
-            self.dtype,
             self.cond.result,
             self.true_val.result,
             self.false_val.result,
@@ -1252,21 +1241,31 @@ class ASTBuilder:
         # create a single-element register for reduction
         dtype = expr.dtype
         memref_type = MemRefType.get((1,), dtype)
-        rv = memref.AllocOp(
-            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
-        )
+        rv = memref.AllocOp(memref_type, [], [], None, ip=GlobalInsertionPoint.get())
         if isinstance(expr, SumOp):
             prefix = "sum"
             init_val = 0
-            reduce_op = {"float": arith.AddFOp, "int": arith.AddIOp, "fixed": hcl_d.AddFixedOp}
+            reduce_op = {
+                "float": arith.AddFOp,
+                "int": arith.AddIOp,
+                "fixed": hcl_d.AddFixedOp,
+            }
         elif isinstance(expr, MinOp):
             prefix = "min"
             init_val = 0x3F3F3F3F  # magic large number
-            reduce_op = {"float": arith.MinFOp, "int": arith.MinUIOp, "fixed": hcl_d.MinFixedOp}
+            reduce_op = {
+                "float": arith.MinFOp,
+                "int": arith.MinUIOp,
+                "fixed": hcl_d.MinFixedOp,
+            }
         elif isinstance(expr, MaxOp):
             prefix = "max"
             init_val = -0x3F3F3F3F
-            reduce_op = {"float": arith.MaxFOp, "int": arith.MaxUIOp, "fixed": hcl_d.MaxFixedOp}
+            reduce_op = {
+                "float": arith.MaxFOp,
+                "int": arith.MaxUIOp,
+                "fixed": hcl_d.MaxFixedOp,
+            }
         else:
             raise RuntimeError("Should not in this branch")
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
@@ -1313,8 +1312,8 @@ class ASTBuilder:
             # update reduction variable
             axis.update_op(reduction_loop.induction_variable)
 
-        # update insertion point
-        GlobalInsertionPoint.save(body_ip)
+            # update insertion point
+            GlobalInsertionPoint.save(body_ip)
 
         # visit subexpressions
         data = self.visit(expr.op)
@@ -1352,14 +1351,16 @@ class ASTBuilder:
         store_reg.attributes["to"] = StringAttr.get("{}_rv".format(prefix))
 
         # set terminator
-        affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
-
-        # restore insertion point
-        GlobalInsertionPoint.restore()
+        for axis in new_axes:
+            affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
+            # restore insertion point
+            GlobalInsertionPoint.restore()
         return rv
 
 
-def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None):
+def make_affine_for(
+    lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
+):
     # Construct lower bound
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
@@ -1398,7 +1399,7 @@ def make_affine_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None,
         stage=("" if stage == "" else StringAttr.get(stage)),
         reduction=(IntegerAttr.get(i32, 1) if reduction else None),
         ip=ip,
-        loc=loc
+        loc=loc,
     )
 
     return forOp

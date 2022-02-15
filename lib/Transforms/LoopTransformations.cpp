@@ -1421,11 +1421,11 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
                             Value &arrayToStream, int fifo_depth = -1) {
   // Construct new array type (add stream attribute)
   auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
-  auto shapedType = arrayToStream.getType().cast<ShapedType>().getShape();
+  auto shape = arrayType.getShape();
   if (fifo_depth == -1) {
     // a conversative estimation
     fifo_depth = 1;
-    for (auto size : shapedType)
+    for (auto size : shape)
       fifo_depth *= size;
   }
   auto newType = MemRefType::get(

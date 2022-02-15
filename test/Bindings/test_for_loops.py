@@ -13,12 +13,9 @@ with Context() as ctx, Location.unknown() as loc:
     memref_type = MemRefType.get((1024, 1024), f32)
 
     with InsertionPoint(module.body):
-        hcl_d.CreateLoopHandleOp(hcl_d.LoopHandleType.get(ctx),
-                                    StringAttr.get("i"))
-        hcl_d.CreateLoopHandleOp(hcl_d.LoopHandleType.get(ctx),
-                                    StringAttr.get("j"))
-        hcl_d.CreateLoopHandleOp(hcl_d.LoopHandleType.get(ctx),
-                                    StringAttr.get("k"))
+        hcl_d.CreateLoopHandleOp(StringAttr.get("i"))
+        hcl_d.CreateLoopHandleOp(StringAttr.get("j"))
+        hcl_d.CreateLoopHandleOp(StringAttr.get("k"))
 
         @builtin.FuncOp.from_py_func(memref_type, memref_type, memref_type)
         def gemm(A, B, C):

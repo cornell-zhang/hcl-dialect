@@ -15,6 +15,7 @@ include "hcl/Dialect/HeteroCLAttrs.td"
 
 include "mlir/IR/BuiltinTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
 
 def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
 {
@@ -346,7 +347,7 @@ def FixedLike: TypeConstraint<Or<[AnyFixed.predicate,
     "fixed-point-like">;
 
 class FixedBinaryOp<string mnemonic, list<Trait> traits = []> :
-    Op<HeteroCL_Dialect, mnemonic, traits>,
+    Op<HeteroCL_Dialect, mnemonic, traits # [SameOperandsAndResultType]>,
     Arguments<(ins FixedLike:$lhs, FixedLike:$rhs)>,
     Results<(outs FixedLike:$result)>;
 

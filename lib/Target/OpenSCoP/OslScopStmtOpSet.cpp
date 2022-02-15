@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Target/OslScopStmtOpSet.h"
+#include "hcl/Target/OpenSCoP/OslScopStmtOpSet.h"
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"

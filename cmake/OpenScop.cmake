@@ -18,9 +18,9 @@
 
 include(ExternalProject)
 
+set(OSL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/openscop")
 set(OSL_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/openscop/include")
 set(OSL_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/openscop/lib")
-set(OSL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/openscop")
 set(OSL_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/openscop")
 
 ExternalProject_Add(

@@ -16,7 +16,7 @@
 #include "mlir/Translation.h"
 #include "hcl/Translation/EmitHLSCpp.h"
 #ifdef OPENSCOP
-#include "hcl/Target/ExtractScopStmt.h"
+#include "hcl/Target/OpenSCoP/ExtractScopStmt.h"
 #endif
 
 #include "hcl/Dialect/HeteroCLDialect.h"

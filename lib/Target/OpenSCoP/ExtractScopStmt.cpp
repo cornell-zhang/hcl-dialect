@@ -5,12 +5,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Target/ExtractScopStmt.h"
-#include "hcl/Target/OslScop.h"
-#include "hcl/Target/OslScopStmtOpSet.h"
-#include "hcl/Target/OslSymbolTable.h"
-#include "hcl/Target/ScopStmt.h"
-#include "hcl/Target/OpenScop.h"
+#include "hcl/Target/OpenSCoP/ExtractScopStmt.h"
+#include "hcl/Target/OpenSCoP/OslScop.h"
+#include "hcl/Target/OpenSCoP/OslScopStmtOpSet.h"
+#include "hcl/Target/OpenSCoP/OslSymbolTable.h"
+#include "hcl/Target/OpenSCoP/ScopStmt.h"
+#include "hcl/Target/OpenSCoP/OpenScop.h"
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"

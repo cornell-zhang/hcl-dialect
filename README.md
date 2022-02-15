@@ -91,7 +91,7 @@ cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
-   -DOPENSCOP=OFF
+   -DOPENSCOP=OFF \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
 make -j
 
@@ -129,7 +129,7 @@ cmake --build . --target check-hcl
 ./bin/hcl-translate -emit-hlscpp
 
 # generate OpenSCoP
-./bin/hcl-opt -opt ../test/compute/tiling.mlir | \
+./bin/hcl-opt -opt ../test/Transforms/memory/buffer_add.mlir | \
 ./bin/hcl-translate --extract-scop-stmt
 
 # run code on CPU

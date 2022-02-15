@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Target/OslScop.h"
-#include "hcl/Target/ScatteringUtils.h"
-#include "hcl/Target/ScopStmt.h"
+#include "hcl/Target/OpenSCoP/OslScop.h"
+#include "hcl/Target/OpenSCoP/ScatteringUtils.h"
+#include "hcl/Target/OpenSCoP/ScopStmt.h"
 
 #include "osl/osl.h"
 

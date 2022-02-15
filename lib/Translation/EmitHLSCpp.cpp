@@ -67,12 +67,12 @@ static SmallString<16> getTypeName(Value val) {
   // Handle (custom) fixed point types.
   else if (auto fixedType = valType.dyn_cast<hcl::FixedType>())
     return SmallString<16>(
-        "ap_fixed<" + std::to_string(fixedType.getWidth()) + "," +
+        "ap_fixed<" + std::to_string(fixedType.getWidth()) + ", " +
         std::to_string(fixedType.getWidth() - fixedType.getFrac()) + ">");
 
   else if (auto ufixedType = valType.dyn_cast<hcl::UFixedType>())
     return SmallString<16>(
-        "ap_ufixed<" + std::to_string(ufixedType.getWidth()) + "," +
+        "ap_ufixed<" + std::to_string(ufixedType.getWidth()) + ", " +
         std::to_string(ufixedType.getWidth() - ufixedType.getFrac()) + ">");
   else
     val.getDefiningOp()->emitError("has unsupported type.");

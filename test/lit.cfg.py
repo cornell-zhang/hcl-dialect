@@ -40,7 +40,7 @@ llvm_config.use_default_substitutions()
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
 # directories.
-config.excludes = ['lit.cfg.py', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt', 'Translation']
+config.excludes = ['lit.cfg.py', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt']
 
 # Unsupported tests
 config.excludes += ['test_llvm.py']

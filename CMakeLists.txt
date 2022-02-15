@@ -26,7 +26,7 @@ if(OPENSCOP)
   # GMP required for OpenScop library link up
   # Find whether the GMP package exists.
   find_package(GMP REQUIRED)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lgmp" )
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lgmp -DOPENSCOP" )
   
   # Openscop for OpenSCoP extraction from MLIR code (Affine as of now)
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OpenScop.cmake")

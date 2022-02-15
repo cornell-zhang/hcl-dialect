@@ -80,7 +80,8 @@ mkdir build && cd build
 cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
-   -DPYTHON_BINDING=OFF
+   -DPYTHON_BINDING=OFF \
+   -DOPENSCOP=OFF
 make -j
 ```
 
@@ -90,12 +91,27 @@ cmake -G "Unix Makefiles" .. \
    -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
+   -DOPENSCOP=OFF \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
 make -j
 
 # Export the generated HCL-MLIR Python library
 export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
+
+- Build with OpenSCoP extraction enabled
+```sh
+cmake -G "Unix Makefiles" .. \
+   -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
+   -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
+   -DPYTHON_BINDING=OFF \
+   -DOPENSCOP=ON
+make -j
+
+# Export the LD_LIBRARY_PATH for OpenSCoP library
+export LD_LIBRARY_PATH=$(pwd)/openscop/lib:$LD_LIBRARY_PATH
+```
+
 
 Lastly, you can use the following integration test to see whether your built dialect works properly.
 ```
@@ -111,6 +127,10 @@ cmake --build . --target check-hcl
 # generate C++ HLS code
 ./bin/hcl-opt -opt ../test/Transforms/compute/tiling.mlir | \
 ./bin/hcl-translate -emit-hlscpp
+
+# generate OpenSCoP
+./bin/hcl-opt -opt ../test/Transforms/memory/buffer_add.mlir | \
+./bin/hcl-translate --extract-scop-stmt
 
 # run code on CPU
 ./bin/hcl-opt -jit ../test/Translation/mm.mlir
@@ -172,3 +192,4 @@ We follow [Google Style Guides](https://google.github.io/styleguide/) and use
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)
 * [Torch-MLIR](https://github.com/llvm/torch-mlir)
+* [Polymer](https://github.com/kumasento/polymer)

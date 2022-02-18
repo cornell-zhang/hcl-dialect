@@ -16,6 +16,23 @@ set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
 
+if(OPENSCOP)
+  message(STATUS "Building OpenSCoP extraction")
+  # ----------------------------- Customize CMake
+  
+  set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  
+  # ----------------------- Setup for required dependencies ---------------
+  # GMP required for OpenScop library link up
+  # Find whether the GMP package exists.
+  find_package(GMP REQUIRED)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lgmp -DOPENSCOP" )
+  
+  # Openscop for OpenSCoP extraction from MLIR code (Affine as of now)
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OpenScop.cmake")
+  include_directories("${OSL_INCLUDE_DIR}")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(TableGen)

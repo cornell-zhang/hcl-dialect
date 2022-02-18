@@ -9,17 +9,38 @@ add_llvm_executable(hcl-translate
   hcl-translate.cpp
   )
 llvm_update_compile_flags(hcl-translate)
-target_link_libraries(hcl-translate
-  PRIVATE
-  ${dialect_libs}
-  ${translation_libs}
-  MLIRIR
-  MLIRParser
-  MLIRPass
-  MLIRSPIRV
-  MLIRTranslation
-  MLIRSupport
-  MLIRHCLEmitHLSCpp
-  )
+
+if(OPENSCOP)
+    target_link_libraries(hcl-translate
+      PRIVATE
+      ${dialect_libs}
+      ${translation_libs}
+      MLIRIR
+      MLIRParser
+      MLIRPass
+      MLIRSPIRV
+      MLIRTranslation
+      MLIRSupport
+      MLIRHCLEmitHLSCpp
+      MLIRHCLEmitOpenSCoP
+      MLIRHeteroCL
+      gmp
+      )
+else()
+    target_link_libraries(hcl-translate
+      PRIVATE
+      ${dialect_libs}
+      ${translation_libs}
+      MLIRIR
+      MLIRParser
+      MLIRPass
+      MLIRSPIRV
+      MLIRTranslation
+      MLIRSupport
+      MLIRHCLEmitHLSCpp
+      MLIRHeteroCL
+      )
+endif()
+
 
 mlir_check_link_libraries(hcl-translate)

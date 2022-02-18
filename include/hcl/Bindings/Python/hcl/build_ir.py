@@ -264,9 +264,9 @@ class ExprOp(object):
         self.built_op = None
 
     @property
-    def result(self):
-        if isinstance(self.op, BlockArgument):
-            return self.op
+    def result(self):  # get_op_result_or_value
+        if isinstance(self.built_op, BlockArgument):
+            return self.built_op
         else:
             return self.built_op.result
 
@@ -584,7 +584,8 @@ class TensorSlice(ExprOp):
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):
-        # op can be BlockArgument or AllocOp.result
+        if op != memref.AllocOp and not isinstance(op, BlockArgument):
+            raise RuntimeError("Not supported TensorOp. Got {}".format(op))
         super().__init__(op)
         self.shape = shape
         if isinstance(dtype, str):
@@ -594,14 +595,22 @@ class TensorOp(ExprOp):
         self.name = name
 
     def build(self):
-        memref_type = self.get_memref_type()
-        self.built_op = self.op(
-            memref_type, [], [], None, ip=GlobalInsertionPoint.get()
-        )
-        self.built_op.attributes["name"] = StringAttr.get(self.name)
+        if self.op == memref.AllocOp:
+            self.built_op = self.op(
+                self.memref_type, [], [], None, ip=GlobalInsertionPoint.get()
+            )
+            self.built_op.attributes["name"] = StringAttr.get(self.name)
+        elif isinstance(self.op, BlockArgument):
+            self.built_op = self.op
+        else:
+            raise RuntimeError("TensorOp should use memref.AllocOp or BlockArgument to implement. Got {}".format(self.op))
         return self.built_op
 
-    def get_memref_type(self):
+    def update_op(self, op):
+        self.built_op = op
+
+    @property
+    def memref_type(self):
         return MemRefType.get(self.shape, self.dtype, loc=get_location())
 
     def set_axis(self, _axis):

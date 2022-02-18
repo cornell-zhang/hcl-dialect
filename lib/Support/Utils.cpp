@@ -304,7 +304,7 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
 AffineMap hcl::getLayoutMap(MemRefType memrefType) {
   // Check whether the memref has layout map.
   auto memrefMaps = memrefType.getLayout();
-  if (!memrefMaps.getAffineMap())
+  if (memrefMaps.getAffineMap().isIdentity())
     return (AffineMap) nullptr;
 
   return memrefMaps.getAffineMap();
@@ -332,8 +332,10 @@ bool hcl::isFullyPartitioned(MemRefType memrefType, int axis) {
       bool flag = true;
       for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
         auto expr = layoutMap.getResult(dim);
-        if (!expr.isa<AffineDimExpr>())
+        if (!expr.isa<AffineDimExpr>()) {
           flag = false;
+          break;
+        }
       }
       fullyPartitioned |= flag;
     } else {

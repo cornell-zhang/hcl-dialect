@@ -520,12 +520,13 @@ class ConstantOp(ExprOp):
 
 
 class TensorSlice(ExprOp):
-    def __init__(self, full_shape, op, dtype, indices, name=None):
+    def __init__(self, full_shape, op, dtype, parent, indices, name=None):
         super().__init__(op)
         self.op = op
         self.full_shape = full_shape
         self.dtype = dtype
         self.name = name
+        self.parent = parent
         self.indices = indices
         # calculate tensor slice shape
         shape = list()
@@ -549,7 +550,7 @@ class TensorSlice(ExprOp):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
             return TensorSlice(
-                self.full_shape, self.op, self.dtype, self.indices + indices, self.name
+                self.full_shape, self.op, self.dtype, self.parent, self.indices + indices, self.name
             )
         elif len(self.indices + indices) == len(self.shape):
             # format indices
@@ -558,7 +559,7 @@ class TensorSlice(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
-            load = LoadOp(self.dtype, self, new_indices)
+            load = LoadOp(self.dtype, self.parent, new_indices)
             # TODO(Niansong): Why build in place result in duplicate load?
             # if flags.BUILD_INPLACE:
             #     load.build()
@@ -570,14 +571,15 @@ class TensorSlice(ExprOp):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
-            pass
+            # TODO(Niansong): I think this is doable actually
+            raise RuntimeError("Writing to a slice of tensor is not allowed.")
         elif len(self.indices + indices) == len(self.shape):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
                     index = ConstantOp(idx_type, index)
                 new_indices.append(index)
-            return StoreOp(expr, self, self.indices + new_indices)
+            return StoreOp(expr, self.parent, self.indices + new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
 
@@ -643,7 +645,7 @@ class TensorOp(ExprOp):
             indices = (indices,)
         # if we are slicing tensor
         if len(indices) < len(self.shape):
-            return TensorSlice(self.shape, self.op, self.dtype, indices, self.name)
+            return TensorSlice(self.shape, self.op, self.dtype, self, indices, self.name)
         elif len(indices) == len(self.shape):
             # format indices
             new_indices = []

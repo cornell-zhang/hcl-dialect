@@ -1571,8 +1571,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
           else
             os << " cyclic";
 
-          os << " factor=" << factors[dim];
-          os << " dim=" << dim + 1 << "\n";
+          os << " dim=" << dim + 1;
+          os << " factor=" << factors[dim] << "\n";
         }
       } else { // fully partitioned
         emitPragmaFlag = true;

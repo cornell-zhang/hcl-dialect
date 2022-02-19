@@ -1560,25 +1560,24 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
 
 bool applyLoopTransformation(ModuleOp &mod) {
   bool isFoundTopFunc = false;
+  std::map<std::string, FuncOp> funcMap;
   // create name->function mapping
   for (FuncOp func : mod.getOps<FuncOp>()) {
     if (func->hasAttr("top")) {
       isFoundTopFunc = true;
+      funcMap["top"] = func;
       break;
     }
   }
 
   // apply schedule
-  if (!isFoundTopFunc) { // fallback
+  if (!isFoundTopFunc || !funcMap["top"]->hasAttr("top")) { // fallback
     for (FuncOp f : mod.getOps<FuncOp>()) {
       applyLoopTransformationOnSingleFunction(f);
     }
   } else {
-    std::map<std::string, FuncOp> funcMap;
     for (FuncOp func : mod.getOps<FuncOp>()) {
-      if (func->hasAttr("top"))
-        funcMap["top"] = func;
-      else
+      if (!func->hasAttr("top"))
         funcMap[func.getName().str().substr(6)] = func; // Stage_xxx
     }
     FuncOp top_func = funcMap["top"];

@@ -14,7 +14,7 @@ from hcl_mlir.ir import *
 class HCLFlags(object):
     def __init__(self):
         self.BUILD_INPLACE = False
-        self.EXTRACT_FUNCTION = True
+        self.EXTRACT_FUNCTION = False
 
     def enable_build_inplace(self):
         self.BUILD_INPLACE = True
@@ -60,7 +60,9 @@ def get_mlir_type(dtype):
     ):
         return dtype
     elif isinstance(dtype, str):
-        if dtype[0:3] == "int":
+        if dtype[0:5] == "index":
+            return IndexType.get()
+        elif dtype[0:3] == "int":
             return IntegerType.get_signless(int(dtype[3:]))
         elif dtype[0:4] == "uint":
             return IntegerType.get_unsigned(int(dtype[4:]))
@@ -440,7 +442,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype=IndexType.get())
+        super().__init__(op, dtype="index")
         self.built_op = op
 
     def update_op(self, op):
@@ -1384,7 +1386,7 @@ def make_affine_for(
         step,
         lbMapAttr,
         ubMapAttr,
-        name=StringAttr.get(name),
+        name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
         stage=("" if stage == "" else StringAttr.get(stage)),
         reduction=(
             IntegerAttr.get(IntegerType.get_signless(32), 1) if reduction else None

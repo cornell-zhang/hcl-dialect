@@ -4,6 +4,7 @@
 #include "mlir/Conversion/ArithmeticToLLVM/ArithmeticToLLVM.h"
 #include "mlir/Conversion/SCFToStandard/SCFToStandard.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
@@ -96,6 +97,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   mlir::arith::populateArithmeticToLLVMConversionPatterns(typeConverter, patterns);
   populateMathToLLVMConversionPatterns(typeConverter, patterns);
   populateStdToLLVMConversionPatterns(typeConverter, patterns);
+  populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
   patterns.add<CreateStageHandleOpLowering>(&context);

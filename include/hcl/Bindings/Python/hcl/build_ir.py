@@ -1411,3 +1411,20 @@ def make_if(cond, ip=None):
 
     if_op = affine.AffineIfOp(attr, set_operands, ip=ip)
     return if_op
+
+
+def get_affine_loop_nests(func):
+    results = []
+    for op in func.entry_block.operations:
+        if isinstance(op, affine.AffineForOp):  # outer-most
+            band = []
+            loop = op
+            while True:
+                band.append({"name": loop.attributes["loop_name"], "body": loop})
+                for loop in loop.body.operations:
+                    if isinstance(loop, affine.AffineForOp):
+                        break
+                else:
+                    break
+            results.append(band)
+    return results

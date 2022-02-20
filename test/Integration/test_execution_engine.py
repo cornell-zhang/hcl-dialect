@@ -58,7 +58,7 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
         execution_engine.invoke("top", res1_memref, A_memref, B_memref, C_memref, D_memref)
         
     ret = ranked_memref_to_numpy(res1_memref[0])
-    print(ret)
+    # print(ret)
 
 if __name__ == "__main__":
     test_execution_engine()

@@ -24,6 +24,7 @@ module {
         affine.store %8, %4[%arg4, %arg5] {to = "out_AB"} : memref<16x18xf32>
       } {loop_name = "y"}
     } {loop_name = "x", stage_name = "out_AB"}
+
     %5 = memref.alloc() {name = "out_ABC"} : memref<16x24xf32>
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 24 {
@@ -44,6 +45,7 @@ module {
         affine.store %8, %5[%arg4, %arg5] {to = "out_ABC"} : memref<16x24xf32>
       } {loop_name = "y"}
     } {loop_name = "x", stage_name = "out_ABC"}
+
     %6 = memref.alloc() {name = "E"} : memref<16x24xf32>
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 24 {
@@ -58,8 +60,8 @@ module {
       } {loop_name = "y"}
     } {loop_name = "x", stage_name = "E"}
 
-    %u_memref = memref.cast %6 : memref<16x24xf32> to memref<*xf32>
-    call @print_memref_f32(%u_memref) : (memref<*xf32>) -> ()
+    // %u_memref = memref.cast %6 : memref<16x24xf32> to memref<*xf32>
+    // call @print_memref_f32(%u_memref) : (memref<*xf32>) -> ()
     return %6 : memref<16x24xf32>
   }
   func private @print_memref_f32(memref<*xf32>) attributes { llvm.emit_c_interface }

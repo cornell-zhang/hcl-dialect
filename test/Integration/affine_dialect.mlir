@@ -57,6 +57,10 @@ module {
         affine.store %11, %6[%arg4, %arg5] {to = "E"} : memref<16x24xf32>
       } {loop_name = "y"}
     } {loop_name = "x", stage_name = "E"}
+
+    %u_memref = memref.cast %6 : memref<16x24xf32> to memref<*xf32>
+    call @print_memref_f32(%u_memref) : (memref<*xf32>) -> ()
     return %6 : memref<16x24xf32>
   }
+  func private @print_memref_f32(memref<*xf32>) attributes { llvm.emit_c_interface }
 }

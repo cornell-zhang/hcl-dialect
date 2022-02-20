@@ -1,3 +1,4 @@
+import os 
 import ctypes
 import numpy as np
 import mlir.all_passes_registration
@@ -24,6 +25,12 @@ def get_assembly(filename):
 def test_execution_engine(P=16, Q=22, R=18, S=24):
     code = get_assembly("./affine_dialect.mlir")
 
+    # Add shared library
+    shared_libs = [
+        os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_runner_utils.so'),
+        os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_c_runner_utils.so')
+    ]
+
     A = np.random.randint(10, size=(P, Q)).astype(np.float32)
     B = np.random.randint(10, size=(Q, R)).astype(np.float32)
     C = np.random.randint(10, size=(R, S)).astype(np.float32)
@@ -47,7 +54,7 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
     with Context():
         module = Module.parse(code)
         lowered = lowerToLLVM(module)
-        execution_engine = ExecutionEngine(lowered)
+        execution_engine = ExecutionEngine(lowered, opt_level=3, shared_libs=shared_libs)
         execution_engine.invoke("top", res1_memref, A_memref, B_memref, C_memref, D_memref)
         
     ret = ranked_memref_to_numpy(res1_memref[0])

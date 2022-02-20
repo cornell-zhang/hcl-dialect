@@ -8,10 +8,10 @@ from mlir.execution_engine import *
 from mlir.runtime import *
 
 def lowerToLLVM(module):
-    # import mlir.conversions
-    # pm = PassManager.parse(
-    #     "lower-affine,convert-memref-to-llvm,convert-std-to-llvm,canonicalize,reconcile-unrealized-casts")
-    # pm.run(module)
+    import mlir.conversions
+    pm = PassManager.parse(
+        "lower-affine,convert-scf-to-std,canonicalize,convert-memref-to-llvm,convert-std-to-llvm,reconcile-unrealized-casts")
+    pm.run(module)
     # module.dump()
     return module
 
@@ -22,13 +22,13 @@ def get_assembly(filename):
 
 
 def test_execution_engine(P=16, Q=22, R=18, S=24):
-    code = get_assembly("./mlir_assembly.txt")
+    code = get_assembly("./affine_dialect.mlir")
 
     A = np.random.randint(10, size=(P, Q)).astype(np.float32)
     B = np.random.randint(10, size=(Q, R)).astype(np.float32)
     C = np.random.randint(10, size=(R, S)).astype(np.float32)
     D = np.random.randint(10, size=(P, S)).astype(np.float32)
-    res1 = np.zeros((P, S), dtype=np.float32)
+    # res1 = np.zeros((P, S), dtype=np.float32)
 
     A_memref = ctypes.pointer(
         ctypes.pointer(get_ranked_memref_descriptor(A)))
@@ -38,9 +38,11 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
         ctypes.pointer(get_ranked_memref_descriptor(C)))
     D_memref = ctypes.pointer(
         ctypes.pointer(get_ranked_memref_descriptor(D)))
-    res1_memref = ctypes.pointer(
-        ctypes.pointer(get_ranked_memref_descriptor(res1))
-    )
+    # res1_memref = ctypes.pointer(
+        # ctypes.pointer(get_ranked_memref_descriptor(res1))
+    # )
+    res1 = make_nd_memref_descriptor(2, ctypes.c_float)()
+    res1_memref = ctypes.pointer(ctypes.pointer(res1))
 
     with Context():
         module = Module.parse(code)

@@ -99,6 +99,7 @@ public:
 
   // This table contains all declared values.
   DenseMap<Value, SmallString<8>> nameTable;
+  std::map<std::string, int> nameConflictCnt;
 
 private:
   HCLEmitterState(const HCLEmitterState &) = delete;
@@ -156,7 +157,13 @@ SmallString<8> HCLEmitterBase::addName(Value val, bool isPtr,
     valName += "*";
 
   if (name != "") {
-    valName += StringRef(name + std::to_string(state.nameTable.size()));
+    if (state.nameConflictCnt.count(name) > 0) {
+      state.nameConflictCnt[name]++;
+      valName += StringRef(name + std::to_string(state.nameConflictCnt[name]));
+    } else { // first time
+      state.nameConflictCnt[name] = 0;
+      valName += name;
+    }
   } else {
     valName += StringRef("v" + std::to_string(state.nameTable.size()));
   }
@@ -1564,8 +1571,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
           else
             os << " cyclic";
 
-          os << " factor=" << factors[dim];
-          os << " dim=" << dim + 1 << "\n";
+          os << " dim=" << dim + 1;
+          os << " factor=" << factors[dim] << "\n";
         }
       } else { // fully partitioned
         emitPragmaFlag = true;

@@ -5,21 +5,10 @@
 # ===----------------------------------------------------------------------=== #
 
 
-from hcl_mlir.ir import *
-from hcl_mlir.dialects import builtin, arith, math, memref, std, affine
+from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-
-
-global_ctx = Context()
-global_loc = Location.unknown(global_ctx)
-f32 = F32Type.get(global_ctx)
-f64 = F64Type.get(global_ctx)
-bool = IntegerType.get_signless(1, context=global_ctx)
-i32 = IntegerType.get_signless(32, context=global_ctx)
-i64 = IntegerType.get_signless(64, context=global_ctx)
-idx_type = IndexType.get(context=global_ctx)
-
-hcl_d.register_dialect(global_ctx)
+from hcl_mlir.dialects import math, memref, std
+from hcl_mlir.ir import *
 
 
 class HCLFlags(object):
@@ -38,14 +27,6 @@ flags = HCLFlags()
 enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
-
-
-def get_context():
-    return global_ctx
-
-
-def get_location():
-    return global_loc
 
 
 def is_floating_point_type(dtype):
@@ -79,28 +60,29 @@ def get_mlir_type(dtype):
     ):
         return dtype
     elif isinstance(dtype, str):
-        with get_context() as ctx:
-            if dtype[0:3] == "int":
-                return IntegerType.get_signless(int(dtype[3:]), context=ctx)
-            elif dtype[0:4] == "uint":
-                return IntegerType.get_unsigned(int(dtype[4:]))
-            elif dtype[0:5] == "float":
-                if dtype[5:] == "16":
-                    return F16Type.get()
-                elif dtype[5:] == "32":
-                    return F32Type.get()
-                elif dtype[5:] == "64":
-                    return F64Type.get()
-                else:
-                    raise RuntimeError("Not supported floating point type")
-            elif dtype[0:5] == "fixed":
-                strs = dtype[5:].split("_")
-                return hcl_d.FixedType.get(int(strs[0]), int(strs[1]), ctx)
-            elif dtype[0:6] == "ufixed":
-                strs = dtype[6:].split("_")
-                return hcl_d.UFixedType.get(int(strs[0]), int(strs[1]), ctx)
+        if dtype[0:5] == "index":
+            return IndexType.get()
+        elif dtype[0:3] == "int":
+            return IntegerType.get_signless(int(dtype[3:]))
+        elif dtype[0:4] == "uint":
+            return IntegerType.get_unsigned(int(dtype[4:]))
+        elif dtype[0:5] == "float":
+            if dtype[5:] == "16":
+                return F16Type.get()
+            elif dtype[5:] == "32":
+                return F32Type.get()
+            elif dtype[5:] == "64":
+                return F64Type.get()
             else:
-                raise RuntimeError("Unrecognized data type")
+                raise RuntimeError("Not supported floating point type")
+        elif dtype[0:5] == "fixed":
+            strs = dtype[5:].split("_")
+            return hcl_d.FixedType.get(int(strs[0]), int(strs[1]))
+        elif dtype[0:6] == "ufixed":
+            strs = dtype[6:].split("_")
+            return hcl_d.UFixedType.get(int(strs[0]), int(strs[1]))
+        else:
+            raise RuntimeError("Unrecognized data type")
     else:
         raise RuntimeError("Unrecognized data type format")
 
@@ -120,7 +102,7 @@ def print_mlir_type(dtype):
         elif dtype.width == 64:
             return "long int"
         elif dtype.width == 1:
-            return "bool"
+            return "IntegerType.get_signless(1)"
         else:
             return "ap_int<{}>".format(dtype.width)
     elif is_fixed_type(dtype):
@@ -163,9 +145,9 @@ def floating_point_error(op_name):
 def get_hcl_op(expr):
     if isinstance(expr, (int, float)):
         if isinstance(expr, int):
-            return ConstantOp(i32, expr)
+            return ConstantOp(IntegerType.get_signless(32), expr)
         elif isinstance(expr, float):
-            return ConstantOp(f32, expr)
+            return ConstantOp(F32Type.get(), expr)
     else:
         return expr
 
@@ -213,11 +195,11 @@ def cast_types(lhs, rhs):
     # 2) Otherwise, if one operand is double
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
-        res_type = f64
+        res_type = F64Type.get()
     # 3) Otherwise, if one operand is float
     elif isinstance(ltype, F32Type):
         # integer type to float (the only real type possible is float, which remains as-is)
-        res_type = f32
+        res_type = F32Type.get()
     # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
     elif isinstance(ltype, (IntegerType, IndexType)):
         res_type = ltype
@@ -225,7 +207,7 @@ def cast_types(lhs, rhs):
     elif is_fixed_type(ltype):
         # TODO: UFixed type
         if is_integer_type(rtype):
-            res_type = hcl_d.FixedType.get(rtype.width, ltype.frac, global_ctx)
+            res_type = hcl_d.FixedType.get(rtype.width, ltype.frac)
         else:
             raise RuntimeError("Type conversion not implemented")
     else:
@@ -246,11 +228,11 @@ def regularize_fixed_type(lhs, rhs):
     lwidth = lhs.dtype.width
     rwidth = rhs.dtype.width
     if lwidth < rwidth:
-        res_type = hcl_d.FixedType.get(rwidth, lhs.dtype.frac, global_ctx)
+        res_type = hcl_d.FixedType.get(rwidth, lhs.dtype.frac)
         cast = CastOp(lhs, res_type)
         return cast, rhs
     elif lwidth > rwidth:
-        res_type = hcl_d.FixedType.get(lwidth, rhs.dtype.frac, global_ctx)
+        res_type = hcl_d.FixedType.get(lwidth, rhs.dtype.frac)
         cast = CastOp(rhs, res_type)
         return lhs, cast
     else:
@@ -278,6 +260,8 @@ class ExprOp(object):
 
         # type checking & conversion
         # get_type_rank has the valid type checking
+        lhs.dtype = get_mlir_type(lhs.dtype)
+        rhs.dtype = get_mlir_type(rhs.dtype)
         lrank = get_type_rank(lhs.dtype)
         rrank = get_type_rank(rhs.dtype)
         # types are the same, no need to cast
@@ -458,7 +442,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype=idx_type)
+        super().__init__(op, dtype="index")
         self.built_op = op
 
     def update_op(self, op):
@@ -496,11 +480,11 @@ class ConstantOp(ExprOp):
     def build(self):
         if not is_fixed_type(self.dtype):
             if isinstance(self.dtype, IntegerType):
-                value_attr = IntegerAttr.get(i32, self.val)
+                value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
             elif isinstance(self.dtype, F32Type):
-                value_attr = FloatAttr.get(f32, self.val)
+                value_attr = FloatAttr.get(F32Type.get(), self.val)
             elif isinstance(self.dtype, IndexType):
-                value_attr = IntegerAttr.get(idx_type, self.val)
+                value_attr = IntegerAttr.get(IndexType.get(), self.val)
             else:
                 raise RuntimeError("Type error")
             self.built_op = self.op(
@@ -509,11 +493,17 @@ class ConstantOp(ExprOp):
             return self.built_op
         else:  # fixed types
             if isinstance(self.val, float):
-                value_attr = FloatAttr.get(f32, self.val)
-                self.built_op = self.op(f32, value_attr, ip=GlobalInsertionPoint.get())
+                value_attr = FloatAttr.get(F32Type.get(), self.val)
+                self.built_op = self.op(
+                    F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
+                )
             elif isinstance(self.val, int):
-                value_attr = IntegerAttr.get(i32, self.val)
-                self.built_op = self.op(i32, value_attr, ip=GlobalInsertionPoint.get())
+                value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
+                self.built_op = self.op(
+                    IntegerType.get_signless(32),
+                    value_attr,
+                    ip=GlobalInsertionPoint.get(),
+                )
             else:
                 raise RuntimeError("Type error")
             return self.built_op
@@ -550,14 +540,19 @@ class TensorSlice(ExprOp):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
             return TensorSlice(
-                self.full_shape, self.op, self.dtype, self.parent, self.indices + indices, self.name
+                self.full_shape,
+                self.op,
+                self.dtype,
+                self.parent,
+                self.indices + indices,
+                self.name,
             )
         elif len(self.indices + indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in self.indices + indices:
                 if isinstance(index, int):
-                    index = ConstantOp(idx_type, index)
+                    index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self.parent, new_indices)
             # TODO(Niansong): Why build in place result in duplicate load?
@@ -577,7 +572,7 @@ class TensorSlice(ExprOp):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
-                    index = ConstantOp(idx_type, index)
+                    index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             return StoreOp(expr, self.parent, self.indices + new_indices)
         else:
@@ -590,10 +585,11 @@ class TensorOp(ExprOp):
             raise RuntimeError("Not supported TensorOp. Got {}".format(op))
         super().__init__(op)
         self.shape = shape
-        if isinstance(dtype, str):
-            self.dtype = get_mlir_type(dtype)
-        else:
-            self.dtype = dtype
+        # if isinstance(dtype, str):
+        #     self.dtype = get_mlir_type(dtype)
+        # else:
+        #     self.dtype = dtype
+        self.dtype = dtype
         self.name = name
 
     def build(self):
@@ -605,7 +601,11 @@ class TensorOp(ExprOp):
         elif isinstance(self.op, BlockArgument):
             self.built_op = self.op
         else:
-            raise RuntimeError("TensorOp should use memref.AllocOp or BlockArgument to implement. Got {}".format(self.op))
+            raise RuntimeError(
+                "TensorOp should use memref.AllocOp or BlockArgument to implement. Got {}".format(
+                    self.op
+                )
+            )
         return self.built_op
 
     def update_op(self, op):
@@ -613,7 +613,8 @@ class TensorOp(ExprOp):
 
     @property
     def memref_type(self):
-        return MemRefType.get(self.shape, self.dtype, loc=get_location())
+        dtype = get_mlir_type(self.dtype)
+        return MemRefType.get(self.shape, dtype)
 
     def set_axis(self, _axis):
         self._axis = _axis
@@ -645,13 +646,15 @@ class TensorOp(ExprOp):
             indices = (indices,)
         # if we are slicing tensor
         if len(indices) < len(self.shape):
-            return TensorSlice(self.shape, self.op, self.dtype, self, indices, self.name)
+            return TensorSlice(
+                self.shape, self.op, self.dtype, self, indices, self.name
+            )
         elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
-                    index = ConstantOp(idx_type, index)
+                    index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             load = LoadOp(self.dtype, self, new_indices)
             # if flags.BUILD_INPLACE:
@@ -671,7 +674,7 @@ class TensorOp(ExprOp):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
-                    index = ConstantOp(idx_type, index)
+                    index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             return StoreOp(expr, self, new_indices)
         else:
@@ -750,7 +753,7 @@ class CmpOp(BinaryOp):
             self.op = hcl_d.CmpFixedOp
         else:
             raise RuntimeError("Unsupported types")
-        super().__init__(self.op, bool, lhs, rhs)
+        super().__init__(self.op, IntegerType.get_signless(1), lhs, rhs)
 
     def build(self):
         if self.arg == "eq":
@@ -775,7 +778,7 @@ class CmpOp(BinaryOp):
             attr = 9
         self.built_op = self.op(
             self.dtype,
-            IntegerAttr.get(i64, attr),
+            IntegerAttr.get(IntegerType.get_signless(64), attr),
             self.lhs.result,
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),
@@ -867,42 +870,42 @@ class NegOp(UnaryOp):
 
 class MathExpOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.ExpOp, f32, val)
+        super().__init__(math.ExpOp, F32Type.get(), val)
 
 
 class MathLogOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.LogOp, f32, val)
+        super().__init__(math.LogOp, F32Type.get(), val)
 
 
 class MathLog2Op(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.Log2Op, f32, val)
+        super().__init__(math.Log2Op, F32Type.get(), val)
 
 
 class MathLog10Op(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.Log10Op, f32, val)
+        super().__init__(math.Log10Op, F32Type.get(), val)
 
 
 class MathSqrtOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.SqrtOp, f32, val)
+        super().__init__(math.SqrtOp, F32Type.get(), val)
 
 
 class MathSinOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.SinOp, f32, val)
+        super().__init__(math.SinOp, F32Type.get(), val)
 
 
 class MathCosOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.CosOp, f32, val)
+        super().__init__(math.CosOp, F32Type.get(), val)
 
 
 class MathTanhOp(UnaryOp):
     def __init__(self, val):
-        super().__init__(math.TanhOp, f32, val)
+        super().__init__(math.TanhOp, F32Type.get(), val)
 
 
 class CastOp(ExprOp):
@@ -932,16 +935,16 @@ class CastOp(ExprOp):
 
 class GetBitOp(ExprOp):
     def __init__(self, val, index):
-        super().__init__(hcl_d.GetIntBitOp, bool)
+        super().__init__(hcl_d.GetIntBitOp, IntegerType.get_signless(1))
         self.val = val
         self.index = index
         if not isinstance(self.index.dtype, IndexType):
             print(
                 "Warning: GetBitOp's input is not an index. Cast from {} to {}.".format(
-                    self.index.dtype, idx_type
+                    self.index.dtype, IndexType.get()
                 )
             )
-            self.index = CastOp(self.index, idx_type)
+            self.index = CastOp(self.index, IndexType.get())
         if flags.BUILD_INPLACE:
             self.build()
 
@@ -1257,7 +1260,9 @@ class ASTBuilder:
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
         # initialize the single-element register
         zero_idx = arith.ConstantOp(
-            idx_type, IntegerAttr.get(idx_type, 0), ip=GlobalInsertionPoint.get()
+            IndexType.get(),
+            IntegerAttr.get(IndexType.get(), 0),
+            ip=GlobalInsertionPoint.get(),
         )
         # initialize the original value of the reducer
         if is_floating_point_type(dtype):
@@ -1372,7 +1377,7 @@ def make_affine_for(
     # Construct step
     if not isinstance(step, int):
         raise RuntimeError("Not supported")
-    step = IntegerAttr.get(i32, step)
+    step = IntegerAttr.get(IntegerType.get_signless(32), step)
 
     # Create AffineForOp
     forOp = affine.AffineForOp(
@@ -1381,9 +1386,11 @@ def make_affine_for(
         step,
         lbMapAttr,
         ubMapAttr,
-        name=StringAttr.get(name),
+        name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
         stage=("" if stage == "" else StringAttr.get(stage)),
-        reduction=(IntegerAttr.get(i32, 1) if reduction else None),
+        reduction=(
+            IntegerAttr.get(IntegerType.get_signless(32), 1) if reduction else None
+        ),
         ip=ip,
         loc=loc,
     )
@@ -1397,7 +1404,7 @@ def make_if(cond, ip=None):
     c1 = AffineConstantExpr.get(1)
     if_cond_set = IntegerSet.get(1, 0, [d0 - c1], [True])  # d0 - 1 == 0
     attr = hcl_d.IntegerSetAttr.get(if_cond_set)
-    cast = CastOp(cond, idx_type)
+    cast = CastOp(cond, IndexType.get())
     set_operands = [cast.result]
 
     if_op = affine.AffineIfOp(attr, set_operands, ip=ip)

@@ -1,17 +1,17 @@
+# RUN: %PYTHON %s
 import os 
 import ctypes
 import numpy as np
-import mlir.all_passes_registration
 
-from mlir.ir import *
-from mlir.passmanager import *
-from mlir.execution_engine import *
-from mlir.runtime import *
+from hcl_mlir.ir import *
+from hcl_mlir.passmanager import *
+from hcl_mlir.execution_engine import *
+from hcl_mlir.runtime import *
 
 def lowerToLLVM(module):
-    import mlir.conversions
+    import hcl_mlir.conversions
     pm = PassManager.parse(
-        "lower-affine,convert-scf-to-std,canonicalize,convert-memref-to-llvm,convert-std-to-llvm,reconcile-unrealized-casts")
+        "lower-affine,convert-scf-to-std,convert-memref-to-llvm,convert-std-to-llvm,reconcile-unrealized-casts")
     pm.run(module)
     # module.dump()
     return module
@@ -23,13 +23,16 @@ def get_assembly(filename):
 
 
 def test_execution_engine(P=16, Q=22, R=18, S=24):
-    code = get_assembly("./affine_dialect.mlir")
+    code = get_assembly(os.path.join(os.path.dirname(os.path.abspath(__file__)), "affine_dialect.mlir"))
 
     # Add shared library
-    shared_libs = [
-        os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_runner_utils.so'),
-        os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_c_runner_utils.so')
-    ]
+    if os.getenv("LLVM_BUILD_DIR") is not None:
+        shared_libs = [
+            os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_runner_utils.so'),
+            os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_c_runner_utils.so')
+        ]
+    else:
+        shared_libs = None
 
     A = np.random.randint(10, size=(P, Q)).astype(np.float32)
     B = np.random.randint(10, size=(Q, R)).astype(np.float32)
@@ -54,11 +57,15 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
     with Context():
         module = Module.parse(code)
         lowered = lowerToLLVM(module)
-        execution_engine = ExecutionEngine(lowered, opt_level=3, shared_libs=shared_libs)
+        if shared_libs is not None:
+            execution_engine = ExecutionEngine(lowered, opt_level=3, shared_libs=shared_libs)
+        else:
+            execution_engine = ExecutionEngine(lowered)
         execution_engine.invoke("top", res1_memref, A_memref, B_memref, C_memref, D_memref)
         
     ret = ranked_memref_to_numpy(res1_memref[0])
-    # print(ret)
+    golden = 0.1 * np.matmul(np.matmul(A, B), C) + 0.1 * D
+    assert np.allclose(ret, golden)
 
 if __name__ == "__main__":
     test_execution_engine()

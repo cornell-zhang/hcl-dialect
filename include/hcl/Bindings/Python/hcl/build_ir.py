@@ -96,15 +96,22 @@ def print_mlir_type(dtype):
         else:
             raise RuntimeError("Not supported data type")
     elif is_integer_type(dtype):
-        # TODO: Support signedness
-        if dtype.width == 32:
-            return "int"
-        elif dtype.width == 64:
-            return "long int"
-        elif dtype.width == 1:
-            return "IntegerType.get_signless(1)"
-        else:
-            return "ap_int<{}>".format(dtype.width)
+        if dtype.is_signed or dtype.is_signless:
+            if dtype.width == 32:
+                return "int"
+            elif dtype.width == 64:
+                return "long int"
+            elif dtype.width == 1:
+                return "bool"
+            else:
+                return "ap_int<{}>".format(dtype.width)
+        elif dtype.is_unsigned:
+            if dtype.width == 32:
+                return "unsigned int"
+            elif dtype.width == 64:
+                return "unsigned long int"
+            else:
+                return "ap_uint<{}>".format(dtype.width)
     elif is_fixed_type(dtype):
         if isinstance(dtype, hcl_d.FixedType):
             return "ap_fixed<{}, {}>".format(dtype.width, dtype.frac)
@@ -554,7 +561,7 @@ class TensorSlice(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
-            load = LoadOp(self.dtype, self.parent, new_indices)
+            load = LoadOp(self.parent, new_indices)
             # TODO(Niansong): Why build in place result in duplicate load?
             # if flags.BUILD_INPLACE:
             #     load.build()
@@ -585,10 +592,6 @@ class TensorOp(ExprOp):
             raise RuntimeError("Not supported TensorOp. Got {}".format(op))
         super().__init__(op)
         self.shape = shape
-        # if isinstance(dtype, str):
-        #     self.dtype = get_mlir_type(dtype)
-        # else:
-        #     self.dtype = dtype
         self.dtype = dtype
         self.name = name
 
@@ -613,8 +616,7 @@ class TensorOp(ExprOp):
 
     @property
     def memref_type(self):
-        dtype = get_mlir_type(self.dtype)
-        return MemRefType.get(self.shape, dtype)
+        return MemRefType.get(self.shape, get_mlir_type(self.dtype))
 
     def set_axis(self, _axis):
         self._axis = _axis
@@ -656,7 +658,7 @@ class TensorOp(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
-            load = LoadOp(self.dtype, self, new_indices)
+            load = LoadOp(self, new_indices)
             # if flags.BUILD_INPLACE:
             #     load.build()
             return load
@@ -959,8 +961,8 @@ class GetBitOp(ExprOp):
 
 
 class LoadOp(ExprOp):
-    def __init__(self, dtype, tensor, indices):
-        super().__init__(affine.AffineLoadOp, dtype)
+    def __init__(self, tensor, indices):
+        super().__init__(affine.AffineLoadOp, tensor.dtype)
         self.tensor = tensor
         self.indices = indices
         if flags.BUILD_INPLACE:

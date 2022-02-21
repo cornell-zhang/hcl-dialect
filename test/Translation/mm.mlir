@@ -34,7 +34,7 @@ module {
     return
   }
 
-  func @main() -> () {
+  func @top() -> () {
     %0 = memref.get_global @gv0 : memref<4x4xf32>
     %1 = memref.get_global @gv0 : memref<4x4xf32>
     %2 = memref.get_global @gv0 : memref<4x4xf32>

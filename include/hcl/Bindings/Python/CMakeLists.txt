@@ -85,6 +85,7 @@ set(_source_components
   MLIRPythonSources.Core
   MLIRPythonSources.Dialects
   MLIRPythonSources.ExecutionEngine
+  MLIRPythonSources.Passes
 )
 
 add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI

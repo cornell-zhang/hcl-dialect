@@ -1246,7 +1246,7 @@ class ASTBuilder:
             init_val = 0x3F3F3F3F  # magic large number
             reduce_op = {
                 "float": arith.MinFOp,
-                "int": arith.MinUIOp,
+                "int": arith.MinSIOp,
                 "fixed": hcl_d.MinFixedOp,
             }
         elif isinstance(expr, MaxOp):
@@ -1254,7 +1254,7 @@ class ASTBuilder:
             init_val = -0x3F3F3F3F
             reduce_op = {
                 "float": arith.MaxFOp,
-                "int": arith.MaxUIOp,
+                "int": arith.MaxSIOp,
                 "fixed": hcl_d.MaxFixedOp,
             }
         else:
@@ -1348,6 +1348,7 @@ class ASTBuilder:
             affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
             # restore insertion point
             GlobalInsertionPoint.restore()
+        expr.built_op = rv
         return rv
 
 

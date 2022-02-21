@@ -396,6 +396,14 @@ def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, Types
   let assemblyFormat = "$predicate `,` $lhs `,` $rhs attr-dict `:` type($lhs)";
 }
 
+def MinFixedOp : FixedBinaryOp<"min_fixed"> {
+  let summary = "fixed point minimum operation";
+}
+
+def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
+  let summary = "fixed point maximum operation";
+}
+
 // Bitwise operators
 def GetIntBitOp : HeteroCL_Op<"get_bit"> {
     let summary = "get bit of an integer";

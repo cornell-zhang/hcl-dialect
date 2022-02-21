@@ -240,6 +240,7 @@ public:
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
+  void emitMinMax(Operation *op, const char *syntax);
 
   /// Special operation emitters.
   void emitCall(CallOp op);
@@ -503,6 +504,12 @@ public:
   bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(hcl::CmpFixedOp op);
+  bool visitOp(hcl::MinFixedOp op) {
+    return emitter.emitMinMax(op, "min"), true;
+  }
+  bool visitOp(hcl::MaxFixedOp op) {
+    return emitter.emitMinMax(op, "max"), true;
+  }
 
 private:
   ModuleEmitter &emitter;
@@ -1241,6 +1248,19 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
 }
 
 /// Special operation emitters.
+void ModuleEmitter::emitMinMax(Operation *op, const char *syntax) {
+  auto rank = emitNestedLoopHead(op->getResult(0));
+  indent();
+  emitValue(op->getResult(0), rank);
+  os << " = " << syntax << "(";
+  emitValue(op->getOperand(0), rank);
+  os << ", ";
+  emitValue(op->getOperand(1), rank);
+  os << ");";
+  emitInfoAndNewLine(op);
+  emitNestedLoopTail(rank);
+}
+
 void ModuleEmitter::emitGetBit(GetIntBitOp op) {
   indent();
   emitValue(op.getResult());

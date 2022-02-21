@@ -67,7 +67,7 @@ public:
             arith::FPToSIOp, arith::FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
-            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp>(
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,hcl::MaxFixedOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -203,6 +203,8 @@ public:
   HANDLE(hcl::SubFixedOp);
   HANDLE(hcl::MulFixedOp);
   HANDLE(hcl::CmpFixedOp);
+  HANDLE(hcl::MinFixedOp);
+  HANDLE(hcl::MaxFixedOp);
 
 #undef HANDLE
 };

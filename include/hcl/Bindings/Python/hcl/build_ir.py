@@ -374,10 +374,10 @@ class ExprOp(object):
         raise RuntimeError("Not implemented")
 
     def __lt__(self, other):
-        return self.generic_op(CmpOp, self, other, arg="slt")
+        return self.generic_op(CmpOp, self, other, arg="lt")
 
     def __le__(self, other):
-        return self.generic_op(CmpOp, self, other, arg="sle")
+        return self.generic_op(CmpOp, self, other, arg="le")
 
     def __eq__(self, other):
         return self.generic_op(CmpOp, self, other, arg="eq")
@@ -386,10 +386,10 @@ class ExprOp(object):
         return self.generic_op(CmpOp, self, other, arg="ne")
 
     def __gt__(self, other):
-        return self.generic_op(CmpOp, self, other, arg="sgt")
+        return self.generic_op(CmpOp, self, other, arg="gt")
 
     def __ge__(self, other):
-        return self.generic_op(CmpOp, self, other, arg="sge")
+        return self.generic_op(CmpOp, self, other, arg="ge")
 
     def __getitem__(self, indices):
         raise RuntimeError("Not implemented")
@@ -744,43 +744,110 @@ class BinaryOp(ExprOp):
 
 
 class CmpOp(BinaryOp):
+    """
+    # Check mlir/Dialect/Arithmetic/IR/ArithmeticBase.td
+    # s/u: signed/unsigned
+    # o/u: ordered/unordered
+    #      ordered means only one of < = > cases is true
+    #      unordered happens for floating points with NaN
+    // Opcode              U L G E    Intuitive operation
+    FCMP_FALSE =  0,  ///< 0 0 0 0    Always false (always folded)
+    FCMP_OEQ   =  1,  ///< 0 0 0 1    True if ordered and equal
+    FCMP_OGT   =  2,  ///< 0 0 1 0    True if ordered and greater than
+    FCMP_OGE   =  3,  ///< 0 0 1 1    True if ordered and greater than or equal
+    FCMP_OLT   =  4,  ///< 0 1 0 0    True if ordered and less than
+    FCMP_OLE   =  5,  ///< 0 1 0 1    True if ordered and less than or equal
+    FCMP_ONE   =  6,  ///< 0 1 1 0    True if ordered and operands are unequal
+    FCMP_ORD   =  7,  ///< 0 1 1 1    True if ordered (no nans)
+    FCMP_UNO   =  8,  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
+    FCMP_UEQ   =  9,  ///< 1 0 0 1    True if unordered or equal
+    FCMP_UGT   = 10,  ///< 1 0 1 0    True if unordered or greater than
+    FCMP_UGE   = 11,  ///< 1 0 1 1    True if unordered, greater than, or equal
+    FCMP_ULT   = 12,  ///< 1 1 0 0    True if unordered or less than
+    FCMP_ULE   = 13,  ///< 1 1 0 1    True if unordered, less than, or equal
+    FCMP_UNE   = 14,  ///< 1 1 1 0    True if unordered or not equal
+    FCMP_TRUE  = 15,  ///< 1 1 1 1    Always true (always folded)
+    """
+
+    ATTR_MAP = {
+        "int": {
+            "eq": 0,
+            "ne": 1,
+            "slt": 2,
+            "sle": 3,
+            "sgt": 4,
+            "sge": 5,
+            "ult": 6,
+            "ule": 7,
+            "ugt": 8,
+            "uge": 9,
+        },
+        "float": {
+            "false": 0,
+            "oeq": 1,
+            "ogt": 2,
+            "oge": 3,
+            "olt": 4,
+            "ole": 5,
+            "one": 6,
+            "ord": 7,
+            "ueq": 8,
+            "ugt": 9,
+            "uge": 10,
+            "ult": 11,
+            "ule": 12,
+            "une": 13,
+            "uno": 14,
+            "true": 15,
+        },
+        "fixed": {
+            "eq": 0,
+            "ne": 1,
+            "slt": 2,
+            "sle": 3,
+            "sgt": 4,
+            "sge": 5,
+            "ult": 6,
+            "ule": 7,
+            "ugt": 8,
+            "uge": 9,
+        },
+    }
+
     def __init__(self, lhs, rhs, arg):
         self.arg = arg
         dtype = lhs.dtype
         if is_integer_type(dtype) or is_index_type(dtype):
             self.op = arith.CmpIOp
+            if dtype.is_signed or dtype.is_sigless:
+                self.arg = CmpOp.ATTR_MAP["int"][
+                    "s" + arg if arg not in ["eq", "ne"] else arg
+                ]
+            else:
+                self.arg = CmpOp.ATTR_MAP["int"][
+                    "u" + arg if arg not in ["eq", "ne"] else arg
+                ]
         elif is_floating_point_type(dtype):
             self.op = arith.CmpFOp
+            self.arg = CmpOp.ATTR_MAP["float"]["o" + arg]
         elif is_fixed_type(dtype):
             self.op = hcl_d.CmpFixedOp
+            if isinstance(dtype, hcl_d.FixedType):
+                self.arg = CmpOp.ATTR_MAP["fixed"][
+                    "s" + arg if arg not in ["eq", "ne"] else arg
+                ]
+            else:
+                self.arg = CmpOp.ATTR_MAP["fixed"][
+                    "u" + arg if arg not in ["eq", "ne"] else arg
+                ]
         else:
             raise RuntimeError("Unsupported types")
         super().__init__(self.op, IntegerType.get_signless(1), lhs, rhs)
 
     def build(self):
-        if self.arg == "eq":
-            attr = 0
-        elif self.arg == "ne":
-            attr = 1
-        elif self.arg == "slt":
-            attr = 2
-        elif self.arg == "sle":
-            attr = 3
-        elif self.arg == "sgt":
-            attr = 4
-        elif self.arg == "sge":
-            attr = 5
-        elif self.arg == "ult":
-            attr = 6
-        elif self.arg == "ule":
-            attr = 7
-        elif self.arg == "ugt":
-            attr = 8
-        elif self.arg == "uge":
-            attr = 9
         self.built_op = self.op(
             self.dtype,
-            IntegerAttr.get(IntegerType.get_signless(64), attr),
+            IntegerAttr.get(IntegerType.get_signless(64), self.arg),
             self.lhs.result,
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),

@@ -96,7 +96,7 @@ def print_mlir_type(dtype):
         else:
             raise RuntimeError("Not supported data type")
     elif is_integer_type(dtype):
-        if dtype.is_signed or dtype.is_signless:
+        if isinstance(dtype, IndexType) or dtype.is_signed or dtype.is_signless:
             if dtype.width == 32:
                 return "int"
             elif dtype.width == 64:
@@ -819,7 +819,7 @@ class CmpOp(BinaryOp):
         dtype = lhs.dtype
         if is_integer_type(dtype) or is_index_type(dtype):
             self.op = arith.CmpIOp
-            if dtype.is_signed or dtype.is_sigless:
+            if isinstance(dtype, IndexType) or dtype.is_signed or dtype.is_signless:
                 self.arg = CmpOp.ATTR_MAP["int"][
                     "s" + arg if arg not in ["eq", "ne"] else arg
                 ]
@@ -1305,7 +1305,8 @@ class ASTBuilder:
             init_val = 0
             reduce_op = {
                 "float": arith.AddFOp,
-                "int": arith.AddIOp,
+                "si": arith.AddIOp,
+                "ui": arith.AddIOp,
                 "fixed": hcl_d.AddFixedOp,
             }
         elif isinstance(expr, MinOp):
@@ -1313,7 +1314,8 @@ class ASTBuilder:
             init_val = 0x3F3F3F3F  # magic large number
             reduce_op = {
                 "float": arith.MinFOp,
-                "int": arith.MinSIOp,
+                "si": arith.MinSIOp,
+                "ui": arith.MinUIOp,
                 "fixed": hcl_d.MinFixedOp,
             }
         elif isinstance(expr, MaxOp):
@@ -1321,7 +1323,8 @@ class ASTBuilder:
             init_val = -0x3F3F3F3F
             reduce_op = {
                 "float": arith.MaxFOp,
-                "int": arith.MaxSIOp,
+                "si": arith.MaxSIOp,
+                "ui": arith.MaxUIOp,
                 "fixed": hcl_d.MaxFixedOp,
             }
         else:
@@ -1386,7 +1389,10 @@ class ASTBuilder:
         if is_floating_point_type(dtype):
             reduce_op = reduce_op["float"]
         elif is_integer_type(dtype):
-            reduce_op = reduce_op["int"]
+            if isinstance(dtype, IndexType) or dtype.is_signed or dtype.is_signless:
+                reduce_op = reduce_op["si"]
+            else:  # unsigned
+                reduce_op = reduce_op["ui"]
         elif is_fixed_type(dtype):
             reduce_op = reduce_op["fixed"]
         else:

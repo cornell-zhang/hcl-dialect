@@ -59,7 +59,7 @@ public:
             arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
             // Logical expressions.
             arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
-            arith::ShRSIOp, arith::ShRUIOp, GetIntBitOp,
+            arith::ShRSIOp, arith::ShRUIOp, hcl::GetIntBitOp, hcl::SetIntBitOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
@@ -67,10 +67,10 @@ public:
             arith::FPToSIOp, arith::FPToUIOp, UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
-            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,hcl::MaxFixedOp>(
-            [&](auto opNode) -> ResultType {
-              return thisCast->visitOp(opNode, args...);
-            })
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,
+            hcl::MaxFixedOp>([&](auto opNode) -> ResultType {
+          return thisCast->visitOp(opNode, args...);
+        })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -174,7 +174,8 @@ public:
   HANDLE(arith::ShLIOp);
   HANDLE(arith::ShRSIOp);
   HANDLE(arith::ShRUIOp);
-  HANDLE(GetIntBitOp);
+  HANDLE(hcl::GetIntBitOp);
+  HANDLE(hcl::SetIntBitOp);
 
   // Special operations.
   HANDLE(CallOp);

@@ -487,7 +487,12 @@ class ConstantOp(ExprOp):
     def build(self):
         if not is_fixed_type(self.dtype):
             if isinstance(self.dtype, IntegerType):
-                value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
+                if self.dtype.width == 1:
+                    value_attr = BoolAttr.get(self.val)
+                else:
+                    value_attr = IntegerAttr.get(
+                        IntegerType.get_signless(self.dtype.width), self.val
+                    )
             elif isinstance(self.dtype, F32Type):
                 value_attr = FloatAttr.get(F32Type.get(), self.val)
             elif isinstance(self.dtype, IndexType):
@@ -1003,9 +1008,11 @@ class CastOp(ExprOp):
 
 
 class GetBitOp(ExprOp):
-    def __init__(self, val, index):
+    def __init__(self, num, index):
         super().__init__(hcl_d.GetIntBitOp, IntegerType.get_signless(1))
-        self.val = val
+        self.num = num
+        if isinstance(index, int):
+            index = ConstantOp(IndexType.get(), index)
         self.index = index
         if not isinstance(self.index.dtype, IndexType):
             print(
@@ -1020,8 +1027,40 @@ class GetBitOp(ExprOp):
     def build(self):
         self.built_op = self.op(
             self.dtype,
-            self.val.result,
+            self.num.result,
             self.index.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
+
+
+class SetBitOp(ExprOp):
+    def __init__(self, num, index, val):
+        super().__init__(hcl_d.SetIntBitOp, None)  # No return value!
+        self.num = num
+        if isinstance(index, int):
+            index = ConstantOp(IndexType.get(), index)
+        self.index = index
+        if val not in [0, 1]:
+            raise RuntimeError("Can only set a bit of 0/1. Got {}.".format(val))
+        if isinstance(val, int):
+            val = ConstantOp(IntegerType.get_signless(1), val)
+        self.val = val
+        if not isinstance(self.index.dtype, IndexType):
+            print(
+                "Warning: SetBitOp's input is not an index. Cast from {} to {}.".format(
+                    self.index.dtype, IndexType.get()
+                )
+            )
+            self.index = CastOp(self.index, IndexType.get())
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.num.result,
+            self.index.result,
+            self.val.result,
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
@@ -1071,6 +1110,16 @@ class LoadOp(ExprOp):
         #         )
         #     )
         return GetBitOp(self, index)
+
+    def __setitem__(self, indices, expr):
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only fixed integers can access the bits")
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        if not len(indices) == 1:
+            raise RuntimeError("Can only access one bit of the integer")
+        index = indices[0]
+        return SetBitOp(self, index, expr)
 
 
 class StoreOp(ExprOp):
@@ -1207,6 +1256,8 @@ class ASTBuilder:
             return self.visit_store_op(expr)
         elif isinstance(expr, GetBitOp):
             return self.visit_getbit_op(expr)
+        elif isinstance(expr, SetBitOp):
+            return self.visit_setbit_op(expr)
         elif isinstance(expr, CastOp):
             return self.visit_cast_op(expr)
         elif isinstance(expr, ReduceOp):
@@ -1285,8 +1336,14 @@ class ASTBuilder:
         return expr.build()
 
     def visit_getbit_op(self, expr):
-        self.visit(expr.val)
+        self.visit(expr.num)
         self.visit(expr.index)
+        return expr.build()
+
+    def visit_setbit_op(self, expr):
+        self.visit(expr.num)
+        self.visit(expr.index)
+        self.visit(expr.val)
         return expr.build()
 
     def visit_constant_op(self, expr):

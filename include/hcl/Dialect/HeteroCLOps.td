@@ -407,10 +407,19 @@ def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
 // Bitwise operators
 def GetIntBitOp : HeteroCL_Op<"get_bit"> {
     let summary = "get bit of an integer";
-    let arguments = (ins SignlessIntegerLike:$val, Builtin_Index:$index);
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index);
     let results = (outs BoolLike:$result);
     let assemblyFormat = [{
-        `(` $val `:` type($val) `,` $index `)` attr-dict `->` type($result)
+        `(` $num `:` type($num) `,` $index `)` attr-dict `->` type($result)
+    }];
+}
+
+def SetIntBitOp : HeteroCL_Op<"set_bit"> {
+    let summary = "set bit of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index, BoolLike:$val);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $index `,` $val `:` type($val) `)` attr-dict
     }];
 }
 

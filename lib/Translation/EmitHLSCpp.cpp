@@ -46,6 +46,7 @@ static SmallString<16> getTypeName(Value val) {
     if (intType.getWidth() == 1)
       return SmallString<16>("bool");
     else {
+      // TODO: only generate ap types when get/set bits are called
       std::string signedness = "";
       if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
         signedness = "u";
@@ -179,7 +180,10 @@ SmallString<8> HCLEmitterBase::getName(Value val) {
     if (auto constOp = dyn_cast<arith::ConstantOp>(defOp)) {
       auto constAttr = constOp.getValue();
 
-      if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
+      if (auto boolAttr = constAttr.dyn_cast<BoolAttr>()) {
+        return SmallString<8>(std::to_string(boolAttr.getValue()));
+
+      } else if (auto floatAttr = constAttr.dyn_cast<FloatAttr>()) {
         auto value = floatAttr.getValueAsDouble();
         if (std::isfinite(value))
           return SmallString<8>(std::to_string(value));
@@ -191,9 +195,7 @@ SmallString<8> HCLEmitterBase::getName(Value val) {
       } else if (auto intAttr = constAttr.dyn_cast<IntegerAttr>()) {
         auto value = intAttr.getInt();
         return SmallString<8>(std::to_string(value));
-
-      } else if (auto boolAttr = constAttr.dyn_cast<BoolAttr>())
-        return SmallString<8>(std::to_string(boolAttr.getValue()));
+      }
     }
   }
   return state.nameTable.lookup(val);
@@ -248,7 +250,8 @@ public:
   void emitConstant(arith::ConstantOp op);
   template <typename CastOpType> void emitCast(CastOpType op);
   void emitGeneralCast(UnrealizedConversionCastOp op);
-  void emitGetBit(GetIntBitOp op);
+  void emitGetBit(hcl::GetIntBitOp op);
+  void emitSetBit(hcl::SetIntBitOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -450,7 +453,8 @@ public:
   bool visitOp(arith::ShLIOp op) { return emitter.emitBinary(op, "<<"), true; }
   bool visitOp(arith::ShRSIOp op) { return emitter.emitBinary(op, ">>"), true; }
   bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
-  bool visitOp(GetIntBitOp op) { return emitter.emitGetBit(op), true; }
+  bool visitOp(hcl::GetIntBitOp op) { return emitter.emitGetBit(op), true; }
+  bool visitOp(hcl::SetIntBitOp op) { return emitter.emitSetBit(op), true; }
 
   /// Unary expressions.
   bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
@@ -1261,14 +1265,25 @@ void ModuleEmitter::emitMinMax(Operation *op, const char *syntax) {
   emitNestedLoopTail(rank);
 }
 
-void ModuleEmitter::emitGetBit(GetIntBitOp op) {
+void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.val());
+  emitValue(op.num());
   os << "[";
   emitValue(op.index());
   os << "];";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitSetBit(hcl::SetIntBitOp op) {
+  indent();
+  emitValue(op.num());
+  os << "[";
+  emitValue(op.index());
+  os << "] = ";
+  emitValue(op.val());
+  os << ";";
   emitInfoAndNewLine(op);
 }
 

@@ -13,6 +13,7 @@ namespace mlir {
 namespace hcl {
 
 std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass();
+std::unique_ptr<OperationPass<ModuleOp>> createFixedPointToIntegerPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 

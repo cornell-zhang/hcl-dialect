@@ -17,4 +17,9 @@ def LoopTransformation : Pass<"loop-opt", "ModuleOp"> {
   let constructor = "mlir::hcl::createLoopTransformationPass()";
 }
 
+def FixedToInteger : Pass<"fixed-to-integer", "ModuleOp"> {
+  let summary = "Fixed-point operations to integer";
+  let constructor = "mlir::hcl::createFixedPointToIntegerPass()";
+}
+
 #endif // HCL_MLIR_PASSES

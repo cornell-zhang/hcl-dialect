@@ -15,7 +15,29 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-bool applyFixedPointToInteger(ModuleOp &module) {
+
+void lowerFixedAdd(FuncOp &f) {
+  // get all fixed-point add ops
+  SmallVector<Operation*, 10> FixedAddOps;
+  f.walk([&](Operation* op) {
+    if (auto add_op = dyn_cast<AddFixedOp>(op)) {
+      FixedAddOps.push_back(op);
+    }
+  });
+
+  for (Operation* op : FixedAddOps) {
+    llvm::outs() << op->getName() << "\n";
+  }
+
+}
+
+bool applyFixedPointToInteger(ModuleOp &mod) {
+
+
+  for (FuncOp func : mod.getOps<FuncOp>()) {
+    lowerFixedAdd(func);
+  }
+
   return true;
 }
 } // namespace hcl

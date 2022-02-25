@@ -23,6 +23,8 @@ bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
                              std::vector<std::string> &subgraph_inputs,
                              std::vector<std::string> &subgraph_outputs);
 
+bool applyFixedPointToInteger(ModuleOp &module);
+
 /// Registers all HCL transformation passes
 void registerHCLPasses();
 

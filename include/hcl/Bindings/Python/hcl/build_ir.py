@@ -715,9 +715,7 @@ class UnaryOp(ExprOp):
             self.build()
 
     def build(self):
-        self.built_op = self.op(
-            self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
-        )
+        self.built_op = self.op(self.val.result, ip=GlobalInsertionPoint.get())
         return self.built_op
 
 

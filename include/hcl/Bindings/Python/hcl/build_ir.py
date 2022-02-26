@@ -1236,8 +1236,9 @@ class MaxOp(ReduceOp):
 
 
 class ASTBuilder:
-    def __init__(self):
+    def __init__(self, removal=False):
         self.iv = []
+        self.removal = removal
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -1271,8 +1272,11 @@ class ASTBuilder:
         * AffineExpr can be automatically simplied
         """
         if isinstance(expr, IterVar):
-            self.iv.append(expr.op)  # BlockArgument
-            return AffineExpr.get_dim(len(self.iv) - 1)
+            if expr.op not in self.iv:
+                self.iv.append(expr.op)  # BlockArgument
+                return AffineExpr.get_dim(len(self.iv) - 1)
+            else:
+                return AffineExpr.get_dim(self.iv.index(expr.op))
         elif isinstance(expr, ConstantOp):
             return AffineExpr.get_constant(expr.val)
         elif isinstance(expr, CastOp):
@@ -1293,19 +1297,34 @@ class ASTBuilder:
             raise RuntimeError("Not an affine index!")
 
     def visit_unary_op(self, expr):
-        self.visit(expr.val)
-        return expr.build()
+        if not self.removal:
+            self.visit(expr.val)
+            return expr.build()
+        else:
+            expr.built_op.operation.erase()
+            self.visit(expr.val)
 
     def visit_binary_op(self, expr):
-        self.visit(expr.lhs)
-        self.visit(expr.rhs)
-        return expr.build()
+        if not self.removal:
+            self.visit(expr.lhs)
+            self.visit(expr.rhs)
+            return expr.build()
+        else:
+            expr.built_op.operation.erase()
+            self.visit(expr.rhs)
+            self.visit(expr.lhs)
 
     def visit_ternary_op(self, expr):
-        self.visit(expr.cond)
-        self.visit(expr.true_val)
-        self.visit(expr.false_val)
-        return expr.build()
+        if not self.removal:
+            self.visit(expr.cond)
+            self.visit(expr.true_val)
+            self.visit(expr.false_val)
+            return expr.build()
+        else:
+            expr.built_op.operation.erase()
+            self.visit(expr.false_val)
+            self.visit(expr.true_val)
+            self.visit(expr.cond)
 
     def visit_load_op(self, expr):
         # create affine expressions
@@ -1316,7 +1335,10 @@ class ASTBuilder:
             exprs.append(affine_expr)
         affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
         affine_attr = AffineMapAttr.get(affine_map)
-        return expr.build_affine(self.iv, affine_attr)
+        if not self.removal:
+            return expr.build_affine(self.iv, affine_attr)
+        else:
+            raise RuntimeError("Cannot remove LoadOp")
 
     def visit_store_op(self, expr):
         # create affine expressions
@@ -1327,27 +1349,44 @@ class ASTBuilder:
             exprs.append(affine_expr)
         affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
         affine_attr = AffineMapAttr.get(affine_map)
-        return expr.build_affine(self.iv, affine_attr)
+        if not self.removal:
+            return expr.build_affine(self.iv, affine_attr)
+        else:
+            raise RuntimeError("Cannot remove StoreOp")
 
     def visit_cast_op(self, expr):
         self.visit(expr.val)
-        return expr.build()
+        if not self.removal:
+            return expr.build()
+        else:
+            raise RuntimeError("Cannot remove CastOp")
 
     def visit_getbit_op(self, expr):
         self.visit(expr.num)
         self.visit(expr.index)
-        return expr.build()
+        if not self.removal:
+            return expr.build()
+        else:
+            raise RuntimeError("Cannot remove GetBitOp")
 
     def visit_setbit_op(self, expr):
         self.visit(expr.num)
         self.visit(expr.index)
         self.visit(expr.val)
-        return expr.build()
+        if not self.removal:
+            return expr.build()
+        else:
+            raise RuntimeError("Cannot remove SetBitOp")
 
     def visit_constant_op(self, expr):
-        return expr.build()
+        if not self.removal:
+            return expr.build()
+        else:
+            expr.built_op.operation.erase()
 
     def visit_reduce_op(self, expr):
+        if self.removal:
+            raise RuntimeError("Cannot remove ReduceOp")
         # save insetion point
         save_ip = GlobalInsertionPoint.get()
 
@@ -1531,14 +1570,51 @@ def make_affine_for(
 
 def make_if(cond, ip=None):
     # suppose in a imperative context (build in-place)
-    d0 = AffineDimExpr.get(0)
-    c1 = AffineConstantExpr.get(1)
-    if_cond_set = IntegerSet.get(1, 0, [d0 - c1], [True])  # d0 - 1 == 0
-    attr = hcl_d.IntegerSetAttr.get(if_cond_set)
-    cast = CastOp(cond, IndexType.get())
-    set_operands = [cast.result]
+    if not isinstance(cond, CmpOp):
+        raise RuntimeError("`if` operation condition should be CmpOp")
+    if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
+        cond.rhs.dtype, (IntegerType, IndexType)
+    ):
+        raise RuntimeError("`affine.if` can only support integer comparison")
+    # only support affine expressions now (i.e. calculations on iteration variables)
+    if cond.arg == 0:  # eq
+        # lhs==rhs
+        eq_flags = [True]
+        new_conds = [cond.lhs - cond.rhs]
+    elif cond.arg == 1:  # ne
+        # lhs>rhs and lhs<rhs
+        raise RuntimeError("Not supported for `affine.if`")
+    elif cond.arg == 2:  # slt
+        # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
+        eq_flags = [False]
+        new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
+    elif cond.arg == 3:  # sle
+        # lhs<=rhs -> rhs-lhs>=0
+        eq_flags = [False]
+        new_conds = [cond.rhs - cond.lhs]
+    elif cond.arg == 4:  # sgt
+        # lhs>rhs -> lhs-rhs-1>=0
+        eq_flags = [False]
+        new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
+    elif cond.arg == 5:  # sge
+        # lhs>=rhs -> lhs-rhs>=0
+        eq_flags = [False]
+        new_conds = [cond.lhs - cond.rhs]
+    else:
+        raise RuntimeError("Predicate of CmpOp")
 
-    if_op = affine.AffineIfOp(attr, set_operands, ip=ip)
+    cond.built_op.operation.erase()
+    exprs = []
+    builder = ASTBuilder()
+    for new_cond in new_conds:
+        remover = ASTBuilder(removal=True)
+        remover.visit(new_cond)
+        # rebuild condition
+        exprs.append(builder.visit_affine_expr(new_cond))
+    if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
+    attr = hcl_d.IntegerSetAttr.get(if_cond_set)
+
+    if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
     return if_op
 
 

@@ -81,6 +81,10 @@ static llvm::cl::opt<bool>
 
 static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"),
                                   llvm::cl::init(false));
+  
+static llvm::cl::opt<bool> fixedPointToInteger("fixed-to-integer", 
+                      llvm::cl::desc("Lower fixed-point operations to integer"),
+                      llvm::cl::init(false));          
 
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile(inputFilename, &context);
@@ -152,6 +156,10 @@ int main(int argc, char **argv) {
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt || runJiT) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
+  }
+
+  if (fixedPointToInteger) {
+    pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
   }
 
   if (enableNormalize) {

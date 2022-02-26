@@ -1,6 +1,7 @@
 add_mlir_library(MLIRHCLPasses
     LoopTransformations.cpp
     HostXcelSeparation.cpp
+    FixedPointToInteger.cpp
     Passes.cpp
 
     ADDITIONAL_HEADER_DIRS

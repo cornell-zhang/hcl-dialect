@@ -13,6 +13,7 @@ namespace mlir {
 namespace hcl {
 
 std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass();
+std::unique_ptr<OperationPass<ModuleOp>> createFixedPointToIntegerPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 
@@ -22,6 +23,8 @@ bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
                              std::vector<std::string> &graph_roots,
                              std::vector<std::string> &subgraph_inputs,
                              std::vector<std::string> &subgraph_outputs);
+
+bool applyFixedPointToInteger(ModuleOp &module);
 
 /// Registers all HCL transformation passes
 void registerHCLPasses();

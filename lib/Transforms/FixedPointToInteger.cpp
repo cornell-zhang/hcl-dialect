@@ -70,6 +70,26 @@ void updateFunctionSignature(FuncOp &funcOp) {
     }
   }
 
+  // Update FuncOp's block argument types
+  for (Block &block : funcOp.getBlocks()) {
+    for (unsigned i = 0; i < block.getNumArguments(); i++) {
+      Type argType = block.getArgument(i).getType();
+      if (MemRefType memrefType = argType.cast<MemRefType>()) {
+        Type oldType = memrefType.getElementType();
+        size_t width;
+        if (FixedType ft = oldType.cast<FixedType>()) {
+          width = ft.getWidth();
+        } else {
+          UFixedType uft = oldType.cast<UFixedType>();
+          width = ft.getWidth();
+        }
+        Type newType = IntegerType::get(funcOp.getContext(), width);
+        Type newMemRefType = memrefType.clone(newType);
+        block.getArgument(i).setType(newMemRefType);
+      }
+    }
+  }
+
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);

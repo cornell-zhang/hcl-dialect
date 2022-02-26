@@ -93,10 +93,47 @@ void updateFunctionSignature(FuncOp &funcOp) {
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
+
+  llvm::outs() << "function signature updated\n";
 }
 
 //
-void lowerAffineLoad(AffineLoadOp &op) {}
+// void lowerAffineLoad(AffineLoadOp &op) {
+//   llvm::outs() << "in lowerAffineLoad\n";
+//   // llvm::outs() << op.getName() << "\n";
+//   llvm::outs() << op.getResult().getType();
+//   for (auto value : op.getOperands()) {
+//     llvm::outs() << value;
+//   }
+// }
+void lowerAffineLoad(FuncOp &f) {
+  SmallVector<Operation *, 10> loads;
+  f.walk([&](Operation *op) {
+    if (auto add_op = dyn_cast<AffineLoadOp>(op)) {
+      loads.push_back(op);
+    }
+  });
+
+  for (auto op : loads) {
+    // check operands
+    for (auto value : op->getOperands()) {
+      llvm::outs() << value << "\n";
+    }
+    // update results
+    for (auto v : llvm::enumerate(op->getResults())) {
+      Type t = v.value().getType();
+      size_t width;
+      if (FixedType ft = t.cast<FixedType>()) {
+        width = ft.getWidth();
+      } else {
+        UFixedType uft = t.cast<UFixedType>();
+        width = uft.getWidth();
+      }
+      Type newType = IntegerType::get(f.getContext(), width);
+      op->getResult(v.index()).setType(newType);
+    }
+  }
+}
 
 // Lower a Fixed-point add op to AddIOp
 void lowerAdd(Operation &addOp) {}
@@ -147,10 +184,13 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
   for (FuncOp func : mod.getOps<FuncOp>()) {
     // lowerFixedAdd(func);
     updateFunctionSignature(func);
-    // for (Operation &op : func.getOps())
-    // if (auto new_op = dyn_cast<AffineLoadOp>(op)) {
-    //  lowerAffineLoad(new_op);
-    //}
+    lowerAffineLoad(func);
+    // for (Operation &op : func.getOps()) {
+    //   llvm::outs() << "opName: " << op.getName() << "\n";
+    //   if (auto new_op = dyn_cast<AffineLoadOp>(op)) {
+    //    lowerAffineLoad(new_op);
+    //   }
+    // }
   }
 
   return true;

@@ -7,7 +7,11 @@
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
+#include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
+
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+
 
 using namespace mlir;
 using namespace hcl;
@@ -26,7 +30,36 @@ void lowerFixedAdd(FuncOp &f) {
   });
 
   for (Operation* op : FixedAddOps) {
-    llvm::outs() << op->getName() << "\n";
+    // FixedAddOps are binary ops, they have two operands
+    Value opr_l = op->getOperand(0);
+    Value opr_r = op->getOperand(1);
+    size_t lwidth, lfrac, rwidth, rfrac;
+    // The operands are either fixed-point or unsigned fixed-point
+    if (opr_l.getType().cast<FixedType>()) { // fixed
+      FixedType ltype = opr_l.getType().cast<FixedType>();
+      FixedType rtype = opr_r.getType().cast<FixedType>();
+      lwidth = ltype.getWidth();
+      lfrac = ltype.getFrac();
+      rwidth = rtype.getWidth();
+      rfrac = rtype.getFrac();
+    } else { // ufixed
+      UFixedType ltype = opr_l.getType().cast<UFixedType>();
+      UFixedType rtype = opr_r.getType().cast<UFixedType>();
+      lwidth = ltype.getWidth();
+      lfrac = ltype.getFrac();
+      rwidth = rtype.getWidth();
+      rfrac = rtype.getFrac();
+    }
+
+    OpBuilder rewriter(op);
+    auto loc = op->getLoc();
+    rewriter.create<arith::AddIOp>(loc, opr_l, opr_r);
+
+    // Check width and cast
+
+    // Check frac and shift
+
+    
   }
 
 }

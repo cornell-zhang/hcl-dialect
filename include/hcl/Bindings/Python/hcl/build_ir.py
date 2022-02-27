@@ -1563,8 +1563,18 @@ class ASTBuilder:
             affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
             # restore insertion point
             GlobalInsertionPoint.restore()
-        expr.built_op = rv
-        return rv
+
+        zero_idx = arith.ConstantOp(
+            IndexType.get(), IntegerAttr.get(IndexType.get(), 0), ip=GlobalInsertionPoint.get())
+        value = affine.AffineLoadOp(
+            rv.result,
+            [zero_idx.result],
+            ip=GlobalInsertionPoint.get()
+        )
+        value.attributes["from"] = StringAttr.get(
+            "{}_rv".format(prefix))
+        expr.built_op = value
+        return value
 
 
 def make_affine_for(

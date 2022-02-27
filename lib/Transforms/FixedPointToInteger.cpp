@@ -22,8 +22,7 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-// function calls also need to be handled
-
+// TODO(Niansong): function calls also need to be handled
 // We also need to replace block args
 void updateFunctionSignature(FuncOp &funcOp) {
   FunctionType functionType = funcOp.getType();
@@ -49,7 +48,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
 
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_result_types.push_back(memrefType.clone(newElementType));
-    //   llvm::outs() << memrefType.clone(newElementType) << "\n";
     }
   }
 
@@ -66,7 +64,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
 
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_arg_types.push_back(memrefType.clone(newElementType));
-    //   llvm::outs() << memrefType.clone(newElementType) << "\n";
     }
   }
 
@@ -93,18 +90,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
-
 }
 
-//
-// void lowerAffineLoad(AffineLoadOp &op) {
-//   llvm::outs() << "in lowerAffineLoad\n";
-//   // llvm::outs() << op.getName() << "\n";
-//   llvm::outs() << op.getResult().getType();
-//   for (auto value : op.getOperands()) {
-//     llvm::outs() << value;
-//   }
-// }
 void lowerAffineLoad(FuncOp &f) {
   SmallVector<Operation *, 10> loads;
   f.walk([&](Operation *op) {
@@ -132,11 +119,11 @@ void lowerAffineLoad(FuncOp &f) {
 
 /* Add attributes to fixed-point operations
  * to preserve operands and result's fixed-type
- * information. After block arguments and 
+ * information. After block arguments and
  * affine load operations are updated to integer
  * type, these information will not be directly
  * accessible through operands' types.
-*/
+ */
 void markFixedOperations(FuncOp &f) {
   SmallVector<Operation *, 10> addOps;
   f.walk([&](Operation *op) {
@@ -187,9 +174,8 @@ void markFixedOperations(FuncOp &f) {
 
 // Fixed-point memref allocation op to integer memref
 void updateAlloc(FuncOp &f) {
-  
   SmallVector<Operation *, 10> allocOps;
-  f.walk([&](Operation *op){
+  f.walk([&](Operation *op) {
     if (auto alloc_op = dyn_cast<memref::AllocOp>(op)) {
       allocOps.push_back(op);
     }
@@ -208,7 +194,6 @@ void updateAlloc(FuncOp &f) {
     Type newType = IntegerType::get(f.getContext(), width);
     Type newMemRefType = memRefType.clone(newType);
     op->getResult(0).setType(newMemRefType); // alloc has only one result
-    // llvm::outs() << allocOp.getType() << "\n";
   }
 }
 
@@ -227,7 +212,8 @@ void lowerFixedAdd(AddFixedOp &op) {
   auto resfrac = op->getAttr("resfrac").cast<IntegerAttr>().getValue();
 
   // Change result type
-  IntegerType resType = IntegerType::get(op->getContext(), reswidth.getSExtValue());
+  IntegerType resType =
+      IntegerType::get(op->getContext(), reswidth.getSExtValue());
   op->getResult(0).setType(resType);
 
   OpBuilder rewriter(op);
@@ -238,7 +224,6 @@ void lowerFixedAdd(AddFixedOp &op) {
   // Check width and cast
 
   // Check frac and shift
-
 }
 
 /// Visitors to recursively update all operations
@@ -266,7 +251,7 @@ void visitBlock(Block &block) {
       opToRemove.push_back(&op);
     }
   }
-  
+
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -276,7 +261,7 @@ void visitBlock(Block &block) {
 void visitRegion(Region &region) {
   for (auto &block : region.getBlocks()) {
     visitBlock(block);
-  }  
+  }
 }
 
 bool applyFixedPointToInteger(ModuleOp &mod) {

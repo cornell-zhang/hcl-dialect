@@ -37,6 +37,14 @@ def is_integer_type(dtype):
     return isinstance(dtype, IntegerType)
 
 
+def is_unsigned_type(dtype):
+    return isinstance(dtype, IntegerType) and dtype.is_unsigned
+
+
+def is_signed_type(dtype):
+    return isinstance(dtype, IntegerType) and (dtype.is_unsigned or dtype.is_signless)
+
+
 def is_fixed_type(dtype):
     return isinstance(dtype, (hcl_d.FixedType, hcl_d.UFixedType))
 
@@ -149,13 +157,18 @@ def floating_point_error(op_name):
     return RuntimeError("{} does not support floating point inputs".format(op_name))
 
 
-def get_hcl_op(expr):
+def get_hcl_op(expr, dtype=None):
     if isinstance(expr, (int, float)):
-        if isinstance(expr, int):
-            return ConstantOp(IntegerType.get_signless(32), expr)
-        elif isinstance(expr, float):
-            return ConstantOp(F32Type.get(), expr)
+        if dtype == None:
+            if isinstance(expr, int):
+                return ConstantOp(IntegerType.get_signless(32), expr)
+            elif isinstance(expr, float):
+                return ConstantOp(F32Type.get(), expr)
+        else:
+            return ConstantOp(dtype, expr)
     else:
+        if dtype != None and dtype != expr.dtype:
+            expr = CastOp(expr, dtype)
         return expr
 
 
@@ -945,6 +958,27 @@ class MathExpOp(UnaryOp):
         super().__init__(math.ExpOp, F32Type.get(), val)
 
 
+class MathPowOp(BinaryOp):
+    def __init__(self, x, y):
+        if not isinstance(x, (int, float)):
+            dtype = x.dtype
+        if not isinstance(y, (int, float)):
+            dtype = y.dtype
+        x = get_hcl_op(x, F32Type.get())
+        y = get_hcl_op(y, F32Type.get())
+        super().__init__(math.PowFOp, dtype, x, y)
+
+    def build(self):
+        self.built_op = self.op(
+            self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
+        )
+        if not is_floating_point_type(self.dtype):
+            self.built_op = arith.FPToSIOp(
+                self.dtype, self.built_op.result, ip=GlobalInsertionPoint.get()
+            )
+        return self.built_op
+
+
 class MathLogOp(UnaryOp):
     def __init__(self, val):
         super().__init__(math.LogOp, F32Type.get(), val)
@@ -987,6 +1021,14 @@ class CastOp(ExprOp):
         self.val = get_hcl_op(val)
         if is_index_type(res_type) and is_integer_type(self.val.dtype):
             op = arith.IndexCastOp
+        elif is_signed_type(self.val.dtype) and is_floating_point_type(res_type):
+            op = arith.SIToFPOp
+        elif is_unsigned_type(self.val.dtype) and is_floating_point_type(res_type):
+            op = arith.UIToFPOp
+        elif is_signed_type(res_type) and is_floating_point_type(self.val.dtype):
+            op = arith.FPToSIOp
+        elif is_unsigned_type(res_type) and is_floating_point_type(self.val.dtype):
+            op = arith.FPToUIOp
         else:
             op = builtin.UnrealizedConversionCastOp
         super().__init__(op, res_type)
@@ -994,7 +1036,13 @@ class CastOp(ExprOp):
             self.build()
 
     def build(self):
-        if self.op == arith.IndexCastOp:
+        if self.op in [
+            arith.IndexCastOp,
+            arith.SIToFPOp,
+            arith.UIToFPOp,
+            arith.FPToSIOp,
+            arith.FPToUIOp,
+        ]:
             self.built_op = self.op(
                 self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
             )

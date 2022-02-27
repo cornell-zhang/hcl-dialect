@@ -72,8 +72,9 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   }];
 }
 
+
 def Bfloat : HeteroCL_Type<"Bfloat", [MemRefElementTypeInterface]> {
-  let summary = "Bfloat floating number";
+  let summary = "bfloat floating-point type";
   let mnemonic = "Bfloat";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
   let printer = [{
@@ -95,6 +96,5 @@ def Bfloat : HeteroCL_Type<"Bfloat", [MemRefElementTypeInterface]> {
     return get($_ctxt, width, frac);
   }];
 }
-
 
 #endif // HCL_TYPES

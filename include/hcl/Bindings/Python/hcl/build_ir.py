@@ -1338,7 +1338,7 @@ class ASTBuilder:
         elif isinstance(expr, MulOp):
             return lhs * rhs
         elif isinstance(expr, DivOp):
-            return lhs / rhs
+            return AffineExpr.get_floor_div(lhs, rhs)  # or get_ceil_div
         elif isinstance(expr, RemOp):
             return lhs % rhs
         else:
@@ -1565,14 +1565,14 @@ class ASTBuilder:
             GlobalInsertionPoint.restore()
 
         zero_idx = arith.ConstantOp(
-            IndexType.get(), IntegerAttr.get(IndexType.get(), 0), ip=GlobalInsertionPoint.get())
-        value = affine.AffineLoadOp(
-            rv.result,
-            [zero_idx.result],
-            ip=GlobalInsertionPoint.get()
+            IndexType.get(),
+            IntegerAttr.get(IndexType.get(), 0),
+            ip=GlobalInsertionPoint.get(),
         )
-        value.attributes["from"] = StringAttr.get(
-            "{}_rv".format(prefix))
+        value = affine.AffineLoadOp(
+            rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+        )
+        value.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
         expr.built_op = value
         return value
 

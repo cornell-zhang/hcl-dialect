@@ -94,7 +94,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
 
-  llvm::outs() << "function signature updated\n";
 }
 
 //
@@ -115,10 +114,6 @@ void lowerAffineLoad(FuncOp &f) {
   });
 
   for (auto op : loads) {
-    // check operands
-    for (auto value : op->getOperands()) {
-      llvm::outs() << value << "\n";
-    }
     // update results
     for (auto v : llvm::enumerate(op->getResults())) {
       Type t = v.value().getType();
@@ -167,7 +162,7 @@ void markFixedOperations(FuncOp &f) {
       rfrac = rtype.getFrac();
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
-    } else { // ufixed
+    } else if (opr_l.getType().cast<UFixedType>()) { // ufixed
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
       UFixedType rtype = opr_r.getType().cast<UFixedType>();
       UFixedType restype = res.getType().cast<UFixedType>();
@@ -190,6 +185,32 @@ void markFixedOperations(FuncOp &f) {
   }
 }
 
+// Fixed-point memref allocation op to integer memref
+void updateAlloc(FuncOp &f) {
+  
+  SmallVector<Operation *, 10> allocOps;
+  f.walk([&](Operation *op){
+    if (auto alloc_op = dyn_cast<memref::AllocOp>(op)) {
+      allocOps.push_back(op);
+    }
+  });
+
+  for (auto op : allocOps) {
+    auto allocOp = dyn_cast<memref::AllocOp>(op);
+    MemRefType memRefType = allocOp.getType().cast<MemRefType>();
+    Type t = memRefType.getElementType();
+    size_t width;
+    if (FixedType ft = t.cast<FixedType>()) {
+      width = ft.getWidth();
+    } else if (UFixedType uft = t.cast<UFixedType>()) {
+      width = uft.getWidth();
+    }
+    Type newType = IntegerType::get(f.getContext(), width);
+    Type newMemRefType = memRefType.clone(newType);
+    op->getResult(0).setType(newMemRefType); // alloc has only one result
+    // llvm::outs() << allocOp.getType() << "\n";
+  }
+}
 
 // Lower a Fixed-point add op to AddIOp
 void lowerFixedAdd(AddFixedOp &op) {
@@ -226,8 +247,6 @@ void visitRegion(Region &region);
 void visitBlock(Block &block);
 
 void visitOperation(Operation &op) {
-  llvm::outs() << "opName: " << op.getName() << "\n";
-
   SmallVector<Operation *, 10> opToRemove;
 
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
@@ -267,6 +286,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     markFixedOperations(func);
     updateFunctionSignature(func);
     lowerAffineLoad(func);
+    updateAlloc(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }

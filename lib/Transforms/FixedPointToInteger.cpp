@@ -23,7 +23,6 @@ namespace mlir {
 namespace hcl {
 
 // TODO(Niansong): function calls also need to be handled
-// We also need to replace block args
 void updateFunctionSignature(FuncOp &funcOp) {
   FunctionType functionType = funcOp.getType();
   SmallVector<Type, 4> result_types =
@@ -78,7 +77,7 @@ void updateFunctionSignature(FuncOp &funcOp) {
           width = ft.getWidth();
         } else {
           UFixedType uft = oldType.cast<UFixedType>();
-          width = ft.getWidth();
+          width = uft.getWidth();
         }
         Type newType = IntegerType::get(funcOp.getContext(), width);
         Type newMemRefType = memrefType.clone(newType);
@@ -92,7 +91,7 @@ void updateFunctionSignature(FuncOp &funcOp) {
   funcOp.setType(newFuncType);
 }
 
-void lowerAffineLoad(FuncOp &f) {
+void updateAffineLoad(FuncOp &f) {
   SmallVector<Operation *, 10> loads;
   f.walk([&](Operation *op) {
     if (auto add_op = dyn_cast<AffineLoadOp>(op)) {
@@ -202,18 +201,32 @@ void lowerFixedAdd(AddFixedOp &op) {
   // FixedAddOps are binary ops, they have two operands
   Value opr_l = op->getOperand(0);
   Value opr_r = op->getOperand(1);
-  // These values are of llvm::APInt type
-  // Compare with operators in llvm::APInt class
-  auto lwidth = op->getAttr("lwidth").cast<IntegerAttr>().getValue();
-  auto lfrac = op->getAttr("lfrac").cast<IntegerAttr>().getValue();
-  auto rwidth = op->getAttr("rwidth").cast<IntegerAttr>().getValue();
-  auto rfrac = op->getAttr("rfrac").cast<IntegerAttr>().getValue();
-  auto reswidth = op->getAttr("reswidth").cast<IntegerAttr>().getValue();
-  auto resfrac = op->getAttr("resfrac").cast<IntegerAttr>().getValue();
+  // IntegerAttr.getValue() values are of llvm::APInt type
+  // llvm::APInt class has special operators to compare them
+  // However, we know these values are non-negative integers
+  // We can get the sign-extended value from llvm::APInt
+  auto lwidth =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  auto lfrac =
+      op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
+  auto rwidth =
+      op->getAttr("rwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  auto rfrac =
+      op->getAttr("rfrac").cast<IntegerAttr>().getValue().getSExtValue();
+  auto reswidth =
+      op->getAttr("reswidth").cast<IntegerAttr>().getValue().getSExtValue();
+  auto resfrac =
+      op->getAttr("resfrac").cast<IntegerAttr>().getValue().getSExtValue();
+
+  // llvm::outs() << "operation: " << op->getName()
+  //   << ", lwidth=" << lwidth << ", lfrac=" << lfrac
+  //   << ", rwidth=" << rwidth << ", rfrac=" << rfrac
+  //   << ", reswidth=" << reswidth << ", resfrac=" << resfrac
+  //   << "\n";
 
   // Change result type
   IntegerType resType =
-      IntegerType::get(op->getContext(), reswidth.getSExtValue());
+      IntegerType::get(op->getContext(), reswidth);
   op->getResult(0).setType(resType);
 
   OpBuilder rewriter(op);
@@ -270,7 +283,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     // lowerFixedAdd(func);
     markFixedOperations(func);
     updateFunctionSignature(func);
-    lowerAffineLoad(func);
+    updateAffineLoad(func);
     updateAlloc(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);

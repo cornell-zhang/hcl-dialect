@@ -182,6 +182,11 @@ void markFixedOperations(FuncOp &f) {
     OpBuilder builder(f.getContext());
     IntegerType targetType = builder.getIntegerType(32);
     op->setAttr("lwidth", builder.getIntegerAttr(targetType, lwidth));
+    op->setAttr("lfrac", builder.getIntegerAttr(targetType, lfrac));
+    op->setAttr("rwidth", builder.getIntegerAttr(targetType, rwidth));
+    op->setAttr("rfrac", builder.getIntegerAttr(targetType, rfrac));
+    op->setAttr("reswidth", builder.getIntegerAttr(targetType, reswidth));
+    op->setAttr("resfrac", builder.getIntegerAttr(targetType, resfrac));
   }
 }
 
@@ -191,27 +196,23 @@ void lowerFixedAdd(AddFixedOp &op) {
   // FixedAddOps are binary ops, they have two operands
   Value opr_l = op->getOperand(0);
   Value opr_r = op->getOperand(1);
-  size_t lwidth, lfrac, rwidth, rfrac;
-  // The operands are either fixed-point or unsigned fixed-point
-  if (opr_l.getType().cast<FixedType>()) { // fixed
-    FixedType ltype = opr_l.getType().cast<FixedType>();
-    FixedType rtype = opr_r.getType().cast<FixedType>();
-    lwidth = ltype.getWidth();
-    lfrac = ltype.getFrac();
-    rwidth = rtype.getWidth();
-    rfrac = rtype.getFrac();
-  } else { // ufixed
-    UFixedType ltype = opr_l.getType().cast<UFixedType>();
-    UFixedType rtype = opr_r.getType().cast<UFixedType>();
-    lwidth = ltype.getWidth();
-    lfrac = ltype.getFrac();
-    rwidth = rtype.getWidth();
-    rfrac = rtype.getFrac();
-  }
+  // These values are of llvm::APInt type
+  // Compare with operators in llvm::APInt class
+  auto lwidth = op->getAttr("lwidth").cast<IntegerAttr>().getValue();
+  auto lfrac = op->getAttr("lfrac").cast<IntegerAttr>().getValue();
+  auto rwidth = op->getAttr("rwidth").cast<IntegerAttr>().getValue();
+  auto rfrac = op->getAttr("rfrac").cast<IntegerAttr>().getValue();
+  auto reswidth = op->getAttr("reswidth").cast<IntegerAttr>().getValue();
+  auto resfrac = op->getAttr("resfrac").cast<IntegerAttr>().getValue();
+
+  // Change result type
+  IntegerType resType = IntegerType::get(op->getContext(), reswidth.getSExtValue());
+  op->getResult(0).setType(resType);
 
   OpBuilder rewriter(op);
   auto loc = op->getLoc();
-  rewriter.create<arith::AddIOp>(loc, opr_l, opr_r);
+  arith::AddIOp newOp = rewriter.create<arith::AddIOp>(loc, opr_l, opr_r);
+  op->replaceAllUsesWith(newOp);
 
   // Check width and cast
 
@@ -227,6 +228,8 @@ void visitBlock(Block &block);
 void visitOperation(Operation &op) {
   llvm::outs() << "opName: " << op.getName() << "\n";
 
+  SmallVector<Operation *, 10> opToRemove;
+
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
     lowerFixedAdd(new_op);
   }
@@ -237,8 +240,17 @@ void visitOperation(Operation &op) {
 }
 
 void visitBlock(Block &block) {
+  SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
+    if (llvm::isa<AddFixedOp>(op)) {
+      opToRemove.push_back(&op);
+    }
+  }
+  
+  std::reverse(opToRemove.begin(), opToRemove.end());
+  for (Operation *op : opToRemove) {
+    op->erase();
   }
 }
 
@@ -253,17 +265,11 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
   for (FuncOp func : mod.getOps<FuncOp>()) {
     // lowerFixedAdd(func);
     markFixedOperations(func);
-    // updateFunctionSignature(func);
-    // lowerAffineLoad(func);
-    // for (Operation &op : func.getOps()) {
-    //   visitOperation(op);
-    // }
-    // for (Operation &op : func.getOps()) {
-    //   llvm::outs() << "opName: " << op.getName() << "\n";
-    //   if (auto new_op = dyn_cast<AffineLoadOp>(op)) {
-    //    lowerAffineLoad(new_op);
-    //   }
-    // }
+    updateFunctionSignature(func);
+    lowerAffineLoad(func);
+    for (Operation &op : func.getOps()) {
+      visitOperation(op);
+    }
   }
 
   return true;

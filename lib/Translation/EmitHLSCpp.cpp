@@ -243,7 +243,7 @@ public:
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
   void emitPower(Operation *op);
-  void emitMinMax(Operation *op, const char *syntax);
+  void emitMaxMin(Operation *op, const char *syntax);
 
   /// Special operation emitters.
   void emitCall(CallOp op);
@@ -446,6 +446,18 @@ public:
   bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
   bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::MaxSIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinSIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+  bool visitOp(arith::MaxUIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinUIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
 
   /// Logical expressions.
   bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
@@ -497,6 +509,21 @@ public:
   bool visitOp(arith::FPToSIOp op) {
     return emitter.emitCast<arith::FPToSIOp>(op), true;
   }
+  bool visitOp(arith::TruncIOp op) {
+    return emitter.emitCast<arith::TruncIOp>(op), true;
+  }
+  bool visitOp(arith::TruncFOp op) {
+    return emitter.emitCast<arith::TruncFOp>(op), true;
+  }
+  bool visitOp(arith::ExtSIOp op) {
+    return emitter.emitCast<arith::ExtSIOp>(op), true;
+  }
+  bool visitOp(arith::ExtUIOp op) {
+    return emitter.emitCast<arith::ExtUIOp>(op), true;
+  }
+  bool visitOp(arith::ExtFOp op) {
+    return emitter.emitCast<arith::ExtFOp>(op), true;
+  }
   bool visitOp(UnrealizedConversionCastOp op) {
     return emitter.emitGeneralCast(op), true;
   }
@@ -511,10 +538,10 @@ public:
   bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(hcl::CmpFixedOp op);
   bool visitOp(hcl::MinFixedOp op) {
-    return emitter.emitMinMax(op, "min"), true;
+    return emitter.emitMaxMin(op, "min"), true;
   }
   bool visitOp(hcl::MaxFixedOp op) {
-    return emitter.emitMinMax(op, "max"), true;
+    return emitter.emitMaxMin(op, "max"), true;
   }
 
 private:
@@ -1267,7 +1294,7 @@ void ModuleEmitter::emitPower(Operation *op) {
 }
 
 /// Special operation emitters.
-void ModuleEmitter::emitMinMax(Operation *op, const char *syntax) {
+void ModuleEmitter::emitMaxMin(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
   emitValue(op->getResult(0), rank);

@@ -241,6 +241,23 @@ void updateAlloc(FuncOp &f) {
   }
 }
 
+void updateAffineStore(AffineStoreOp &op) {
+  // llvm::outs() << op->getOperand(0) << "\n";
+  // llvm::outs() << op->getOperand(1) << "\n";
+  Type valueTyp = op->getOperand(0).getType();
+  Type memRefEleTyp = op->getOperand(1).getType().cast<MemRefType>().getElementType();
+  OpBuilder builder(op);
+  if (valueTyp.cast<IntegerType>().getWidth() < memRefEleTyp.cast<IntegerType>().getWidth()) {
+    // extend
+    Value v = builder.create<arith::ExtSIOp>(op->getLoc(), memRefEleTyp, op->getOperand(0));
+    op->setOperand(0, v);
+  } else {
+    // truncate
+    Value v = builder.create<arith::TruncIOp>(op->getLoc(), memRefEleTyp, op->getOperand(0));
+    op->setOperand(0, v);
+  }
+}
+
 // Lower a Fixed-point add op to AddIOp
 void lowerFixedAdd(AddFixedOp &op) {
   // FixedAddOps are binary ops, they have two operands
@@ -269,14 +286,35 @@ void lowerFixedAdd(AddFixedOp &op) {
   //   << ", reswidth=" << reswidth << ", resfrac=" << resfrac
   //   << "\n";
 
+  OpBuilder rewriter(op);
+
+  // Cast lhs and rhs
+  Value lhs, rhs;
+  size_t width = lwidth > rwidth ? lwidth : rwidth; 
+  Type newType = IntegerType::get(op->getContext(), width);
+  if (opr_l.getType().cast<IntegerType>().getWidth() < width) {
+    // extend bits
+    lhs = rewriter.create<arith::ExtSIOp>(op->getLoc(), newType, opr_l);
+  } else {
+    // truncate bits
+    lhs = rewriter.create<arith::TruncIOp>(op->getLoc(), newType, opr_l);
+  }
+  if (opr_r.getType().cast<IntegerType>().getWidth() < width) {
+    // extend bits
+    rhs = rewriter.create<arith::ExtSIOp>(op->getLoc(), newType, opr_r);
+  } else {
+    // truncate bits
+    rhs = rewriter.create<arith::TruncIOp>(op->getLoc(), newType, opr_r);
+  }
+
   // Change result type
   IntegerType resType =
       IntegerType::get(op->getContext(), reswidth);
   op->getResult(0).setType(resType);
 
-  OpBuilder rewriter(op);
+
   auto loc = op->getLoc();
-  arith::AddIOp newOp = rewriter.create<arith::AddIOp>(loc, opr_l, opr_r);
+  arith::AddIOp newOp = rewriter.create<arith::AddIOp>(loc, lhs, rhs);
   op->replaceAllUsesWith(newOp);
 
   // Check width and cast
@@ -294,6 +332,8 @@ void visitOperation(Operation &op) {
 
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
     lowerFixedAdd(new_op);
+  } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
+    updateAffineStore(new_op);
   }
 
   for (auto &region : op.getRegions()) {
@@ -330,10 +370,10 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateFunctionSignature(func);
     updateAffineLoad(func);
     updateAlloc(func);
+    updateReturnOp(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
-    updateReturnOp(func);
   }
 
   return true;

@@ -1029,6 +1029,25 @@ class CastOp(ExprOp):
             op = arith.FPToSIOp
         elif is_unsigned_type(res_type) and is_floating_point_type(self.val.dtype):
             op = arith.FPToUIOp
+        elif is_integer_type(res_type) and is_integer_type(self.val.dtype):
+            if res_type.width < self.val.dtype.width:
+                op = arith.TruncIOp
+            elif res_type.width == self.val.dtype.width:
+                op = None
+            else:
+                if not is_unsigned_type(res_type):
+                    op = arith.ExtSIOp
+                else:
+                    op = arith.ExtUIOp
+        elif is_floating_point_type(res_type) and is_floating_point_type(
+            self.val.dtype
+        ):
+            if res_type.width < self.val.dtype.width:
+                op = arith.TruncFOp
+            elif res_type.width == self.val.dtype.width:
+                op = None
+            else:
+                op = arith.ExtFOp
         else:
             op = builtin.UnrealizedConversionCastOp
         super().__init__(op, res_type)
@@ -1042,10 +1061,17 @@ class CastOp(ExprOp):
             arith.UIToFPOp,
             arith.FPToSIOp,
             arith.FPToUIOp,
+            arith.TruncIOp,
+            arith.TruncFOp,
+            arith.ExtUIOp,
+            arith.ExtSIOp,
+            arith.ExtFOp,
         ]:
             self.built_op = self.op(
                 self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
             )
+        elif self.op == None:
+            self.built_op = self.val.built_op
         else:  # builtin.UnrealizedConversionCastOp
             self.built_op = self.op(
                 [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()

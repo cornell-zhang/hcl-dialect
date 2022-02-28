@@ -1338,7 +1338,7 @@ class ASTBuilder:
         elif isinstance(expr, MulOp):
             return lhs * rhs
         elif isinstance(expr, DivOp):
-            return lhs / rhs
+            return AffineExpr.get_floor_div(lhs, rhs)  # or get_ceil_div
         elif isinstance(expr, RemOp):
             return lhs % rhs
         else:
@@ -1483,9 +1483,15 @@ class ASTBuilder:
             zero_value = arith.ConstantOp(
                 dtype, FloatAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
-        elif is_integer_type(dtype) or is_fixed_type(dtype):
+        elif is_integer_type(dtype):
             zero_value = arith.ConstantOp(
                 dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
+            )
+        elif is_fixed_type(dtype):
+            value_attr = IntegerAttr.get(IntegerType.get_signless(32), init_val)
+            zero_value = arith.ConstantOp(IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get())
+            zero_value = builtin.UnrealizedConversionCastOp(
+                [dtype], [zero_value.result], ip=GlobalInsertionPoint.get()
             )
         else:
             raise RuntimeError("Unrecognized data type in reduction op")
@@ -1563,8 +1569,18 @@ class ASTBuilder:
             affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
             # restore insertion point
             GlobalInsertionPoint.restore()
-        expr.built_op = rv
-        return rv
+
+        zero_idx = arith.ConstantOp(
+            IndexType.get(),
+            IntegerAttr.get(IndexType.get(), 0),
+            ip=GlobalInsertionPoint.get(),
+        )
+        value = affine.AffineLoadOp(
+            rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+        )
+        value.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
+        expr.built_op = value
+        return value
 
 
 def make_affine_for(

@@ -81,6 +81,27 @@ static SmallString<16> getTypeName(Value val) {
   return SmallString<16>();
 }
 
+void fixUnsignedType(Value &result, bool isUnsigned) {
+  if (isUnsigned) { // unsigned type
+    if (result.getType().isa<MemRefType>()) {
+      auto arrayType = result.getType().dyn_cast<MemRefType>();
+      Type elt = IntegerType::get(
+          arrayType.getContext(),
+          arrayType.getElementType().cast<IntegerType>().getWidth(),
+          IntegerType::SignednessSemantics::Unsigned);
+      result.setType(MemRefType::get(arrayType.getShape(), elt,
+                                     arrayType.getLayout(),
+                                     arrayType.getMemorySpace()));
+    } else if (result.getType().isa<IntegerType>()) {
+      Type type =
+          IntegerType::get(result.getType().getContext(),
+                           result.getType().cast<IntegerType>().getWidth(),
+                           IntegerType::SignednessSemantics::Unsigned);
+      result.setType(type);
+    }
+  }
+}
+
 //===----------------------------------------------------------------------===//
 // Some Base Classes
 //===----------------------------------------------------------------------===//
@@ -935,7 +956,9 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   if (op->hasAttr("from")) {
     load_from_name = op->getAttr("from").cast<StringAttr>().getValue().str();
   }
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   auto memref = op.getMemRef();
   emitValue(memref, 0, false, load_from_name);
@@ -1131,15 +1154,19 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   }
 
   indent();
-  emitArrayDecl(op.getResult(), false, name);
+  Value result = op.getResult(); // memref
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitArrayDecl(result, false, name);
   os << ";";
   emitInfoAndNewLine(op);
-  emitArrayDirectives(op.getResult());
+  emitArrayDirectives(result);
 }
 
 void ModuleEmitter::emitLoad(memref::LoadOp op) {
   indent();
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   auto memref = op.getMemRef();
   emitValue(memref);
@@ -1259,7 +1286,9 @@ void ModuleEmitter::emitRank(memref::RankOp op) {
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = ";
   emitValue(op->getOperand(0), rank);
   os << " " << syntax << " ";
@@ -1272,7 +1301,9 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
   os << ");";
@@ -1297,7 +1328,9 @@ void ModuleEmitter::emitPower(Operation *op) {
 void ModuleEmitter::emitMaxMin(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
   os << ", ";
@@ -1309,7 +1342,9 @@ void ModuleEmitter::emitMaxMin(Operation *op, const char *syntax) {
 
 void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
   indent();
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   emitValue(op.num());
   os << "[";
@@ -1336,7 +1371,9 @@ void ModuleEmitter::emitSelect(SelectOp op) {
     conditionRank = 0;
 
   indent();
-  emitValue(op.getResult(), rank);
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = ";
   emitValue(op.getCondition(), conditionRank);
   os << " ? ";
@@ -1357,7 +1394,9 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
 
   if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
-    emitArrayDecl(op.getResult());
+    Value result = op.getResult(); // memref
+    fixUnsignedType(result, op->hasAttr("unsigned"));
+    emitArrayDecl(result);
     os << " = {";
     auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
@@ -1809,18 +1848,29 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     // suppose only one output
     input_args.push_back(output_names);
   }
+  std::string extra_itypes = "";
+  if (func->hasAttr("extra_itypes"))
+    extra_itypes =
+        func->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  else {
+    for (unsigned i = 0; i < func.getNumArguments(); ++i)
+      extra_itypes += "x";
+  }
   for (auto &arg : func.getArguments()) {
     indent();
-    if (input_args.size() == 0) {
-      if (arg.getType().isa<ShapedType>())
+    fixUnsignedType(arg, extra_itypes[argIdx] == 'u');
+    if (arg.getType().isa<ShapedType>()) {
+      if (input_args.size() == 0) {
         emitArrayDecl(arg, true);
-      else
-        emitValue(arg);
-    } else {
-      if (arg.getType().isa<ShapedType>())
+      } else {
         emitArrayDecl(arg, true, input_args[argIdx]);
-      else
+      }
+    } else {
+      if (input_args.size() == 0) {
+        emitValue(arg);
+      } else {
         emitValue(arg, 0, false, input_args[argIdx]);
+      }
     }
 
     portList.push_back(arg);
@@ -1830,29 +1880,40 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   // Emit results.
   auto args = func.getArguments();
+  std::string extra_otypes = "";
+  if (func->hasAttr("extra_otypes"))
+    extra_otypes =
+        func->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  else {
+    for (unsigned i = 0; i < func.getNumArguments(); ++i)
+      extra_otypes += "x";
+  }
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
+    unsigned idx = 0;
     for (auto result : funcReturn.getOperands()) {
       if (std::find(args.begin(), args.end(), result) == args.end()) {
         os << ",\n";
         indent();
-        if (output_names != "") {
-          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
-          // : index, index. However, typically this should not happen.
-          if (result.getType().isa<ShapedType>())
+
+        // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
+        // : index, index. However, typically this should not happen.
+        fixUnsignedType(result, extra_otypes[idx] == 'u');
+        if (result.getType().isa<ShapedType>()) {
+          if (output_names != "")
             emitArrayDecl(result, true);
           else
-            // In Vivado HLS, pointer indicates the value is an output.
-            emitValue(result, /*rank=*/0, /*isPtr=*/true);
-        } else {
-          if (result.getType().isa<ShapedType>())
             emitArrayDecl(result, true, output_names);
+        } else {
+          // In Vivado HLS, pointer indicates the value is an output.
+          if (output_names != "")
+            emitValue(result, /*rank=*/0, /*isPtr=*/true);
           else
-            // In Vivado HLS, pointer indicates the value is an output.
             emitValue(result, /*rank=*/0, /*isPtr=*/true, output_names);
         }
 
         portList.push_back(result);
       }
+      idx += 1;
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");

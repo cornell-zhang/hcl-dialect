@@ -512,9 +512,16 @@ class ConstantOp(ExprOp):
                 value_attr = IntegerAttr.get(IndexType.get(), self.val)
             else:
                 raise RuntimeError("Type error")
-            self.built_op = self.op(
-                self.dtype, value_attr, ip=GlobalInsertionPoint.get()
-            )
+            if is_unsigned_type(self.dtype):
+                dtype = IntegerType.get_signless(self.dtype.width)
+                self.built_op = self.op(
+                    dtype, value_attr, ip=GlobalInsertionPoint.get()
+                )
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
+            else:
+                self.built_op = self.op(
+                    self.dtype, value_attr, ip=GlobalInsertionPoint.get()
+                )
             return self.built_op
         else:  # fixed types
             if isinstance(self.val, float):
@@ -618,6 +625,8 @@ class TensorOp(ExprOp):
             self.built_op = self.op(
                 self.memref_type, [], [], None, ip=GlobalInsertionPoint.get()
             )
+            if is_unsigned_type(self.dtype):
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
             self.built_op.attributes["name"] = StringAttr.get(self.name)
         elif isinstance(self.op, BlockArgument):
             self.built_op = self.op
@@ -634,7 +643,12 @@ class TensorOp(ExprOp):
 
     @property
     def memref_type(self):
-        return MemRefType.get(self.shape, get_mlir_type(self.dtype))
+        dtype = get_mlir_type(self.dtype)
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
+        return MemRefType.get(self.shape, dtype)
 
     def set_axis(self, _axis):
         self._axis = _axis
@@ -729,6 +743,8 @@ class UnaryOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(self.val.result, ip=GlobalInsertionPoint.get())
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -756,6 +772,8 @@ class BinaryOp(ExprOp):
         self.built_op = self.op(
             self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -868,6 +886,8 @@ class CmpOp(BinaryOp):
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1067,9 +1087,16 @@ class CastOp(ExprOp):
             arith.ExtSIOp,
             arith.ExtFOp,
         ]:
-            self.built_op = self.op(
-                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
-            )
+            if is_unsigned_type(self.dtype):
+                dtype = IntegerType.get_signless(self.dtype.width)
+                self.built_op = self.op(
+                    dtype, self.val.result, ip=GlobalInsertionPoint.get()
+                )
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
+            else:
+                self.built_op = self.op(
+                    self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+                )
         elif self.op == None:
             self.built_op = self.val.built_op
         else:  # builtin.UnrealizedConversionCastOp
@@ -1103,6 +1130,8 @@ class GetBitOp(ExprOp):
             self.index.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1135,6 +1164,8 @@ class SetBitOp(ExprOp):
             self.val.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1154,6 +1185,8 @@ class LoadOp(ExprOp):
             self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
     def build_affine(self, indices, affine_attr):
@@ -1164,6 +1197,8 @@ class LoadOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
     def __getitem__(self, indices):
@@ -1221,6 +1256,8 @@ class StoreOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
+        if is_unsigned_type(self.to_tensor.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
     def build_affine(self, indices, affine_attr):
@@ -1233,6 +1270,8 @@ class StoreOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
+        if is_unsigned_type(self.to_tensor.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1252,6 +1291,8 @@ class CallOp(ExprOp):
             self.inputs,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1284,6 +1325,8 @@ class SelectOp(ExprOp):
             self.false_val.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1466,6 +1509,8 @@ class ASTBuilder:
 
         # create a single-element register for reduction
         dtype = expr.dtype
+        if is_unsigned_type(dtype):
+            dtype = IntegerType.get_signless(dtype.width)
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(memref_type, [], [], None, ip=GlobalInsertionPoint.get())
         if isinstance(expr, SumOp):
@@ -1498,6 +1543,8 @@ class ASTBuilder:
         else:
             raise RuntimeError("Should not in this branch")
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            rv.attributes["unsigned"] = UnitAttr.get()
         # initialize the single-element register
         zero_idx = arith.ConstantOp(
             IndexType.get(),
@@ -1515,12 +1562,16 @@ class ASTBuilder:
             )
         elif is_fixed_type(dtype):
             value_attr = IntegerAttr.get(IntegerType.get_signless(32), init_val)
-            zero_value = arith.ConstantOp(IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get())
+            zero_value = arith.ConstantOp(
+                IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get()
+            )
             zero_value = builtin.UnrealizedConversionCastOp(
                 [dtype], [zero_value.result], ip=GlobalInsertionPoint.get()
             )
         else:
             raise RuntimeError("Unrecognized data type in reduction op")
+        if is_unsigned_type(expr.dtype):
+            zero_value.attributes["unsigned"] = UnitAttr.get()
 
         store = affine.AffineStoreOp(
             zero_value.result,
@@ -1560,6 +1611,8 @@ class ASTBuilder:
             rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         load.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            load.attributes["unsigned"] = UnitAttr.get()
         if is_floating_point_type(dtype):
             reduce_op = reduce_op["float"]
         elif is_integer_type(dtype):
@@ -1580,6 +1633,8 @@ class ASTBuilder:
         iter_reduction = reduce_op(
             data.result, load.result, ip=GlobalInsertionPoint.get()
         )
+        if is_unsigned_type(expr.dtype):
+            iter_reduction.attributes["unsigned"] = UnitAttr.get()
 
         # store the result back to register
         store_reg = affine.AffineStoreOp(
@@ -1605,6 +1660,8 @@ class ASTBuilder:
             rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         value.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            value.attributes["unsigned"] = UnitAttr.get()
         expr.built_op = value
         return value
 

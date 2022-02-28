@@ -1483,9 +1483,15 @@ class ASTBuilder:
             zero_value = arith.ConstantOp(
                 dtype, FloatAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
-        elif is_integer_type(dtype) or is_fixed_type(dtype):
+        elif is_integer_type(dtype):
             zero_value = arith.ConstantOp(
                 dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
+            )
+        elif is_fixed_type(dtype):
+            value_attr = IntegerAttr.get(IntegerType.get_signless(32), init_val)
+            zero_value = arith.ConstantOp(IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get())
+            zero_value = builtin.UnrealizedConversionCastOp(
+                [dtype], [zero_value.result], ip=GlobalInsertionPoint.get()
             )
         else:
             raise RuntimeError("Unrecognized data type in reduction op")

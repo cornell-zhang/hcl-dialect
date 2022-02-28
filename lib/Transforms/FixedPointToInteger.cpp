@@ -23,6 +23,12 @@ namespace mlir {
 namespace hcl {
 
 // TODO(Niansong): function calls also need to be handled
+
+/* Update the function signature and 
+ * Because we need to interact with numpy, which only supports up
+ * to 64-bit int/uint, so we update the input/output arguments
+ * to 64-bit signless integer type. When the input memref
+ */
 void updateFunctionSignature(FuncOp &funcOp) {
   FunctionType functionType = funcOp.getType();
   SmallVector<Type, 4> result_types =
@@ -37,14 +43,14 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : result_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      size_t width;
-      if (FixedType ft = et.cast<FixedType>()) {
-        width = ft.getWidth();
-      } else {
-        UFixedType uft = et.cast<UFixedType>();
-        width = uft.getWidth();
-      }
-
+      // size_t width;
+      // if (FixedType ft = et.cast<FixedType>()) {
+      //   width = ft.getWidth();
+      // } else {
+      //   UFixedType uft = et.cast<UFixedType>();
+      //   width = uft.getWidth();
+      // }
+      size_t width = 64;
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_result_types.push_back(memrefType.clone(newElementType));
     }
@@ -53,14 +59,14 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : arg_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      size_t width;
-      if (FixedType ft = et.cast<FixedType>()) {
-        width = ft.getWidth();
-      } else {
-        UFixedType uft = et.cast<UFixedType>();
-        width = uft.getWidth();
-      }
-
+      // size_t width;
+      // if (FixedType ft = et.cast<FixedType>()) {
+      //   width = ft.getWidth();
+      // } else {
+      //   UFixedType uft = et.cast<UFixedType>();
+      //   width = uft.getWidth();
+      // }
+      size_t width = 64;
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_arg_types.push_back(memrefType.clone(newElementType));
     }
@@ -72,20 +78,20 @@ void updateFunctionSignature(FuncOp &funcOp) {
       Type argType = block.getArgument(i).getType();
       if (MemRefType memrefType = argType.cast<MemRefType>()) {
         Type oldType = memrefType.getElementType();
-        size_t width;
-        if (FixedType ft = oldType.cast<FixedType>()) {
-          width = ft.getWidth();
-        } else {
-          UFixedType uft = oldType.cast<UFixedType>();
-          width = uft.getWidth();
-        }
+        // size_t width;
+        // if (FixedType ft = oldType.cast<FixedType>()) {
+        //   width = ft.getWidth();
+        // } else {
+        //   UFixedType uft = oldType.cast<UFixedType>();
+        //   width = uft.getWidth();
+        // }
+        size_t width = 64;
         Type newType = IntegerType::get(funcOp.getContext(), width);
         Type newMemRefType = memrefType.clone(newType);
         block.getArgument(i).setType(newMemRefType);
       }
     }
   }
-
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
@@ -100,18 +106,57 @@ void updateAffineLoad(FuncOp &f) {
   });
 
   for (auto op : loads) {
+    // llvm::outs() << op->getOperand(0).getType() << "\n";
     // update results
     for (auto v : llvm::enumerate(op->getResults())) {
-      Type t = v.value().getType();
-      size_t width;
-      if (FixedType ft = t.cast<FixedType>()) {
-        width = ft.getWidth();
-      } else {
-        UFixedType uft = t.cast<UFixedType>();
-        width = uft.getWidth();
-      }
-      Type newType = IntegerType::get(f.getContext(), width);
+      // Type t = v.value().getType();
+      // size_t width;
+      // if (FixedType ft = t.cast<FixedType>()) {
+      //   width = ft.getWidth();
+      // } else {
+      //   UFixedType uft = t.cast<UFixedType>();
+      //   width = uft.getWidth();
+      // }
+      // Type newType = IntegerType::get(f.getContext(), width);
+      Type newType = op->getOperand(0).getType().cast<MemRefType>().getElementType();
       op->getResult(v.index()).setType(newType);
+    }
+  }
+}
+
+void updateReturnOp(FuncOp &funcOp) {
+  // Update FuncOp's return types
+  SmallVector<Operation *, 4> returnOps;
+  funcOp.walk([&](Operation *op) {
+    if (auto add_op = dyn_cast<ReturnOp>(op)) {
+      returnOps.push_back(op);
+    }
+  });
+  // If return op is not int64, we need to add a cast node
+  for (auto op : returnOps) {
+    MemRefType type = op->getOperand(0).getType().cast<MemRefType>();
+    Type etype = type.getElementType();
+    Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
+    if (etype != newType) {
+      // create cast nodes
+      // Lesson learned: OpBuilder has to be in the right scope
+      // OpBuilder builder(op);
+      // auto width = etype.dyn_cast<IntegerType>().getWidth();
+      // llvm::outs() << width << "\n";
+      Value arg = op->getOperand(0);
+      auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp());
+      allocOp->getResult(0).setType(newType);
+      // if (width > 64) {
+        // Value new_res = builder.create<arith::TruncIOp>(op->getLoc(), newType, op->getOperand(0));
+        // op->setOperand(0, new_res);
+      // } else {
+        // llvm::outs() << arg << "\n";
+        // Value res = builder.create<arith::ExtSIOp>(op->getLoc(), newType, arg);
+        // builder.create<ReturnOp>(op->getLoc(), res);
+        // llvm::outs() << res << "\n";
+        // llvm::outs() << funcOp << "\n";
+        // op->setOperand(0, new_res);
+      // }
     }
   }
 }
@@ -288,6 +333,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
+    updateReturnOp(func);
   }
 
   return true;

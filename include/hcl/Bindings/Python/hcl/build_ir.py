@@ -1465,7 +1465,8 @@ class ASTVisitor:
 
     def visit_load_op(self, expr):
         if self.mode == "remove":
-            raise RuntimeError("Cannot remove LoadOp")
+            expr.built_op.operation.erase()
+            return
         elif self.mode == "profile":
             self.load.append(expr)
             return
@@ -1482,7 +1483,8 @@ class ASTVisitor:
 
     def visit_store_op(self, expr):
         if self.mode == "remove":
-            raise RuntimeError("Cannot remove StoreOp")
+            expr.built_op.operation.erase()
+            return
         elif self.mode == "profile":
             self.store.append(expr)
             return
@@ -1499,22 +1501,27 @@ class ASTVisitor:
 
     def visit_cast_op(self, expr):
         if self.mode == "remove":
-            raise RuntimeError("Cannot remove CastOp")
+            expr.built_op.operation.erase()
         self.visit(expr.val)
         if self.mode == "build":
             return expr.build()
 
     def visit_getbit_op(self, expr):
-        if self.mode == "remove":
-            raise RuntimeError("Cannot remove GetBitOp")
-        self.visit(expr.num)
-        self.visit(expr.index)
         if self.mode == "build":
+            self.visit(expr.num)
+            self.visit(expr.index)
             return expr.build()
+        elif self.mode == "remove":
+            expr.built_op.operation.erase()
+            self.visit(expr.index)
+            self.visit(expr.num)
+        else:
+            self.visit(expr.num)
+            self.visit(expr.index)
 
     def visit_setbit_op(self, expr):
         if self.mode == "remove":
-            raise RuntimeError("Cannot remove SetBitOp")
+            expr.built_op.operation.erase()
         self.visit(expr.num)
         self.visit(expr.index)
         self.visit(expr.val)
@@ -1752,8 +1759,12 @@ def make_if(cond, ip=None):
     visitor = ASTVisitor(mode="profile")
     visitor.visit(cond)
     if len(visitor.load) != 0 or len(visitor.store) != 0:
+        remover = ASTVisitor(mode="remove")
+        remover.visit(cond)
+        builder = ASTVisitor(mode="build")
+        builder.visit(cond)
         if_op = scf.IfOp(cond.result, ip=ip)
-    else: # Affine expression
+    else:  # Affine expression
         if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
             cond.rhs.dtype, (IntegerType, IndexType)
         ):
@@ -1787,7 +1798,8 @@ def make_if(cond, ip=None):
 
         cond.built_op.operation.erase()
         exprs = []
-        builder = ASTVisitor()
+        # make sure all the AffineExpr are referenced in one visitor
+        builder = ASTVisitor(mode="build")
         for new_cond in new_conds:
             remover = ASTVisitor(mode="remove")
             remover.visit(new_cond)

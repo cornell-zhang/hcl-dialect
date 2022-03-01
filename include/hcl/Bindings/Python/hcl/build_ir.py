@@ -22,10 +22,14 @@ class HCLFlags(object):
     def disable_build_inplace(self):
         self.BUILD_INPLACE = False
 
+    def is_build_inplace(self):
+        return self.BUILD_INPLACE
+
 
 flags = HCLFlags()
 enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
+is_build_inplace = flags.is_build_inplace
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
 

@@ -466,7 +466,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype="index")
+        super().__init__(op, dtype=IndexType.get())
         self.built_op = op
 
     def update_op(self, op):
@@ -1044,7 +1044,7 @@ class CastOp(ExprOp):
         # dtype is the result type
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
-        if is_index_type(res_type) and is_integer_type(self.val.dtype):
+        if (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (is_index_type(self.val.dtype) and is_integer_type(res_type)):
             op = arith.IndexCastOp
         elif is_signed_type(self.val.dtype) and is_floating_point_type(res_type):
             op = arith.SIToFPOp

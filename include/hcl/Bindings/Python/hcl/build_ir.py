@@ -1194,24 +1194,35 @@ class LoadOp(ExprOp):
             self.build()
 
     def build(self):
-        new_indices = []
+        # test if affine expressions
+        visitor = ASTVisitor(mode="profile")
+        exprs = []
+        flag = True
         for index in self.indices:
-            new_indices.append(index.result)
-        self.built_op = self.op(
-            self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
-        )
-        self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
-        if is_unsigned_type(self.dtype):
-            self.built_op.attributes["unsigned"] = UnitAttr.get()
-        return self.built_op
-
-    def build_affine(self, indices, affine_attr):
-        self.built_op = self.op(
-            self.tensor.result,
-            indices,
-            affine_attr,
-            ip=GlobalInsertionPoint.get(),
-        )
+            try:
+                affine_expr = visitor.visit_affine_expr(index)
+                exprs.append(affine_expr)
+            except:
+                flag = False
+                break
+        if flag:
+            affine_map = AffineMap.get(
+                dim_count=len(visitor.iv), symbol_count=0, exprs=exprs
+            )
+            affine_attr = AffineMapAttr.get(affine_map)
+            self.built_op = self.op(
+                self.tensor.result,
+                visitor.iv,
+                affine_attr,
+                ip=GlobalInsertionPoint.get(),
+            )
+        else:
+            new_indices = []
+            for index in self.indices:
+                new_indices.append(index.result)
+            self.built_op = memref.LoadOp(
+                self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
+            )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
@@ -1271,29 +1282,39 @@ class StoreOp(ExprOp):
             self.build()
 
     def build(self):
-        new_indices = []
+        # test if affine expressions
+        visitor = ASTVisitor(mode="profile")
+        exprs = []
+        flag = True
         for index in self.indices:
-            new_indices.append(index.result)
-        self.built_op = self.op(
-            self.val.result,
-            self.to_tensor.result,
-            new_indices,
-            ip=GlobalInsertionPoint.get(),
-        )
-        self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
-        if is_unsigned_type(self.to_tensor.dtype):
-            self.built_op.attributes["unsigned"] = UnitAttr.get()
-        return self.built_op
-
-    def build_affine(self, indices, affine_attr):
-        self.built_op = self.op(
-            self.dtype,
-            self.val.result,
-            self.to_tensor.result,
-            indices,
-            affine_attr,
-            ip=GlobalInsertionPoint.get(),
-        )
+            try:
+                affine_expr = visitor.visit_affine_expr(index)
+                exprs.append(affine_expr)
+            except:
+                flag = False
+                break
+        if flag:
+            affine_map = AffineMap.get(
+                dim_count=len(visitor.iv), symbol_count=0, exprs=exprs
+            )
+            affine_attr = AffineMapAttr.get(affine_map)
+            self.built_op = self.op(
+                self.val.result,
+                self.to_tensor.result,
+                visitor.iv,
+                affine_attr,
+                ip=GlobalInsertionPoint.get(),
+            )
+        else:
+            new_indices = []
+            for index in self.indices:
+                new_indices.append(index.result)
+            self.built_op = memref.StoreOp(
+                self.val.result,
+                self.to_tensor.result,
+                new_indices,
+                ip=GlobalInsertionPoint.get(),
+            )
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
         if is_unsigned_type(self.to_tensor.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
@@ -1419,6 +1440,8 @@ class ASTVisitor:
         * Should all be binary op
         * AffineExpr can be automatically simplied
         """
+        if not isinstance(expr, (IterVar, ConstantOp, CastOp, BinaryOp)):
+            raise RuntimeError("Not an affine index!")
         if isinstance(expr, IterVar):
             if expr.op not in self.iv:
                 self.iv.append(expr.op)  # BlockArgument
@@ -1490,16 +1513,8 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.load.append(expr)
             return
-        # create affine expressions
-        self.iv = []  # clear
-        exprs = []
-        for index in expr.indices:
-            affine_expr = self.visit_affine_expr(index)
-            exprs.append(affine_expr)
-        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
-        affine_attr = AffineMapAttr.get(affine_map)
-        if self.mode == "build":
-            return expr.build_affine(self.iv, affine_attr)
+        else:
+            return expr.build()
 
     def visit_store_op(self, expr):
         if self.mode == "remove":
@@ -1508,16 +1523,8 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.store.append(expr)
             return
-        # create affine expressions
-        self.iv = []  # clear
-        exprs = []
-        for index in expr.indices:
-            affine_expr = self.visit_affine_expr(index)
-            exprs.append(affine_expr)
-        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
-        affine_attr = AffineMapAttr.get(affine_map)
-        if self.mode == "build":
-            return expr.build_affine(self.iv, affine_attr)
+        else:
+            return expr.build()
 
     def visit_cast_op(self, expr):
         if self.mode == "remove":

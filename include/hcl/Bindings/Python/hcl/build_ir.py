@@ -1813,6 +1813,23 @@ def make_if(cond, ip=None):
     return if_op
 
 
+def make_while(cond, ip=None):
+    # suppose in a imperative context (build in-place)
+    if not isinstance(cond, CmpOp):
+        raise RuntimeError("`if` operation condition should be CmpOp")
+    while_op = scf.WhileOp([], [], ip=ip)
+    while_op.before.blocks.append(*[])
+    while_op.after.blocks.append(*[])
+    GlobalInsertionPoint.save(while_op.before.blocks[0])
+    remover = ASTVisitor(mode="remove")
+    remover.visit(cond)
+    builder = ASTVisitor(mode="build")
+    builder.visit(cond)
+    scf.ConditionOp(cond.result, [], ip=GlobalInsertionPoint.get())
+    GlobalInsertionPoint.restore()
+    return while_op
+
+
 def get_affine_loop_nests(func):
     results = []
     for op in func.entry_block.operations:

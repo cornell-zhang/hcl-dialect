@@ -1044,7 +1044,9 @@ class CastOp(ExprOp):
         # dtype is the result type
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
-        if (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (is_index_type(self.val.dtype) and is_integer_type(res_type)):
+        if (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (
+            is_index_type(self.val.dtype) and is_integer_type(res_type)
+        ):
             op = arith.IndexCastOp
         elif is_signed_type(self.val.dtype) and is_floating_point_type(res_type):
             op = arith.SIToFPOp
@@ -1178,7 +1180,16 @@ class LoadOp(ExprOp):
     def __init__(self, tensor, indices):
         super().__init__(affine.AffineLoadOp, tensor.dtype)
         self.tensor = tensor
-        self.indices = indices
+        self.indices = []
+        for index in indices:
+            if not isinstance(index.dtype, IndexType):
+                print(
+                    "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            self.indices.append(index)
         if flags.BUILD_INPLACE:
             self.build()
 
@@ -1246,7 +1257,16 @@ class StoreOp(ExprOp):
             val = CastOp(val, to_tensor.dtype)
         self.val = val
         self.to_tensor = to_tensor
-        self.indices = indices
+        self.indices = []
+        for index in indices:
+            if not isinstance(index.dtype, IndexType):
+                print(
+                    "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            self.indices.append(index)
         if flags.BUILD_INPLACE:
             self.build()
 

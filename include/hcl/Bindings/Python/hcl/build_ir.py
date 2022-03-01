@@ -25,11 +25,15 @@ class HCLFlags(object):
     def is_build_inplace(self):
         return self.BUILD_INPLACE
 
+    def reset(self):
+        self.BUILD_INPLACE = False
+
 
 flags = HCLFlags()
 enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 is_build_inplace = flags.is_build_inplace
+reset_build_inplace = flags.reset
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
 

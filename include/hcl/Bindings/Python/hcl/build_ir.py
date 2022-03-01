@@ -7,7 +7,7 @@
 
 from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-from hcl_mlir.dialects import math, memref, std
+from hcl_mlir.dialects import math, memref, std, scf
 from hcl_mlir.ir import *
 
 
@@ -714,6 +714,7 @@ class TensorOp(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
+            expr = get_hcl_op(expr)
             return StoreOp(expr, self, new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
@@ -1356,10 +1357,16 @@ class MaxOp(ReduceOp):
         super().__init__(op, axis, dtype)
 
 
-class ASTBuilder:
-    def __init__(self, removal=False):
+class ASTVisitor:
+    def __init__(self, mode="build"):
         self.iv = []
-        self.removal = removal
+        if mode not in ["build", "remove", "profile"]:
+            raise RuntimeError(
+                "ASTVisitor only supports build, remove, or profile mode"
+            )
+        self.mode = mode
+        self.load = []
+        self.store = []
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -1418,29 +1425,38 @@ class ASTBuilder:
             raise RuntimeError("Not an affine index!")
 
     def visit_unary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.val)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.val)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.val)
 
     def visit_binary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.lhs)
             self.visit(expr.rhs)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.lhs)
+            self.visit(expr.rhs)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.rhs)
             self.visit(expr.lhs)
 
     def visit_ternary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.cond)
             self.visit(expr.true_val)
             self.visit(expr.false_val)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.cond)
+            self.visit(expr.true_val)
+            self.visit(expr.false_val)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.false_val)
@@ -1448,6 +1464,11 @@ class ASTBuilder:
             self.visit(expr.cond)
 
     def visit_load_op(self, expr):
+        if self.mode == "remove":
+            raise RuntimeError("Cannot remove LoadOp")
+        elif self.mode == "profile":
+            self.load.append(expr)
+            return
         # create affine expressions
         self.iv = []  # clear
         exprs = []
@@ -1456,12 +1477,15 @@ class ASTBuilder:
             exprs.append(affine_expr)
         affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
         affine_attr = AffineMapAttr.get(affine_map)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build_affine(self.iv, affine_attr)
-        else:
-            raise RuntimeError("Cannot remove LoadOp")
 
     def visit_store_op(self, expr):
+        if self.mode == "remove":
+            raise RuntimeError("Cannot remove StoreOp")
+        elif self.mode == "profile":
+            self.store.append(expr)
+            return
         # create affine expressions
         self.iv = []  # clear
         exprs = []
@@ -1470,44 +1494,46 @@ class ASTBuilder:
             exprs.append(affine_expr)
         affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
         affine_attr = AffineMapAttr.get(affine_map)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build_affine(self.iv, affine_attr)
-        else:
-            raise RuntimeError("Cannot remove StoreOp")
 
     def visit_cast_op(self, expr):
-        self.visit(expr.val)
-        if not self.removal:
-            return expr.build()
-        else:
+        if self.mode == "remove":
             raise RuntimeError("Cannot remove CastOp")
+        self.visit(expr.val)
+        if self.mode == "build":
+            return expr.build()
 
     def visit_getbit_op(self, expr):
+        if self.mode == "remove":
+            raise RuntimeError("Cannot remove GetBitOp")
         self.visit(expr.num)
         self.visit(expr.index)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
-        else:
-            raise RuntimeError("Cannot remove GetBitOp")
 
     def visit_setbit_op(self, expr):
+        if self.mode == "remove":
+            raise RuntimeError("Cannot remove SetBitOp")
         self.visit(expr.num)
         self.visit(expr.index)
         self.visit(expr.val)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
-        else:
-            raise RuntimeError("Cannot remove SetBitOp")
 
     def visit_constant_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
+        elif self.mode == "profile":
+            pass
         else:
             expr.built_op.operation.erase()
 
     def visit_reduce_op(self, expr):
-        if self.removal:
+        if self.mode == "remove":
             raise RuntimeError("Cannot remove ReduceOp")
+        elif self.mode == "profile":
+            return
         # save insetion point
         save_ip = GlobalInsertionPoint.get()
 
@@ -1723,49 +1749,55 @@ def make_if(cond, ip=None):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, CmpOp):
         raise RuntimeError("`if` operation condition should be CmpOp")
-    if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
-        cond.rhs.dtype, (IntegerType, IndexType)
-    ):
-        raise RuntimeError("`affine.if` can only support integer comparison")
-    # only support affine expressions now (i.e. calculations on iteration variables)
-    if cond.arg == 0:  # eq
-        # lhs==rhs
-        eq_flags = [True]
-        new_conds = [cond.lhs - cond.rhs]
-    elif cond.arg == 1:  # ne
-        # lhs>rhs and lhs<rhs
-        raise RuntimeError("Not supported for `affine.if`")
-    elif cond.arg == 2:  # slt
-        # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
-        eq_flags = [False]
-        new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
-    elif cond.arg == 3:  # sle
-        # lhs<=rhs -> rhs-lhs>=0
-        eq_flags = [False]
-        new_conds = [cond.rhs - cond.lhs]
-    elif cond.arg == 4:  # sgt
-        # lhs>rhs -> lhs-rhs-1>=0
-        eq_flags = [False]
-        new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
-    elif cond.arg == 5:  # sge
-        # lhs>=rhs -> lhs-rhs>=0
-        eq_flags = [False]
-        new_conds = [cond.lhs - cond.rhs]
-    else:
-        raise RuntimeError("Predicate of CmpOp")
+    visitor = ASTVisitor(mode="profile")
+    visitor.visit(cond)
+    if len(visitor.load) != 0 or len(visitor.store) != 0:
+        if_op = scf.IfOp(cond.result, ip=ip)
+    else: # Affine expression
+        if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
+            cond.rhs.dtype, (IntegerType, IndexType)
+        ):
+            raise RuntimeError("`affine.if` can only support integer comparison")
+        # only support affine expressions now (i.e. calculations on iteration variables)
+        if cond.arg == 0:  # eq
+            # lhs==rhs
+            eq_flags = [True]
+            new_conds = [cond.lhs - cond.rhs]
+        elif cond.arg == 1:  # ne
+            # lhs>rhs and lhs<rhs
+            raise RuntimeError("Not supported for `affine.if`")
+        elif cond.arg == 2:  # slt
+            # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
+            eq_flags = [False]
+            new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
+        elif cond.arg == 3:  # sle
+            # lhs<=rhs -> rhs-lhs>=0
+            eq_flags = [False]
+            new_conds = [cond.rhs - cond.lhs]
+        elif cond.arg == 4:  # sgt
+            # lhs>rhs -> lhs-rhs-1>=0
+            eq_flags = [False]
+            new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
+        elif cond.arg == 5:  # sge
+            # lhs>=rhs -> lhs-rhs>=0
+            eq_flags = [False]
+            new_conds = [cond.lhs - cond.rhs]
+        else:
+            raise RuntimeError("Predicate of CmpOp")
 
-    cond.built_op.operation.erase()
-    exprs = []
-    builder = ASTBuilder()
-    for new_cond in new_conds:
-        remover = ASTBuilder(removal=True)
-        remover.visit(new_cond)
-        # rebuild condition
-        exprs.append(builder.visit_affine_expr(new_cond))
-    if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
-    attr = hcl_d.IntegerSetAttr.get(if_cond_set)
+        cond.built_op.operation.erase()
+        exprs = []
+        builder = ASTVisitor()
+        for new_cond in new_conds:
+            remover = ASTVisitor(mode="remove")
+            remover.visit(new_cond)
+            # rebuild condition
+            exprs.append(builder.visit_affine_expr(new_cond))
+        if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
+        attr = hcl_d.IntegerSetAttr.get(if_cond_set)
 
-    if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
+        if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
+
     return if_op
 
 

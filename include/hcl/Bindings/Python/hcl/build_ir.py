@@ -103,6 +103,40 @@ def get_mlir_type(dtype):
         raise RuntimeError("Unrecognized data type format")
 
 
+def get_concrete_type(dtype):
+    if IntegerType.isinstance(dtype):
+        return IntegerType(dtype)
+    elif F16Type.isinstance(dtype):
+        return F16Type(dtype)
+    elif F32Type.isinstance(dtype):
+        return F32Type(dtype)
+    elif F64Type.isinstance(dtype):
+        return F64Type(dtype)
+    elif hcl_d.FixedType.isinstance(dtype):
+        return hcl_d.FixedType(dtype)
+    elif hcl_d.UFixedType.isinstance(dtype):
+        return hcl_d.UFixedType(dtype)
+    else:
+        raise RuntimeError("Unrecognized data type")
+
+
+def get_bitwidth(dtype):
+    if IntegerType.isinstance(dtype):
+        return dtype.width
+    elif F16Type.isinstance(dtype):
+        return 16
+    elif F32Type.isinstance(dtype):
+        return 32
+    elif F64Type.isinstance(dtype):
+        return 64
+    elif hcl_d.FixedType.isinstance(dtype):
+        return dtype.width
+    elif hcl_d.UFixedType.isinstance(dtype):
+        return dtype.width
+    else:
+        raise RuntimeError("Unrecognized data type")
+
+
 def print_mlir_type(dtype):
     if is_floating_point_type(dtype):
         if dtype.width == 32:
@@ -980,6 +1014,25 @@ class NegOp(UnaryOp):
         super().__init__(
             {"float": arith.NegFOp, "int": arith.NegFOp}, dtype, val
         )  # use the same op
+
+
+class BitCastOp(UnaryOp):
+    def __init__(self, dtype, val):
+        super().__init__(arith.BitcastOp, dtype, val)
+
+    def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+            self.built_op = self.op(
+                dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        else:
+            dtype = self.dtype
+            self.built_op = self.op(
+                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+        return self.built_op
 
 
 class MathExpOp(UnaryOp):

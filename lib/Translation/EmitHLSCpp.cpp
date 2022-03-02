@@ -274,6 +274,7 @@ public:
   void emitGeneralCast(UnrealizedConversionCastOp op);
   void emitGetBit(hcl::GetIntBitOp op);
   void emitSetBit(hcl::SetIntBitOp op);
+  void emitBitcast(arith::BitcastOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -545,6 +546,7 @@ public:
   bool visitOp(arith::ExtFOp op) {
     return emitter.emitCast<arith::ExtFOp>(op), true;
   }
+  bool visitOp(arith::BitcastOp op) { return emitter.emitBitcast(op), true; }
   bool visitOp(UnrealizedConversionCastOp op) {
     return emitter.emitGeneralCast(op), true;
   }
@@ -1434,6 +1436,31 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
     emitInfoAndNewLine(op);
   } else
     emitError(op, "has unsupported constant type.");
+}
+
+void ModuleEmitter::emitBitcast(arith::BitcastOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << ";\n";
+  indent();
+  os << "union { ";
+  os << getTypeName(op.getOperand());
+  os << " from; ";
+  os << getTypeName(op.getResult());
+  os << " to;} ";
+  auto name = SmallString<32>("_converter_") + getName(op.getOperand()) +
+              SmallString<32>("_to_") + getName(op.getResult());
+  os << name << ";\n";
+  indent();
+  os << name << ".from";
+  os << " = ";
+  emitValue(op.getOperand());
+  os << ";\n";
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  os << name << ".to;";
+  emitInfoAndNewLine(op);
 }
 
 template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {

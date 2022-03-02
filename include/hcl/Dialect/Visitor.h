@@ -65,7 +65,8 @@ public:
             CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
             arith::ExtFOp, arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
-            arith::FPToSIOp, arith::FPToUIOp, UnrealizedConversionCastOp,
+            arith::FPToSIOp, arith::FPToUIOp, arith::BitcastOp,
+            UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
             hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,
@@ -199,6 +200,7 @@ public:
   HANDLE(arith::SIToFPOp);
   HANDLE(arith::FPToUIOp);
   HANDLE(arith::FPToSIOp);
+  HANDLE(arith::BitcastOp);
   HANDLE(UnrealizedConversionCastOp);
 
   // HCL operations

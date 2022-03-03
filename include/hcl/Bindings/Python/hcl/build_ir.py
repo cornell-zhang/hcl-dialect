@@ -1202,7 +1202,7 @@ class GetBitOp(ExprOp):
 class SetBitOp(ExprOp):
     def __init__(self, num, index, val):
         super().__init__(hcl_d.SetIntBitOp, None)  # No return value!
-        self.num = num
+        self.num = num  # actually a LoadOp
         if isinstance(index, int):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
@@ -1230,6 +1230,7 @@ class SetBitOp(ExprOp):
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
+        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
         return self.built_op
 
 
@@ -1302,15 +1303,15 @@ class LoadOp(ExprOp):
         #     )
         return GetBitOp(self, index)
 
-    def __setitem__(self, indices, expr):
+    def __setitem__(self, bit_idx, expr):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
-        if not isinstance(indices, tuple):
-            indices = (indices,)
-        if not len(indices) == 1:
+        if not isinstance(bit_idx, tuple):
+            bit_idx = (bit_idx,)
+        if not len(bit_idx) == 1:
             raise RuntimeError("Can only access one bit of the integer")
-        index = indices[0]
-        return SetBitOp(self, index, expr)
+        bit_idx = bit_idx[0]
+        return SetBitOp(self, bit_idx, expr)
 
 
 class StoreOp(ExprOp):

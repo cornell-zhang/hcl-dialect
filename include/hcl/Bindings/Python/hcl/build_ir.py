@@ -505,7 +505,7 @@ class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
     def __init__(self, op):
-        super().__init__(op, dtype=IndexType.get())
+        super().__init__(op, dtype="index")
         self.built_op = op
 
     def update_op(self, op):
@@ -1750,11 +1750,15 @@ class ASTVisitor:
         else:
             raise RuntimeError("Unsupported type")
         if dtype != data.result.type:
-            raise RuntimeError(
-                "Reduction variable should have the same type with the data. Got {} and {}".format(
+            print(
+                "Warning: Reduction variable should have the same type with the data. Got {} and {}. Do type casting...".format(
                     dtype, data.result.type
                 )
             )
+            placeholder = LoadOp(expr, [])
+            placeholder.built_op = data
+            data = CastOp(placeholder, dtype)
+            data.build()
         iter_reduction = reduce_op(
             data.result, load.result, ip=GlobalInsertionPoint.get()
         )

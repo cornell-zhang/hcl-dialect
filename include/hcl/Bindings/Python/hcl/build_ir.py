@@ -15,6 +15,7 @@ class HCLFlags(object):
     def __init__(self):
         self.BUILD_INPLACE = False
         self.EXTRACT_FUNCTION = False
+        self.BIT_OP = False
 
     def enable_build_inplace(self):
         self.BUILD_INPLACE = True
@@ -1196,6 +1197,7 @@ class GetBitOp(ExprOp):
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
+        flags.BIT_OP = True
         return self.built_op
 
 
@@ -1231,6 +1233,7 @@ class SetBitOp(ExprOp):
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        flags.BIT_OP = True
         return self.built_op
 
 

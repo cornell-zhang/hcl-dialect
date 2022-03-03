@@ -27,6 +27,9 @@ using namespace hcl;
 // Utils
 //===----------------------------------------------------------------------===//
 
+// used for determine whether to generate C++ default types or ap_(u)int
+static bool BIT_FLAG = false;
+
 static SmallString<16> getTypeName(Value val) {
   // Handle memref, tensor, and vector types.
   auto valType = val.getType();
@@ -43,22 +46,28 @@ static SmallString<16> getTypeName(Value val) {
   else if (valType.isa<IndexType>())
     return SmallString<16>("int");
   else if (auto intType = valType.dyn_cast<IntegerType>()) {
-    if (intType.getWidth() == 1)
-      return SmallString<16>("bool");
-    else {
-      // TODO: only generate ap types when get/set bits are called
+    if (intType.getWidth() == 1) {
+      if (!BIT_FLAG)
+        return SmallString<16>("bool");
+      else
+        return SmallString<16>("ap_uint<1>");
+    } else {
       std::string signedness = "";
       if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
         signedness = "u";
-
-      switch (intType.getWidth()) {
-      case 8:
-      case 16:
-      case 32:
-      case 64:
-        return SmallString<16>(signedness + "int" +
-                               std::to_string(intType.getWidth()) + "_t");
-      default:
+      if (!BIT_FLAG) {
+        switch (intType.getWidth()) {
+        case 8:
+        case 16:
+        case 32:
+        case 64:
+          return SmallString<16>(signedness + "int" +
+                                 std::to_string(intType.getWidth()) + "_t");
+        default:
+          return SmallString<16>("ap_" + signedness + "int<" +
+                                 std::to_string(intType.getWidth()) + ">");
+        }
+      } else {
         return SmallString<16>("ap_" + signedness + "int<" +
                                std::to_string(intType.getWidth()) + ">");
       }
@@ -1848,6 +1857,9 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
+  if (func->hasAttr("bit"))
+    BIT_FLAG = true;
+
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 

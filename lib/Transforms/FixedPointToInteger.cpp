@@ -43,13 +43,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : result_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      // size_t width;
-      // if (FixedType ft = et.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = et.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
       size_t width = 64;
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_result_types.push_back(memrefType.clone(newElementType));
@@ -59,13 +52,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : arg_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      // size_t width;
-      // if (FixedType ft = et.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = et.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
       size_t width = 64;
       Type newElementType = IntegerType::get(funcOp.getContext(), width);
       new_arg_types.push_back(memrefType.clone(newElementType));
@@ -78,13 +64,6 @@ void updateFunctionSignature(FuncOp &funcOp) {
       Type argType = block.getArgument(i).getType();
       if (MemRefType memrefType = argType.cast<MemRefType>()) {
         Type oldType = memrefType.getElementType();
-        // size_t width;
-        // if (FixedType ft = oldType.cast<FixedType>()) {
-        //   width = ft.getWidth();
-        // } else {
-        //   UFixedType uft = oldType.cast<UFixedType>();
-        //   width = uft.getWidth();
-        // }
         size_t width = 64;
         Type newType = IntegerType::get(funcOp.getContext(), width);
         Type newMemRefType = memrefType.clone(newType);
@@ -97,6 +76,12 @@ void updateFunctionSignature(FuncOp &funcOp) {
   funcOp.setType(newFuncType);
 }
 
+/* Update AffineLoad's result type
+After we changed the function arguments, affine loads's argument
+memref may change as well, which makes the affine load's result
+type different from input memref's element type. This function
+updates the result type of affine load operations
+*/
 void updateAffineLoad(FuncOp &f) {
   SmallVector<Operation *, 10> loads;
   f.walk([&](Operation *op) {
@@ -106,18 +91,7 @@ void updateAffineLoad(FuncOp &f) {
   });
 
   for (auto op : loads) {
-    // llvm::outs() << op->getOperand(0).getType() << "\n";
-    // update results
     for (auto v : llvm::enumerate(op->getResults())) {
-      // Type t = v.value().getType();
-      // size_t width;
-      // if (FixedType ft = t.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = t.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
-      // Type newType = IntegerType::get(f.getContext(), width);
       Type newType =
           op->getOperand(0).getType().cast<MemRefType>().getElementType();
       op->getResult(v.index()).setType(newType);
@@ -236,6 +210,10 @@ void updateAlloc(FuncOp &f) {
       width = ft.getWidth();
     } else if (UFixedType uft = t.cast<UFixedType>()) {
       width = uft.getWidth();
+    } else {
+      // Not a fixed-point alloc operation
+      // Return without changing anything
+      return;
     }
     Type newType = IntegerType::get(f.getContext(), width);
     Type newMemRefType = memRefType.clone(newType);
@@ -324,7 +302,7 @@ void visitOperation(Operation &op) {
 
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
     lowerFixedAdd(new_op);
-  } else if (auto new_op = dyn_cast<SubFixedOp>(op)){
+  } else if (auto new_op = dyn_cast<SubFixedOp>(op)) {
     lowerFixedSub(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
     updateAffineStore(new_op);

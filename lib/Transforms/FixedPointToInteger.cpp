@@ -169,14 +169,17 @@ void updateReturnOp(FuncOp &funcOp) {
  * accessible through operands' types.
  */
 void markFixedOperations(FuncOp &f) {
-  SmallVector<Operation *, 10> addOps;
+  SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<AddFixedOp>(op)) {
-      addOps.push_back(op);
+    // if (auto add_op = dyn_cast<AddFixedOp>(op)) {
+    //   addOps.push_back(op);
+    // }
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp, MaxFixedOp>(op)) {
+      fixedOps.push_back(op);
     }
   });
   // set attribute to addOps
-  for (auto op : addOps) {
+  for (auto op : fixedOps) {
     // FixedAddOps are binary ops, they have two operands
     Value opr_l = op->getOperand(0);
     Value opr_r = op->getOperand(1);
@@ -280,15 +283,9 @@ void lowerFixedAdd(AddFixedOp &op) {
   auto resfrac =
       op->getAttr("resfrac").cast<IntegerAttr>().getValue().getSExtValue();
 
-  // llvm::outs() << "operation: " << op->getName()
-  //   << ", lwidth=" << lwidth << ", lfrac=" << lfrac
-  //   << ", rwidth=" << rwidth << ", rfrac=" << rfrac
-  //   << ", reswidth=" << reswidth << ", resfrac=" << resfrac
-  //   << "\n";
-
   OpBuilder rewriter(op);
 
-  // Cast lhs and rhs
+  /// Step 1: Cast lhs and rhs
   Value lhs, rhs;
   size_t width = lwidth > rwidth ? lwidth : rwidth; 
   Type newType = IntegerType::get(op->getContext(), width);
@@ -306,6 +303,7 @@ void lowerFixedAdd(AddFixedOp &op) {
     // truncate bits
     rhs = rewriter.create<arith::TruncIOp>(op->getLoc(), newType, opr_r);
   }
+
 
   // Change result type
   IntegerType resType =

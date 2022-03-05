@@ -338,20 +338,95 @@ void lowerFixedCmp(CmpFixedOp &op) {
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(0), width);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(2), width);
+                               op->getOperand(1), width);
 
-  arith::CmpIOp newOp = rewriter.create<arith::CmpIOp>(op->getLoc(), op->getOperand(0), lhs, rhs);
+  auto prednum = op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
+  auto loc = op->getLoc();
+  arith::CmpIOp newOp;
+  switch (prednum) {
+    case 0:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
+      break;
+    case 1:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);  
+      break;
+    case 2:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);  
+      break;
+    case 3:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);  
+      break;
+    case 4:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);  
+      break;
+    case 5:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);  
+      break;
+    case 6:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);  
+      break;
+    case 7:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);  
+      break;
+    case 8:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);  
+      break;
+    case 9:
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);  
+      break;
+    default:
+      llvm::errs() << "unknown predicate code in CmpFixedOp\n";
+  }
+  
   op->replaceAllUsesWith(newOp);
 }
 
+// Lower MinFixedOp to MinSIOp or MinUIOp 
 void lowerFixedMin(MinFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
 
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(2), width);
+  
+  Type opTy = op->getOperand(0).getType();
+  if (opTy.isa<FixedType>()) {
+    // use signed integer min
+    auto res = rewriter.create<arith::MinSIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  } else {
+    // use unsigned integer min
+    auto res = rewriter.create<arith::MinUIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  }
 }
 
+// Lower MaxFixedOp to MaxSIOp or MaxUIOp
 void lowerFixedMax(MaxFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
 
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(2), width);
+  
+  Type opTy = op->getOperand(0).getType();
+  if (opTy.isa<FixedType>()) {
+    // use signed integer max
+    auto res = rewriter.create<arith::MaxSIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  } else {
+    // use unsigned integer max
+    auto res = rewriter.create<arith::MaxUIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  }
 }
 
 /// Visitors to recursively update all operations

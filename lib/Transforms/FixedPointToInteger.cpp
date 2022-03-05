@@ -317,7 +317,6 @@ void lowerFixedMul(MulFixedOp &op) {
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
-
   
   if (opTy.isa<FixedType>()) {
     // use signed right shift
@@ -332,6 +331,29 @@ void lowerFixedMul(MulFixedOp &op) {
   }
 }
 
+// Lower CmpFixedOp to CmpIOp
+void lowerFixedCmp(CmpFixedOp &op) {
+  // size_t width =
+  //     op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  // OpBuilder rewriter(op);
+
+  // Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+  //                              op->getOperand(0), width);
+  // Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+  //                              op->getOperand(1), width);
+
+  // arith::SubIOp newOp = rewriter.create<arith::SubIOp>(op->getLoc(), lhs, rhs);
+  // op->replaceAllUsesWith(newOp);
+}
+
+void lowerFixedMin(MinFixedOp &op) {
+
+}
+
+void lowerFixedMax(MaxFixedOp &op) {
+
+}
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);
@@ -344,6 +366,12 @@ void visitOperation(Operation &op) {
     lowerFixedSub(new_op);
   } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
     lowerFixedMul(new_op);
+  } else if (auto new_op = dyn_cast<CmpFixedOp>(op)) {
+    lowerFixedCmp(new_op);
+  } else if (auto new_op = dyn_cast<MinFixedOp>(op)) {
+    lowerFixedMin(new_op);
+  } else if (auto new_op = dyn_cast<MaxFixedOp>(op)) {
+    lowerFixedMax(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
     updateAffineStore(new_op);
   }
@@ -357,7 +385,7 @@ void visitBlock(Block &block) {
   SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
-    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp, MaxFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }

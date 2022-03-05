@@ -43,18 +43,30 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : result_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      size_t width = 64;
-      Type newElementType = IntegerType::get(funcOp.getContext(), width);
-      new_result_types.push_back(memrefType.clone(newElementType));
+      // If result memref element type is fixed
+      // change it to i64 to be compatible with numpy
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_result_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_result_types.push_back(memrefType);
+      }
     }
   }
 
   for (Type t : arg_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      size_t width = 64;
-      Type newElementType = IntegerType::get(funcOp.getContext(), width);
-      new_arg_types.push_back(memrefType.clone(newElementType));
+      // If argument memref element type is fixed
+      // change it to i64 to be compatible with numpy
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_arg_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_arg_types.push_back(memrefType);
+      }
     }
   }
 
@@ -63,14 +75,18 @@ void updateFunctionSignature(FuncOp &funcOp) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
       if (MemRefType memrefType = argType.cast<MemRefType>()) {
-        Type oldType = memrefType.getElementType();
-        size_t width = 64;
-        Type newType = IntegerType::get(funcOp.getContext(), width);
-        Type newMemRefType = memrefType.clone(newType);
-        block.getArgument(i).setType(newMemRefType);
+        Type et = memrefType.getElementType();
+        if (et.isa<FixedType, UFixedType>()) {
+          size_t width = 64;
+          Type newType = IntegerType::get(funcOp.getContext(), width);
+          Type newMemRefType = memrefType.clone(newType);
+          block.getArgument(i).setType(newMemRefType);
+        }
       }
     }
   }
+
+  // Update function signature
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
@@ -99,6 +115,10 @@ void updateAffineLoad(FuncOp &f) {
   }
 }
 
+/* Update Return Op's arguement value to be i64 memref
+ * Check ReturnOp's argument, if it is an AllocOp and
+ * it's type is not i64 memref, update it to be i64 memeref
+ */
 void updateReturnOp(FuncOp &funcOp) {
   // Update FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
@@ -113,25 +133,12 @@ void updateReturnOp(FuncOp &funcOp) {
     Type etype = type.getElementType();
     Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
     if (etype != newType) {
-      // create cast nodes
-      // Lesson learned: OpBuilder has to be in the right scope
-      // OpBuilder builder(op);
-      // auto width = etype.dyn_cast<IntegerType>().getWidth();
-      // llvm::outs() << width << "\n";
-      Value arg = op->getOperand(0);
-      auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp());
-      allocOp->getResult(0).setType(newType);
-      // if (width > 64) {
-      // Value new_res = builder.create<arith::TruncIOp>(op->getLoc(), newType,
-      // op->getOperand(0)); op->setOperand(0, new_res);
-      // } else {
-      // llvm::outs() << arg << "\n";
-      // Value res = builder.create<arith::ExtSIOp>(op->getLoc(), newType, arg);
-      // builder.create<ReturnOp>(op->getLoc(), res);
-      // llvm::outs() << res << "\n";
-      // llvm::outs() << funcOp << "\n";
-      // op->setOperand(0, new_res);
-      // }
+      for (unsigned i = 0; i < op->getNumOperands(); i++) {
+        Value arg = op->getOperand(i);
+        if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+          allocOp->getResult(0).setType(newType);
+        }
+      }
     }
   }
 }
@@ -267,14 +274,11 @@ void lowerFixedAdd(AddFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width);
 
-  // Change result type to integer
-  IntegerType resTy = IntegerType::get(op->getContext(), width);
-  op->getResult(0).setType(resTy);
   arith::AddIOp newOp = rewriter.create<arith::AddIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);
 }
 
-// Lower AddSubOp to SubIOp
+// Lower FixedSubOp to SubIOp
 void lowerFixedSub(SubFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
@@ -285,11 +289,47 @@ void lowerFixedSub(SubFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width);
 
-  // Change result type to integer
-  IntegerType resTy = IntegerType::get(op->getContext(), width);
-  op->getResult(0).setType(resTy);
   arith::SubIOp newOp = rewriter.create<arith::SubIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);
+}
+
+// Lower MulFixedop to MulIOp
+void lowerFixedMul(MulFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t frac =
+      op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
+
+  OpBuilder rewriter(op);
+
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+
+  arith::MulIOp newOp = rewriter.create<arith::MulIOp>(op->getLoc(), lhs, rhs);
+
+  // lhs<width, frac> * rhs<width, frac> -> res<width, 2*frac>
+  // Therefore, we need to right shift the result for frac bit
+  // Right shift needs to consider signed/unsigned
+  Type opTy = op->getOperand(0).getType();
+  IntegerType intTy = IntegerType::get(op->getContext(), 32);
+  auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
+  auto fracCstOp =
+      rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
+
+  
+  if (opTy.isa<FixedType>()) {
+    // use signed right shift
+    arith::ShRSIOp res =
+        rewriter.create<arith::ShRSIOp>(op->getLoc(), newOp, fracCstOp);
+    op->replaceAllUsesWith(res);
+  } else {
+    // use unsigned right shift
+    arith::ShRUIOp res =
+        rewriter.create<arith::ShRUIOp>(op->getLoc(), newOp, fracCstOp);
+    op->replaceAllUsesWith(res);
+  }
 }
 
 /// Visitors to recursively update all operations
@@ -298,12 +338,12 @@ void visitRegion(Region &region);
 void visitBlock(Block &block);
 
 void visitOperation(Operation &op) {
-  SmallVector<Operation *, 10> opToRemove;
-
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
     lowerFixedAdd(new_op);
   } else if (auto new_op = dyn_cast<SubFixedOp>(op)) {
     lowerFixedSub(new_op);
+  } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
+    lowerFixedMul(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
     updateAffineStore(new_op);
   }
@@ -317,11 +357,13 @@ void visitBlock(Block &block) {
   SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
-    if (llvm::isa<AddFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }
 
+  // Remove fixed-point operations after the block
+  // is visited. 
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -346,6 +388,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
+    llvm::outs() << func << "\n";
   }
 
   return true;

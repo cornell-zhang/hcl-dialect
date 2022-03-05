@@ -129,12 +129,12 @@ void updateReturnOp(FuncOp &funcOp) {
   });
   // If return op is not int64, we need to add a cast node
   for (auto op : returnOps) {
-    MemRefType type = op->getOperand(0).getType().cast<MemRefType>();
-    Type etype = type.getElementType();
-    Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-    if (etype != newType) {
-      for (unsigned i = 0; i < op->getNumOperands(); i++) {
-        Value arg = op->getOperand(i);
+    for (unsigned i = 0; i < op->getNumOperands(); i++) {
+      Value arg = op->getOperand(i);
+      MemRefType type = arg.getType().cast<MemRefType>();
+      Type etype = type.getElementType();
+      Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
+      if (etype != newType) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
           allocOp->getResult(0).setType(newType);
         }
@@ -487,7 +487,9 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateFunctionSignature(func);
     updateAffineLoad(func);
     updateAlloc(func);
+    llvm::outs() << "before updateReturnOp\n";
     updateReturnOp(func);
+    llvm::outs() << "after updateReturnOp\n";
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }

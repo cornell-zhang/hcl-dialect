@@ -1,5 +1,16 @@
-// RUN: hcl-opt %s
+// RUN: hcl-opt %s --fixed-to-integer
 module {
+  func @no_return(%arg0: memref<10x!hcl.Fixed<32, 2>>, %arg1: memref<10x!hcl.Fixed<32, 2>>, %arg3: memref<10x!hcl.Fixed<32, 2>>) -> () {
+    affine.for %arg2 = 0 to 10 {
+      %1 = affine.load %arg0[%arg2] {from = "compute_0"} : memref<10x!hcl.Fixed<32, 2>>
+      %2 = affine.load %arg1[%arg2] {from = "compute_1"} : memref<10x!hcl.Fixed<32, 2>>
+      %3 = "hcl.add_fixed"(%1, %2) : (!hcl.Fixed<32, 2>, !hcl.Fixed<32, 2>) -> !hcl.Fixed<32, 2>
+      affine.store %3, %arg3[%arg2] {to = "compute_2"} : memref<10x!hcl.Fixed<32, 2>>
+    } {loop_name = "x", stage_name = "compute_2"}
+    return
+  }
+
+
   func @top_vadd(%arg0: memref<10x!hcl.Fixed<32, 2>>, %arg1: memref<10x!hcl.Fixed<32, 2>>) -> memref<10x!hcl.Fixed<32, 2>> {
     %0 = memref.alloc() {name = "compute_2"} : memref<10x!hcl.Fixed<32, 2>>
     affine.for %arg2 = 0 to 10 {
@@ -10,6 +21,7 @@ module {
     } {loop_name = "x", stage_name = "compute_2"}
     return %0 : memref<10x!hcl.Fixed<32, 2>>
   }
+
 
   func @top_vmul(%arg0: memref<10x!hcl.Fixed<32, 2>>, %arg1: memref<10x!hcl.Fixed<32, 2>>) -> memref<10x!hcl.Fixed<32, 2>> {
     %0 = memref.alloc() {name = "compute_2"} : memref<10x!hcl.Fixed<32, 2>>

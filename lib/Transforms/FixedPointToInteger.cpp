@@ -233,6 +233,9 @@ void updateAffineStore(AffineStoreOp &op) {
   Type memRefEleTyp =
       op->getOperand(1).getType().cast<MemRefType>().getElementType();
   OpBuilder builder(op);
+  if (!valueTyp.isa<IntegerType>() || !memRefEleTyp.isa<IntegerType>()) {
+    return;
+  }
   if (valueTyp.cast<IntegerType>().getWidth() <
       memRefEleTyp.cast<IntegerType>().getWidth()) {
     // extend

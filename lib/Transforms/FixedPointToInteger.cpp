@@ -333,17 +333,17 @@ void lowerFixedMul(MulFixedOp &op) {
 
 // Lower CmpFixedOp to CmpIOp
 void lowerFixedCmp(CmpFixedOp &op) {
-  // size_t width =
-  //     op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
-  // OpBuilder rewriter(op);
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
 
-  // Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-  //                              op->getOperand(0), width);
-  // Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-  //                              op->getOperand(1), width);
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(2), width);
 
-  // arith::SubIOp newOp = rewriter.create<arith::SubIOp>(op->getLoc(), lhs, rhs);
-  // op->replaceAllUsesWith(newOp);
+  arith::CmpIOp newOp = rewriter.create<arith::CmpIOp>(op->getLoc(), op->getOperand(0), lhs, rhs);
+  op->replaceAllUsesWith(newOp);
 }
 
 void lowerFixedMin(MinFixedOp &op) {

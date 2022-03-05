@@ -134,7 +134,7 @@ void updateReturnOp(FuncOp &funcOp) {
       MemRefType type = arg.getType().cast<MemRefType>();
       Type etype = type.getElementType();
       Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-      if (etype != newType) {
+      if (etype != newType and etype.isa<FixedType, UFixedType>()) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
           allocOp->getResult(0).setType(newType);
         }
@@ -213,9 +213,9 @@ void updateAlloc(FuncOp &f) {
     MemRefType memRefType = allocOp.getType().cast<MemRefType>();
     Type t = memRefType.getElementType();
     size_t width;
-    if (FixedType ft = t.cast<FixedType>()) {
+    if (auto ft = t.dyn_cast_or_null<FixedType>()) {
       width = ft.getWidth();
-    } else if (UFixedType uft = t.cast<UFixedType>()) {
+    } else if (auto uft = t.dyn_cast_or_null<UFixedType>()) {
       width = uft.getWidth();
     } else {
       // Not a fixed-point alloc operation
@@ -239,7 +239,8 @@ void updateAffineStore(AffineStoreOp &op) {
     Value v = builder.create<arith::ExtSIOp>(op->getLoc(), memRefEleTyp,
                                              op->getOperand(0));
     op->setOperand(0, v);
-  } else {
+  } else if (valueTyp.cast<IntegerType>().getWidth() >
+             memRefEleTyp.cast<IntegerType>().getWidth()) {
     // truncate
     Value v = builder.create<arith::TruncIOp>(op->getLoc(), memRefEleTyp,
                                               op->getOperand(0));
@@ -317,7 +318,7 @@ void lowerFixedMul(MulFixedOp &op) {
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
-  
+
   if (opTy.isa<FixedType>()) {
     // use signed right shift
     arith::ShRSIOp res =
@@ -342,48 +343,49 @@ void lowerFixedCmp(CmpFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width);
 
-  auto prednum = op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
+  auto prednum =
+      op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
   auto loc = op->getLoc();
   arith::CmpIOp newOp;
   switch (prednum) {
-    case 0:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
-      break;
-    case 1:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);  
-      break;
-    case 2:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);  
-      break;
-    case 3:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);  
-      break;
-    case 4:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);  
-      break;
-    case 5:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);  
-      break;
-    case 6:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);  
-      break;
-    case 7:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);  
-      break;
-    case 8:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);  
-      break;
-    case 9:
-      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);  
-      break;
-    default:
-      llvm::errs() << "unknown predicate code in CmpFixedOp\n";
+  case 0:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
+    break;
+  case 1:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
+    break;
+  case 2:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);
+    break;
+  case 3:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);
+    break;
+  case 4:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);
+    break;
+  case 5:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);
+    break;
+  case 6:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);
+    break;
+  case 7:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);
+    break;
+  case 8:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);
+    break;
+  case 9:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);
+    break;
+  default:
+    llvm::errs() << "unknown predicate code in CmpFixedOp\n";
   }
-  
+
   op->replaceAllUsesWith(newOp);
 }
 
-// Lower MinFixedOp to MinSIOp or MinUIOp 
+// Lower MinFixedOp to MinSIOp or MinUIOp
 void lowerFixedMin(MinFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
@@ -393,7 +395,7 @@ void lowerFixedMin(MinFixedOp &op) {
                                op->getOperand(1), width);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(2), width);
-  
+
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {
     // use signed integer min
@@ -416,7 +418,7 @@ void lowerFixedMax(MaxFixedOp &op) {
                                op->getOperand(1), width);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(2), width);
-  
+
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {
     // use signed integer max
@@ -460,13 +462,14 @@ void visitBlock(Block &block) {
   SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
-    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp, MaxFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp,
+                  MaxFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }
 
   // Remove fixed-point operations after the block
-  // is visited. 
+  // is visited.
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -486,14 +489,11 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     markFixedOperations(func);
     updateFunctionSignature(func);
     updateAffineLoad(func);
-    updateAlloc(func);
-    llvm::outs() << "before updateReturnOp\n";
     updateReturnOp(func);
-    llvm::outs() << "after updateReturnOp\n";
+    updateAlloc(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
-    llvm::outs() << func << "\n";
   }
 
   return true;

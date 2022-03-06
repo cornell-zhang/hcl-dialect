@@ -57,14 +57,16 @@ public:
             // Integer binary expressions.
             arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
             arith::DivSIOp, arith::RemSIOp, arith::DivUIOp, arith::RemUIOp,
+            arith::MaxSIOp, arith::MinSIOp, arith::MaxUIOp, arith::MinUIOp,
             // Logical expressions.
             arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
             arith::ShRSIOp, arith::ShRUIOp, hcl::GetIntBitOp, hcl::SetIntBitOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
-            arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
-            arith::FPToSIOp, arith::FPToUIOp, UnrealizedConversionCastOp,
+            arith::ExtFOp, arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
+            arith::FPToSIOp, arith::FPToUIOp, arith::BitcastOp,
+            UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
             hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,
@@ -167,6 +169,10 @@ public:
   HANDLE(arith::RemSIOp);
   HANDLE(arith::DivUIOp);
   HANDLE(arith::RemUIOp);
+  HANDLE(arith::MaxSIOp);
+  HANDLE(arith::MinSIOp);
+  HANDLE(arith::MaxUIOp);
+  HANDLE(arith::MinUIOp);
 
   // Logical expressions.
   HANDLE(arith::XOrIOp);
@@ -194,6 +200,7 @@ public:
   HANDLE(arith::SIToFPOp);
   HANDLE(arith::FPToUIOp);
   HANDLE(arith::FPToSIOp);
+  HANDLE(arith::BitcastOp);
   HANDLE(UnrealizedConversionCastOp);
 
   // HCL operations

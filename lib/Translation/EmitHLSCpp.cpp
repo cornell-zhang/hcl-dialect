@@ -27,6 +27,9 @@ using namespace hcl;
 // Utils
 //===----------------------------------------------------------------------===//
 
+// used for determine whether to generate C++ default types or ap_(u)int
+static bool BIT_FLAG = false;
+
 static SmallString<16> getTypeName(Value val) {
   // Handle memref, tensor, and vector types.
   auto valType = val.getType();
@@ -43,22 +46,28 @@ static SmallString<16> getTypeName(Value val) {
   else if (valType.isa<IndexType>())
     return SmallString<16>("int");
   else if (auto intType = valType.dyn_cast<IntegerType>()) {
-    if (intType.getWidth() == 1)
-      return SmallString<16>("bool");
-    else {
-      // TODO: only generate ap types when get/set bits are called
+    if (intType.getWidth() == 1) {
+      if (!BIT_FLAG)
+        return SmallString<16>("bool");
+      else
+        return SmallString<16>("ap_uint<1>");
+    } else {
       std::string signedness = "";
       if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
         signedness = "u";
-
-      switch (intType.getWidth()) {
-      case 8:
-      case 16:
-      case 32:
-      case 64:
-        return SmallString<16>(signedness + "int" +
-                               std::to_string(intType.getWidth()) + "_t");
-      default:
+      if (!BIT_FLAG) {
+        switch (intType.getWidth()) {
+        case 8:
+        case 16:
+        case 32:
+        case 64:
+          return SmallString<16>(signedness + "int" +
+                                 std::to_string(intType.getWidth()) + "_t");
+        default:
+          return SmallString<16>("ap_" + signedness + "int<" +
+                                 std::to_string(intType.getWidth()) + ">");
+        }
+      } else {
         return SmallString<16>("ap_" + signedness + "int<" +
                                std::to_string(intType.getWidth()) + ">");
       }
@@ -79,6 +88,27 @@ static SmallString<16> getTypeName(Value val) {
     val.getDefiningOp()->emitError("has unsupported type.");
 
   return SmallString<16>();
+}
+
+void fixUnsignedType(Value &result, bool isUnsigned) {
+  if (isUnsigned) { // unsigned type
+    if (result.getType().isa<MemRefType>()) {
+      auto arrayType = result.getType().dyn_cast<MemRefType>();
+      Type elt = IntegerType::get(
+          arrayType.getContext(),
+          arrayType.getElementType().cast<IntegerType>().getWidth(),
+          IntegerType::SignednessSemantics::Unsigned);
+      result.setType(MemRefType::get(arrayType.getShape(), elt,
+                                     arrayType.getLayout(),
+                                     arrayType.getMemorySpace()));
+    } else if (result.getType().isa<IntegerType>()) {
+      Type type =
+          IntegerType::get(result.getType().getContext(),
+                           result.getType().cast<IntegerType>().getWidth(),
+                           IntegerType::SignednessSemantics::Unsigned);
+      result.setType(type);
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -243,7 +273,7 @@ public:
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
   void emitPower(Operation *op);
-  void emitMinMax(Operation *op, const char *syntax);
+  void emitMaxMin(Operation *op, const char *syntax);
 
   /// Special operation emitters.
   void emitCall(CallOp op);
@@ -253,6 +283,7 @@ public:
   void emitGeneralCast(UnrealizedConversionCastOp op);
   void emitGetBit(hcl::GetIntBitOp op);
   void emitSetBit(hcl::SetIntBitOp op);
+  void emitBitcast(arith::BitcastOp op);
 
   /// Top-level MLIR module emitter.
   void emitModule(ModuleOp module);
@@ -446,6 +477,18 @@ public:
   bool visitOp(arith::RemSIOp op) { return emitter.emitBinary(op, "%"), true; }
   bool visitOp(arith::DivUIOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemUIOp op) { return emitter.emitBinary(op, "%"), true; }
+  bool visitOp(arith::MaxSIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinSIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
+  bool visitOp(arith::MaxUIOp op) {
+    return emitter.emitMaxMin(op, "max"), true;
+  }
+  bool visitOp(arith::MinUIOp op) {
+    return emitter.emitMaxMin(op, "min"), true;
+  }
 
   /// Logical expressions.
   bool visitOp(arith::XOrIOp op) { return emitter.emitBinary(op, "^"), true; }
@@ -497,6 +540,22 @@ public:
   bool visitOp(arith::FPToSIOp op) {
     return emitter.emitCast<arith::FPToSIOp>(op), true;
   }
+  bool visitOp(arith::TruncIOp op) {
+    return emitter.emitCast<arith::TruncIOp>(op), true;
+  }
+  bool visitOp(arith::TruncFOp op) {
+    return emitter.emitCast<arith::TruncFOp>(op), true;
+  }
+  bool visitOp(arith::ExtSIOp op) {
+    return emitter.emitCast<arith::ExtSIOp>(op), true;
+  }
+  bool visitOp(arith::ExtUIOp op) {
+    return emitter.emitCast<arith::ExtUIOp>(op), true;
+  }
+  bool visitOp(arith::ExtFOp op) {
+    return emitter.emitCast<arith::ExtFOp>(op), true;
+  }
+  bool visitOp(arith::BitcastOp op) { return emitter.emitBitcast(op), true; }
   bool visitOp(UnrealizedConversionCastOp op) {
     return emitter.emitGeneralCast(op), true;
   }
@@ -511,10 +570,10 @@ public:
   bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(hcl::CmpFixedOp op);
   bool visitOp(hcl::MinFixedOp op) {
-    return emitter.emitMinMax(op, "min"), true;
+    return emitter.emitMaxMin(op, "min"), true;
   }
   bool visitOp(hcl::MaxFixedOp op) {
-    return emitter.emitMinMax(op, "max"), true;
+    return emitter.emitMaxMin(op, "max"), true;
   }
 
 private:
@@ -908,7 +967,9 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   if (op->hasAttr("from")) {
     load_from_name = op->getAttr("from").cast<StringAttr>().getValue().str();
   }
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   auto memref = op.getMemRef();
   emitValue(memref, 0, false, load_from_name);
@@ -1104,15 +1165,19 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   }
 
   indent();
-  emitArrayDecl(op.getResult(), false, name);
+  Value result = op.getResult(); // memref
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitArrayDecl(result, false, name);
   os << ";";
   emitInfoAndNewLine(op);
-  emitArrayDirectives(op.getResult());
+  emitArrayDirectives(result);
 }
 
 void ModuleEmitter::emitLoad(memref::LoadOp op) {
   indent();
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   auto memref = op.getMemRef();
   emitValue(memref);
@@ -1232,7 +1297,9 @@ void ModuleEmitter::emitRank(memref::RankOp op) {
 void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = ";
   emitValue(op->getOperand(0), rank);
   os << " " << syntax << " ";
@@ -1245,7 +1312,9 @@ void ModuleEmitter::emitBinary(Operation *op, const char *syntax) {
 void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
   os << ");";
@@ -1267,10 +1336,12 @@ void ModuleEmitter::emitPower(Operation *op) {
 }
 
 /// Special operation emitters.
-void ModuleEmitter::emitMinMax(Operation *op, const char *syntax) {
+void ModuleEmitter::emitMaxMin(Operation *op, const char *syntax) {
   auto rank = emitNestedLoopHead(op->getResult(0));
   indent();
-  emitValue(op->getResult(0), rank);
+  Value result = op->getResult(0);
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
   os << ", ";
@@ -1282,7 +1353,9 @@ void ModuleEmitter::emitMinMax(Operation *op, const char *syntax) {
 
 void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
   indent();
-  emitValue(op.getResult());
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
   os << " = ";
   emitValue(op.num());
   os << "[";
@@ -1309,7 +1382,9 @@ void ModuleEmitter::emitSelect(SelectOp op) {
     conditionRank = 0;
 
   indent();
-  emitValue(op.getResult(), rank);
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, rank);
   os << " = ";
   emitValue(op.getCondition(), conditionRank);
   os << " ? ";
@@ -1330,7 +1405,9 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
 
   if (auto denseAttr = op.getValue().dyn_cast<DenseElementsAttr>()) {
     indent();
-    emitArrayDecl(op.getResult());
+    Value result = op.getResult(); // memref
+    fixUnsignedType(result, op->hasAttr("unsigned"));
+    emitArrayDecl(result);
     os << " = {";
     auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
@@ -1368,6 +1445,31 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
     emitInfoAndNewLine(op);
   } else
     emitError(op, "has unsupported constant type.");
+}
+
+void ModuleEmitter::emitBitcast(arith::BitcastOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << ";\n";
+  indent();
+  os << "union { ";
+  os << getTypeName(op.getOperand());
+  os << " from; ";
+  os << getTypeName(op.getResult());
+  os << " to;} ";
+  auto name = SmallString<32>("_converter_") + getName(op.getOperand()) +
+              SmallString<32>("_to_") + getName(op.getResult());
+  os << name << ";\n";
+  indent();
+  os << name << ".from";
+  os << " = ";
+  emitValue(op.getOperand());
+  os << ";\n";
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  os << name << ".to;";
+  emitInfoAndNewLine(op);
 }
 
 template <typename CastOpType> void ModuleEmitter::emitCast(CastOpType op) {
@@ -1755,6 +1857,9 @@ void ModuleEmitter::emitFunctionDirectives(FuncOp func,
 }
 
 void ModuleEmitter::emitFunction(FuncOp func) {
+  if (func->hasAttr("bit"))
+    BIT_FLAG = true;
+
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
 
@@ -1782,18 +1887,29 @@ void ModuleEmitter::emitFunction(FuncOp func) {
     // suppose only one output
     input_args.push_back(output_names);
   }
+  std::string extra_itypes = "";
+  if (func->hasAttr("extra_itypes"))
+    extra_itypes =
+        func->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  else {
+    for (unsigned i = 0; i < func.getNumArguments(); ++i)
+      extra_itypes += "x";
+  }
   for (auto &arg : func.getArguments()) {
     indent();
-    if (input_args.size() == 0) {
-      if (arg.getType().isa<ShapedType>())
+    fixUnsignedType(arg, extra_itypes[argIdx] == 'u');
+    if (arg.getType().isa<ShapedType>()) {
+      if (input_args.size() == 0) {
         emitArrayDecl(arg, true);
-      else
-        emitValue(arg);
-    } else {
-      if (arg.getType().isa<ShapedType>())
+      } else {
         emitArrayDecl(arg, true, input_args[argIdx]);
-      else
+      }
+    } else {
+      if (input_args.size() == 0) {
+        emitValue(arg);
+      } else {
         emitValue(arg, 0, false, input_args[argIdx]);
+      }
     }
 
     portList.push_back(arg);
@@ -1803,29 +1919,40 @@ void ModuleEmitter::emitFunction(FuncOp func) {
 
   // Emit results.
   auto args = func.getArguments();
+  std::string extra_otypes = "";
+  if (func->hasAttr("extra_otypes"))
+    extra_otypes =
+        func->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  else {
+    for (unsigned i = 0; i < func.getNumArguments(); ++i)
+      extra_otypes += "x";
+  }
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
+    unsigned idx = 0;
     for (auto result : funcReturn.getOperands()) {
       if (std::find(args.begin(), args.end(), result) == args.end()) {
         os << ",\n";
         indent();
-        if (output_names != "") {
-          // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
-          // : index, index. However, typically this should not happen.
-          if (result.getType().isa<ShapedType>())
+
+        // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
+        // : index, index. However, typically this should not happen.
+        fixUnsignedType(result, extra_otypes[idx] == 'u');
+        if (result.getType().isa<ShapedType>()) {
+          if (output_names != "")
             emitArrayDecl(result, true);
           else
-            // In Vivado HLS, pointer indicates the value is an output.
-            emitValue(result, /*rank=*/0, /*isPtr=*/true);
-        } else {
-          if (result.getType().isa<ShapedType>())
             emitArrayDecl(result, true, output_names);
+        } else {
+          // In Vivado HLS, pointer indicates the value is an output.
+          if (output_names != "")
+            emitValue(result, /*rank=*/0, /*isPtr=*/true);
           else
-            // In Vivado HLS, pointer indicates the value is an output.
             emitValue(result, /*rank=*/0, /*isPtr=*/true, output_names);
         }
 
         portList.push_back(result);
       }
+      idx += 1;
     }
   } else
     emitError(func, "doesn't have a return operation as terminator.");

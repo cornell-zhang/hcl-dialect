@@ -7,7 +7,7 @@
 
 from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-from hcl_mlir.dialects import math, memref, std
+from hcl_mlir.dialects import math, memref, std, scf
 from hcl_mlir.ir import *
 
 
@@ -15,6 +15,7 @@ class HCLFlags(object):
     def __init__(self):
         self.BUILD_INPLACE = False
         self.EXTRACT_FUNCTION = False
+        self.BIT_OP = False
 
     def enable_build_inplace(self):
         self.BUILD_INPLACE = True
@@ -22,10 +23,18 @@ class HCLFlags(object):
     def disable_build_inplace(self):
         self.BUILD_INPLACE = False
 
+    def is_build_inplace(self):
+        return self.BUILD_INPLACE
+
+    def reset(self):
+        self.BUILD_INPLACE = False
+
 
 flags = HCLFlags()
 enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
+is_build_inplace = flags.is_build_inplace
+reset_build_inplace = flags.reset
 EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
 
 
@@ -93,6 +102,40 @@ def get_mlir_type(dtype):
             raise RuntimeError("Unrecognized data type")
     else:
         raise RuntimeError("Unrecognized data type format")
+
+
+def get_concrete_type(dtype):
+    if IntegerType.isinstance(dtype):
+        return IntegerType(dtype)
+    elif F16Type.isinstance(dtype):
+        return F16Type(dtype)
+    elif F32Type.isinstance(dtype):
+        return F32Type(dtype)
+    elif F64Type.isinstance(dtype):
+        return F64Type(dtype)
+    elif hcl_d.FixedType.isinstance(dtype):
+        return hcl_d.FixedType(dtype)
+    elif hcl_d.UFixedType.isinstance(dtype):
+        return hcl_d.UFixedType(dtype)
+    else:
+        raise RuntimeError("Unrecognized data type")
+
+
+def get_bitwidth(dtype):
+    if IntegerType.isinstance(dtype):
+        return dtype.width
+    elif F16Type.isinstance(dtype):
+        return 16
+    elif F32Type.isinstance(dtype):
+        return 32
+    elif F64Type.isinstance(dtype):
+        return 64
+    elif hcl_d.FixedType.isinstance(dtype):
+        return dtype.width
+    elif hcl_d.UFixedType.isinstance(dtype):
+        return dtype.width
+    else:
+        raise RuntimeError("Unrecognized data type")
 
 
 def print_mlir_type(dtype):
@@ -512,9 +555,16 @@ class ConstantOp(ExprOp):
                 value_attr = IntegerAttr.get(IndexType.get(), self.val)
             else:
                 raise RuntimeError("Type error")
-            self.built_op = self.op(
-                self.dtype, value_attr, ip=GlobalInsertionPoint.get()
-            )
+            if is_unsigned_type(self.dtype):
+                dtype = IntegerType.get_signless(self.dtype.width)
+                self.built_op = self.op(
+                    dtype, value_attr, ip=GlobalInsertionPoint.get()
+                )
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
+            else:
+                self.built_op = self.op(
+                    self.dtype, value_attr, ip=GlobalInsertionPoint.get()
+                )
             return self.built_op
         else:  # fixed types
             if isinstance(self.val, float):
@@ -618,6 +668,8 @@ class TensorOp(ExprOp):
             self.built_op = self.op(
                 self.memref_type, [], [], None, ip=GlobalInsertionPoint.get()
             )
+            if is_unsigned_type(self.dtype):
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
             self.built_op.attributes["name"] = StringAttr.get(self.name)
         elif isinstance(self.op, BlockArgument):
             self.built_op = self.op
@@ -634,7 +686,12 @@ class TensorOp(ExprOp):
 
     @property
     def memref_type(self):
-        return MemRefType.get(self.shape, get_mlir_type(self.dtype))
+        dtype = get_mlir_type(self.dtype)
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
+        return MemRefType.get(self.shape, dtype)
 
     def set_axis(self, _axis):
         self._axis = _axis
@@ -696,6 +753,7 @@ class TensorOp(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
+            expr = get_hcl_op(expr)
             return StoreOp(expr, self, new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
@@ -729,6 +787,8 @@ class UnaryOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(self.val.result, ip=GlobalInsertionPoint.get())
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -756,6 +816,8 @@ class BinaryOp(ExprOp):
         self.built_op = self.op(
             self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -868,6 +930,8 @@ class CmpOp(BinaryOp):
             self.rhs.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -953,6 +1017,25 @@ class NegOp(UnaryOp):
         )  # use the same op
 
 
+class BitCastOp(UnaryOp):
+    def __init__(self, dtype, val):
+        super().__init__(arith.BitcastOp, dtype, val)
+
+    def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+            self.built_op = self.op(
+                dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        else:
+            dtype = self.dtype
+            self.built_op = self.op(
+                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+            )
+        return self.built_op
+
+
 class MathExpOp(UnaryOp):
     def __init__(self, val):
         super().__init__(math.ExpOp, F32Type.get(), val)
@@ -1019,7 +1102,12 @@ class CastOp(ExprOp):
         # dtype is the result type
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
-        if is_index_type(res_type) and is_integer_type(self.val.dtype):
+        self.val.dtype = get_mlir_type(self.val.dtype)
+        if res_type == self.val.dtype:
+            op = None
+        elif (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (
+            is_index_type(self.val.dtype) and is_integer_type(res_type)
+        ):
             op = arith.IndexCastOp
         elif is_signed_type(self.val.dtype) and is_floating_point_type(res_type):
             op = arith.SIToFPOp
@@ -1029,6 +1117,25 @@ class CastOp(ExprOp):
             op = arith.FPToSIOp
         elif is_unsigned_type(res_type) and is_floating_point_type(self.val.dtype):
             op = arith.FPToUIOp
+        elif is_integer_type(res_type) and is_integer_type(self.val.dtype):
+            if res_type.width < self.val.dtype.width:
+                op = arith.TruncIOp
+            elif res_type.width == self.val.dtype.width:
+                op = None
+            else:
+                if not is_unsigned_type(res_type):
+                    op = arith.ExtSIOp
+                else:
+                    op = arith.ExtUIOp
+        elif is_floating_point_type(res_type) and is_floating_point_type(
+            self.val.dtype
+        ):
+            if res_type.width < self.val.dtype.width:
+                op = arith.TruncFOp
+            elif res_type.width == self.val.dtype.width:
+                op = None
+            else:
+                op = arith.ExtFOp
         else:
             op = builtin.UnrealizedConversionCastOp
         super().__init__(op, res_type)
@@ -1042,10 +1149,24 @@ class CastOp(ExprOp):
             arith.UIToFPOp,
             arith.FPToSIOp,
             arith.FPToUIOp,
+            arith.TruncIOp,
+            arith.TruncFOp,
+            arith.ExtUIOp,
+            arith.ExtSIOp,
+            arith.ExtFOp,
         ]:
-            self.built_op = self.op(
-                self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
-            )
+            if is_unsigned_type(self.dtype):
+                dtype = IntegerType.get_signless(self.dtype.width)
+                self.built_op = self.op(
+                    dtype, self.val.result, ip=GlobalInsertionPoint.get()
+                )
+                self.built_op.attributes["unsigned"] = UnitAttr.get()
+            else:
+                self.built_op = self.op(
+                    self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
+                )
+        elif self.op == None:
+            self.built_op = self.val.built_op
         else:  # builtin.UnrealizedConversionCastOp
             self.built_op = self.op(
                 [self.dtype], [self.val.result], ip=GlobalInsertionPoint.get()
@@ -1077,13 +1198,16 @@ class GetBitOp(ExprOp):
             self.index.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        flags.BIT_OP = True
         return self.built_op
 
 
 class SetBitOp(ExprOp):
     def __init__(self, num, index, val):
         super().__init__(hcl_d.SetIntBitOp, None)  # No return value!
-        self.num = num
+        self.num = num  # actually a LoadOp
         if isinstance(index, int):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
@@ -1109,6 +1233,10 @@ class SetBitOp(ExprOp):
             self.val.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        flags.BIT_OP = True
         return self.built_op
 
 
@@ -1116,28 +1244,52 @@ class LoadOp(ExprOp):
     def __init__(self, tensor, indices):
         super().__init__(affine.AffineLoadOp, tensor.dtype)
         self.tensor = tensor
-        self.indices = indices
+        self.indices = []
+        for index in indices:
+            if not isinstance(get_mlir_type(index.dtype), IndexType):
+                print(
+                    "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            self.indices.append(index)
         if flags.BUILD_INPLACE:
             self.build()
 
     def build(self):
-        new_indices = []
+        # test if affine expressions
+        visitor = ASTVisitor(mode="profile")
+        exprs = []
+        flag = True
         for index in self.indices:
-            new_indices.append(index.result)
-        self.built_op = self.op(
-            self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
-        )
+            try:
+                affine_expr = visitor.visit_affine_expr(index)
+                exprs.append(affine_expr)
+            except:
+                flag = False
+                break
+        if flag:
+            affine_map = AffineMap.get(
+                dim_count=len(visitor.iv), symbol_count=0, exprs=exprs
+            )
+            affine_attr = AffineMapAttr.get(affine_map)
+            self.built_op = self.op(
+                self.tensor.result,
+                visitor.iv,
+                affine_attr,
+                ip=GlobalInsertionPoint.get(),
+            )
+        else:
+            new_indices = []
+            for index in self.indices:
+                new_indices.append(index.result)
+            self.built_op = memref.LoadOp(
+                self.tensor.result, new_indices, ip=GlobalInsertionPoint.get()
+            )
         self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
-        return self.built_op
-
-    def build_affine(self, indices, affine_attr):
-        self.built_op = self.op(
-            self.tensor.result,
-            indices,
-            affine_attr,
-            ip=GlobalInsertionPoint.get(),
-        )
-        self.built_op.attributes["from"] = StringAttr.get(self.tensor.name)
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
     def __getitem__(self, indices):
@@ -1157,15 +1309,15 @@ class LoadOp(ExprOp):
         #     )
         return GetBitOp(self, index)
 
-    def __setitem__(self, indices, expr):
+    def __setitem__(self, bit_idx, expr):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
-        if not isinstance(indices, tuple):
-            indices = (indices,)
-        if not len(indices) == 1:
+        if not isinstance(bit_idx, tuple):
+            bit_idx = (bit_idx,)
+        if not len(bit_idx) == 1:
             raise RuntimeError("Can only access one bit of the integer")
-        index = indices[0]
-        return SetBitOp(self, index, expr)
+        bit_idx = bit_idx[0]
+        return SetBitOp(self, bit_idx, expr)
 
 
 class StoreOp(ExprOp):
@@ -1180,33 +1332,56 @@ class StoreOp(ExprOp):
             val = CastOp(val, to_tensor.dtype)
         self.val = val
         self.to_tensor = to_tensor
-        self.indices = indices
+        self.indices = []
+        for index in indices:
+            if not isinstance(get_mlir_type(index.dtype), IndexType):
+                print(
+                    "Warning: StoreOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            self.indices.append(index)
         if flags.BUILD_INPLACE:
             self.build()
 
     def build(self):
-        new_indices = []
+        # test if affine expressions
+        visitor = ASTVisitor(mode="profile")
+        exprs = []
+        flag = True
         for index in self.indices:
-            new_indices.append(index.result)
-        self.built_op = self.op(
-            self.val.result,
-            self.to_tensor.result,
-            new_indices,
-            ip=GlobalInsertionPoint.get(),
-        )
+            try:
+                affine_expr = visitor.visit_affine_expr(index)
+                exprs.append(affine_expr)
+            except:
+                flag = False
+                break
+        if flag:
+            affine_map = AffineMap.get(
+                dim_count=len(visitor.iv), symbol_count=0, exprs=exprs
+            )
+            affine_attr = AffineMapAttr.get(affine_map)
+            self.built_op = self.op(
+                self.val.result,
+                self.to_tensor.result,
+                visitor.iv,
+                affine_attr,
+                ip=GlobalInsertionPoint.get(),
+            )
+        else:
+            new_indices = []
+            for index in self.indices:
+                new_indices.append(index.result)
+            self.built_op = memref.StoreOp(
+                self.val.result,
+                self.to_tensor.result,
+                new_indices,
+                ip=GlobalInsertionPoint.get(),
+            )
         self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
-        return self.built_op
-
-    def build_affine(self, indices, affine_attr):
-        self.built_op = self.op(
-            self.dtype,
-            self.val.result,
-            self.to_tensor.result,
-            indices,
-            affine_attr,
-            ip=GlobalInsertionPoint.get(),
-        )
-        self.built_op.attributes["to"] = StringAttr.get(self.to_tensor.name)
+        if is_unsigned_type(self.to_tensor.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1226,6 +1401,8 @@ class CallOp(ExprOp):
             self.inputs,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1258,6 +1435,8 @@ class SelectOp(ExprOp):
             self.false_val.result,
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 
@@ -1283,10 +1462,16 @@ class MaxOp(ReduceOp):
         super().__init__(op, axis, dtype)
 
 
-class ASTBuilder:
-    def __init__(self, removal=False):
+class ASTVisitor:
+    def __init__(self, mode="build"):
         self.iv = []
-        self.removal = removal
+        if mode not in ["build", "remove", "profile"]:
+            raise RuntimeError(
+                "ASTVisitor only supports build, remove, or profile mode"
+            )
+        self.mode = mode
+        self.load = []
+        self.store = []
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -1319,6 +1504,8 @@ class ASTBuilder:
         * Should all be binary op
         * AffineExpr can be automatically simplied
         """
+        if not isinstance(expr, (IterVar, ConstantOp, CastOp, BinaryOp)):
+            raise RuntimeError("Not an affine index!")
         if isinstance(expr, IterVar):
             if expr.op not in self.iv:
                 self.iv.append(expr.op)  # BlockArgument
@@ -1338,36 +1525,45 @@ class ASTBuilder:
         elif isinstance(expr, MulOp):
             return lhs * rhs
         elif isinstance(expr, DivOp):
-            return lhs / rhs
+            return AffineExpr.get_floor_div(lhs, rhs)  # or get_ceil_div
         elif isinstance(expr, RemOp):
             return lhs % rhs
         else:
             raise RuntimeError("Not an affine index!")
 
     def visit_unary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.val)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.val)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.val)
 
     def visit_binary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.lhs)
             self.visit(expr.rhs)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.lhs)
+            self.visit(expr.rhs)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.rhs)
             self.visit(expr.lhs)
 
     def visit_ternary_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             self.visit(expr.cond)
             self.visit(expr.true_val)
             self.visit(expr.false_val)
             return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.cond)
+            self.visit(expr.true_val)
+            self.visit(expr.false_val)
         else:
             expr.built_op.operation.erase()
             self.visit(expr.false_val)
@@ -1375,71 +1571,74 @@ class ASTBuilder:
             self.visit(expr.cond)
 
     def visit_load_op(self, expr):
-        # create affine expressions
-        self.iv = []  # clear
-        exprs = []
-        for index in expr.indices:
-            affine_expr = self.visit_affine_expr(index)
-            exprs.append(affine_expr)
-        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
-        affine_attr = AffineMapAttr.get(affine_map)
-        if not self.removal:
-            return expr.build_affine(self.iv, affine_attr)
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
+            return
+        elif self.mode == "profile":
+            self.load.append(expr)
+            return
         else:
-            raise RuntimeError("Cannot remove LoadOp")
+            return expr.build()
 
     def visit_store_op(self, expr):
-        # create affine expressions
-        self.iv = []  # clear
-        exprs = []
-        for index in expr.indices:
-            affine_expr = self.visit_affine_expr(index)
-            exprs.append(affine_expr)
-        affine_map = AffineMap.get(dim_count=len(self.iv), symbol_count=0, exprs=exprs)
-        affine_attr = AffineMapAttr.get(affine_map)
-        if not self.removal:
-            return expr.build_affine(self.iv, affine_attr)
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
+            return
+        elif self.mode == "profile":
+            self.store.append(expr)
+            return
         else:
-            raise RuntimeError("Cannot remove StoreOp")
+            return expr.build()
 
     def visit_cast_op(self, expr):
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
         self.visit(expr.val)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
-        else:
-            raise RuntimeError("Cannot remove CastOp")
 
     def visit_getbit_op(self, expr):
-        self.visit(expr.num)
-        self.visit(expr.index)
-        if not self.removal:
+        if self.mode == "build":
+            self.visit(expr.num)
+            self.visit(expr.index)
             return expr.build()
+        elif self.mode == "remove":
+            expr.built_op.operation.erase()
+            self.visit(expr.index)
+            self.visit(expr.num)
         else:
-            raise RuntimeError("Cannot remove GetBitOp")
+            self.visit(expr.num)
+            self.visit(expr.index)
 
     def visit_setbit_op(self, expr):
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
         self.visit(expr.num)
         self.visit(expr.index)
         self.visit(expr.val)
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
-        else:
-            raise RuntimeError("Cannot remove SetBitOp")
 
     def visit_constant_op(self, expr):
-        if not self.removal:
+        if self.mode == "build":
             return expr.build()
+        elif self.mode == "profile":
+            pass
         else:
             expr.built_op.operation.erase()
 
     def visit_reduce_op(self, expr):
-        if self.removal:
+        if self.mode == "remove":
             raise RuntimeError("Cannot remove ReduceOp")
+        elif self.mode == "profile":
+            return
         # save insetion point
         save_ip = GlobalInsertionPoint.get()
 
         # create a single-element register for reduction
         dtype = expr.dtype
+        if is_unsigned_type(dtype):
+            dtype = IntegerType.get_signless(dtype.width)
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(memref_type, [], [], None, ip=GlobalInsertionPoint.get())
         if isinstance(expr, SumOp):
@@ -1472,6 +1671,8 @@ class ASTBuilder:
         else:
             raise RuntimeError("Should not in this branch")
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            rv.attributes["unsigned"] = UnitAttr.get()
         # initialize the single-element register
         zero_idx = arith.ConstantOp(
             IndexType.get(),
@@ -1483,12 +1684,22 @@ class ASTBuilder:
             zero_value = arith.ConstantOp(
                 dtype, FloatAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
-        elif is_integer_type(dtype) or is_fixed_type(dtype):
+        elif is_integer_type(dtype):
             zero_value = arith.ConstantOp(
                 dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
+        elif is_fixed_type(dtype):
+            value_attr = IntegerAttr.get(IntegerType.get_signless(32), init_val)
+            zero_value = arith.ConstantOp(
+                IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get()
+            )
+            zero_value = builtin.UnrealizedConversionCastOp(
+                [dtype], [zero_value.result], ip=GlobalInsertionPoint.get()
+            )
         else:
             raise RuntimeError("Unrecognized data type in reduction op")
+        if is_unsigned_type(expr.dtype):
+            zero_value.attributes["unsigned"] = UnitAttr.get()
 
         store = affine.AffineStoreOp(
             zero_value.result,
@@ -1528,6 +1739,8 @@ class ASTBuilder:
             rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
         )
         load.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            load.attributes["unsigned"] = UnitAttr.get()
         if is_floating_point_type(dtype):
             reduce_op = reduce_op["float"]
         elif is_integer_type(dtype):
@@ -1540,14 +1753,20 @@ class ASTBuilder:
         else:
             raise RuntimeError("Unsupported type")
         if dtype != data.result.type:
-            raise RuntimeError(
-                "Reduction variable should have the same type with the data. Got {} and {}".format(
+            print(
+                "Warning: Reduction variable should have the same type with the data. Got {} and {}. Do type casting...".format(
                     dtype, data.result.type
                 )
             )
+            placeholder = LoadOp(expr, [])
+            placeholder.built_op = data
+            data = CastOp(placeholder, dtype)
+            data.build()
         iter_reduction = reduce_op(
             data.result, load.result, ip=GlobalInsertionPoint.get()
         )
+        if is_unsigned_type(expr.dtype):
+            iter_reduction.attributes["unsigned"] = UnitAttr.get()
 
         # store the result back to register
         store_reg = affine.AffineStoreOp(
@@ -1563,8 +1782,20 @@ class ASTBuilder:
             affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
             # restore insertion point
             GlobalInsertionPoint.restore()
-        expr.built_op = rv
-        return rv
+
+        zero_idx = arith.ConstantOp(
+            IndexType.get(),
+            IntegerAttr.get(IndexType.get(), 0),
+            ip=GlobalInsertionPoint.get(),
+        )
+        value = affine.AffineLoadOp(
+            rv.result, [zero_idx.result], ip=GlobalInsertionPoint.get()
+        )
+        value.attributes["from"] = StringAttr.get("{}_rv".format(prefix))
+        if is_unsigned_type(expr.dtype):
+            value.attributes["unsigned"] = UnitAttr.get()
+        expr.built_op = value
+        return value
 
 
 def make_affine_for(
@@ -1620,50 +1851,78 @@ def make_if(cond, ip=None):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, CmpOp):
         raise RuntimeError("`if` operation condition should be CmpOp")
-    if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
-        cond.rhs.dtype, (IntegerType, IndexType)
-    ):
-        raise RuntimeError("`affine.if` can only support integer comparison")
-    # only support affine expressions now (i.e. calculations on iteration variables)
-    if cond.arg == 0:  # eq
-        # lhs==rhs
-        eq_flags = [True]
-        new_conds = [cond.lhs - cond.rhs]
-    elif cond.arg == 1:  # ne
-        # lhs>rhs and lhs<rhs
-        raise RuntimeError("Not supported for `affine.if`")
-    elif cond.arg == 2:  # slt
-        # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
-        eq_flags = [False]
-        new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
-    elif cond.arg == 3:  # sle
-        # lhs<=rhs -> rhs-lhs>=0
-        eq_flags = [False]
-        new_conds = [cond.rhs - cond.lhs]
-    elif cond.arg == 4:  # sgt
-        # lhs>rhs -> lhs-rhs-1>=0
-        eq_flags = [False]
-        new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
-    elif cond.arg == 5:  # sge
-        # lhs>=rhs -> lhs-rhs>=0
-        eq_flags = [False]
-        new_conds = [cond.lhs - cond.rhs]
-    else:
-        raise RuntimeError("Predicate of CmpOp")
+    visitor = ASTVisitor(mode="profile")
+    visitor.visit(cond)
+    if len(visitor.load) != 0 or len(visitor.store) != 0:
+        remover = ASTVisitor(mode="remove")
+        remover.visit(cond)
+        builder = ASTVisitor(mode="build")
+        builder.visit(cond)
+        if_op = scf.IfOp(cond.result, ip=ip)
+    else:  # Affine expression
+        if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
+            cond.rhs.dtype, (IntegerType, IndexType)
+        ):
+            raise RuntimeError("`affine.if` can only support integer comparison")
+        # only support affine expressions now (i.e. calculations on iteration variables)
+        if cond.arg == 0:  # eq
+            # lhs==rhs
+            eq_flags = [True]
+            new_conds = [cond.lhs - cond.rhs]
+        elif cond.arg == 1:  # ne
+            # lhs>rhs and lhs<rhs
+            raise RuntimeError("Not supported for `affine.if`")
+        elif cond.arg == 2:  # slt
+            # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
+            eq_flags = [False]
+            new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
+        elif cond.arg == 3:  # sle
+            # lhs<=rhs -> rhs-lhs>=0
+            eq_flags = [False]
+            new_conds = [cond.rhs - cond.lhs]
+        elif cond.arg == 4:  # sgt
+            # lhs>rhs -> lhs-rhs-1>=0
+            eq_flags = [False]
+            new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
+        elif cond.arg == 5:  # sge
+            # lhs>=rhs -> lhs-rhs>=0
+            eq_flags = [False]
+            new_conds = [cond.lhs - cond.rhs]
+        else:
+            raise RuntimeError("Predicate of CmpOp")
 
-    cond.built_op.operation.erase()
-    exprs = []
-    builder = ASTBuilder()
-    for new_cond in new_conds:
-        remover = ASTBuilder(removal=True)
-        remover.visit(new_cond)
-        # rebuild condition
-        exprs.append(builder.visit_affine_expr(new_cond))
-    if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
-    attr = hcl_d.IntegerSetAttr.get(if_cond_set)
+        cond.built_op.operation.erase()
+        exprs = []
+        # make sure all the AffineExpr are referenced in one visitor
+        builder = ASTVisitor(mode="build")
+        for new_cond in new_conds:
+            remover = ASTVisitor(mode="remove")
+            remover.visit(new_cond)
+            # rebuild condition
+            exprs.append(builder.visit_affine_expr(new_cond))
+        if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
+        attr = hcl_d.IntegerSetAttr.get(if_cond_set)
 
-    if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
+        if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
+
     return if_op
+
+
+def make_while(cond, ip=None):
+    # suppose in a imperative context (build in-place)
+    if not isinstance(cond, CmpOp):
+        raise RuntimeError("`if` operation condition should be CmpOp")
+    while_op = scf.WhileOp([], [], ip=ip)
+    while_op.before.blocks.append(*[])
+    while_op.after.blocks.append(*[])
+    GlobalInsertionPoint.save(while_op.before.blocks[0])
+    remover = ASTVisitor(mode="remove")
+    remover.visit(cond)
+    builder = ASTVisitor(mode="build")
+    builder.visit(cond)
+    scf.ConditionOp(cond.result, [], ip=GlobalInsertionPoint.get())
+    GlobalInsertionPoint.restore()
+    return while_op
 
 
 def get_affine_loop_nests(func):

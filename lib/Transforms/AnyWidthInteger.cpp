@@ -31,8 +31,86 @@ namespace mlir {
 namespace hcl {
 
 
-// entry point
+void updateTopFunctionSignature(FuncOp &funcOp) {
+  FunctionType functionType = funcOp.getType();
+  SmallVector<Type, 4> result_types =
+      llvm::to_vector<4>(functionType.getResults());
+  SmallVector<Type, 8> arg_types;
+  for (const auto &argEn : llvm::enumerate(funcOp.getArguments()))
+    arg_types.push_back(argEn.value().getType());
+
+  SmallVector<Type, 4> new_result_types;
+  SmallVector<Type, 8> new_arg_types;
+
+  for (Type t : result_types) {
+    if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
+      Type et = memrefType.getElementType();
+      // If result memref element type is integer
+      // change it to i64 to be compatible with numpy
+      if (et.isa<IntegerType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_result_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_result_types.push_back(memrefType);
+      }
+    }
+  }
+
+  for (Type t : arg_types) {
+    if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
+      Type et = memrefType.getElementType();
+      // If argument memref element type is integer
+      // change it to i64 to be compatible with numpy
+      if (et.isa<IntegerType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_arg_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_arg_types.push_back(memrefType);
+      }
+    }
+  }
+  
+  // Update FuncOp's block argument types
+  for (Block &block : funcOp.getBlocks()) {
+    for (unsigned i = 0; i < block.getNumArguments(); i++) {
+      Type argType = block.getArgument(i).getType();
+      if (MemRefType memrefType = argType.cast<MemRefType>()) {
+        Type et = memrefType.getElementType();
+        if (et.isa<IntegerType>()) {
+          size_t width = 64;
+          Type newType = IntegerType::get(funcOp.getContext(), width);
+          Type newMemRefType = memrefType.clone(newType);
+          block.getArgument(i).setType(newMemRefType);
+        }
+      }
+    }
+  }
+
+  // Update function signature
+  FunctionType newFuncType =
+      FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
+  funcOp.setType(newFuncType);
+}
+
+
+/// entry point
 bool applyAnyWidthInteger(ModuleOp &mod) {
+  // Find top-level function
+  bool isFoundTopFunc = false;
+  FuncOp* topFunc;
+  for (FuncOp func : mod.getOps<FuncOp>()) {
+    if (func->hasAttr("top")) {
+      isFoundTopFunc = true;
+      topFunc = &func;
+      break;
+    }
+  }
+
+  if (isFoundTopFunc && topFunc) {
+    updateTopFunctionSignature(*topFunc);
+  }
 
   return true;
 }

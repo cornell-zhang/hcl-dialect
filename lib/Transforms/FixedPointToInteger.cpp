@@ -24,7 +24,7 @@ namespace hcl {
 
 // TODO(Niansong): function calls also need to be handled
 
-/* Update the function signature and 
+/* Update the function signature and
  * Because we need to interact with numpy, which only supports up
  * to 64-bit int/uint, so we update the input/output arguments
  * to 64-bit signless integer type. When the input memref
@@ -43,32 +43,30 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Type t : result_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      // size_t width;
-      // if (FixedType ft = et.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = et.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
-      size_t width = 64;
-      Type newElementType = IntegerType::get(funcOp.getContext(), width);
-      new_result_types.push_back(memrefType.clone(newElementType));
+      // If result memref element type is fixed
+      // change it to i64 to be compatible with numpy
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_result_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_result_types.push_back(memrefType);
+      }
     }
   }
 
   for (Type t : arg_types) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
-      // size_t width;
-      // if (FixedType ft = et.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = et.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
-      size_t width = 64;
-      Type newElementType = IntegerType::get(funcOp.getContext(), width);
-      new_arg_types.push_back(memrefType.clone(newElementType));
+      // If argument memref element type is fixed
+      // change it to i64 to be compatible with numpy
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = 64;
+        Type newElementType = IntegerType::get(funcOp.getContext(), width);
+        new_arg_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_arg_types.push_back(memrefType);
+      }
     }
   }
 
@@ -77,26 +75,29 @@ void updateFunctionSignature(FuncOp &funcOp) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
       if (MemRefType memrefType = argType.cast<MemRefType>()) {
-        Type oldType = memrefType.getElementType();
-        // size_t width;
-        // if (FixedType ft = oldType.cast<FixedType>()) {
-        //   width = ft.getWidth();
-        // } else {
-        //   UFixedType uft = oldType.cast<UFixedType>();
-        //   width = uft.getWidth();
-        // }
-        size_t width = 64;
-        Type newType = IntegerType::get(funcOp.getContext(), width);
-        Type newMemRefType = memrefType.clone(newType);
-        block.getArgument(i).setType(newMemRefType);
+        Type et = memrefType.getElementType();
+        if (et.isa<FixedType, UFixedType>()) {
+          size_t width = 64;
+          Type newType = IntegerType::get(funcOp.getContext(), width);
+          Type newMemRefType = memrefType.clone(newType);
+          block.getArgument(i).setType(newMemRefType);
+        }
       }
     }
   }
+
+  // Update function signature
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
 }
 
+/* Update AffineLoad's result type
+After we changed the function arguments, affine loads's argument
+memref may change as well, which makes the affine load's result
+type different from input memref's element type. This function
+updates the result type of affine load operations
+*/
 void updateAffineLoad(FuncOp &f) {
   SmallVector<Operation *, 10> loads;
   f.walk([&](Operation *op) {
@@ -106,24 +107,18 @@ void updateAffineLoad(FuncOp &f) {
   });
 
   for (auto op : loads) {
-    // llvm::outs() << op->getOperand(0).getType() << "\n";
-    // update results
     for (auto v : llvm::enumerate(op->getResults())) {
-      // Type t = v.value().getType();
-      // size_t width;
-      // if (FixedType ft = t.cast<FixedType>()) {
-      //   width = ft.getWidth();
-      // } else {
-      //   UFixedType uft = t.cast<UFixedType>();
-      //   width = uft.getWidth();
-      // }
-      // Type newType = IntegerType::get(f.getContext(), width);
-      Type newType = op->getOperand(0).getType().cast<MemRefType>().getElementType();
+      Type newType =
+          op->getOperand(0).getType().cast<MemRefType>().getElementType();
       op->getResult(v.index()).setType(newType);
     }
   }
 }
 
+/* Update Return Op's arguement value to be i64 memref
+ * Check ReturnOp's argument, if it is an AllocOp and
+ * it's type is not i64 memref, update it to be i64 memeref
+ */
 void updateReturnOp(FuncOp &funcOp) {
   // Update FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
@@ -134,29 +129,16 @@ void updateReturnOp(FuncOp &funcOp) {
   });
   // If return op is not int64, we need to add a cast node
   for (auto op : returnOps) {
-    MemRefType type = op->getOperand(0).getType().cast<MemRefType>();
-    Type etype = type.getElementType();
-    Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-    if (etype != newType) {
-      // create cast nodes
-      // Lesson learned: OpBuilder has to be in the right scope
-      // OpBuilder builder(op);
-      // auto width = etype.dyn_cast<IntegerType>().getWidth();
-      // llvm::outs() << width << "\n";
-      Value arg = op->getOperand(0);
-      auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp());
-      allocOp->getResult(0).setType(newType);
-      // if (width > 64) {
-        // Value new_res = builder.create<arith::TruncIOp>(op->getLoc(), newType, op->getOperand(0));
-        // op->setOperand(0, new_res);
-      // } else {
-        // llvm::outs() << arg << "\n";
-        // Value res = builder.create<arith::ExtSIOp>(op->getLoc(), newType, arg);
-        // builder.create<ReturnOp>(op->getLoc(), res);
-        // llvm::outs() << res << "\n";
-        // llvm::outs() << funcOp << "\n";
-        // op->setOperand(0, new_res);
-      // }
+    for (unsigned i = 0; i < op->getNumOperands(); i++) {
+      Value arg = op->getOperand(i);
+      MemRefType type = arg.getType().cast<MemRefType>();
+      Type etype = type.getElementType();
+      Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
+      if (etype != newType and etype.isa<FixedType, UFixedType>()) {
+        if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+          allocOp->getResult(0).setType(newType);
+        }
+      }
     }
   }
 }
@@ -169,14 +151,15 @@ void updateReturnOp(FuncOp &funcOp) {
  * accessible through operands' types.
  */
 void markFixedOperations(FuncOp &f) {
-  SmallVector<Operation *, 10> addOps;
+  SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<AddFixedOp>(op)) {
-      addOps.push_back(op);
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp,
+                  MaxFixedOp>(op)) {
+      fixedOps.push_back(op);
     }
   });
   // set attribute to addOps
-  for (auto op : addOps) {
+  for (auto op : fixedOps) {
     // FixedAddOps are binary ops, they have two operands
     Value opr_l = op->getOperand(0);
     Value opr_r = op->getOperand(1);
@@ -230,10 +213,14 @@ void updateAlloc(FuncOp &f) {
     MemRefType memRefType = allocOp.getType().cast<MemRefType>();
     Type t = memRefType.getElementType();
     size_t width;
-    if (FixedType ft = t.cast<FixedType>()) {
+    if (auto ft = t.dyn_cast_or_null<FixedType>()) {
       width = ft.getWidth();
-    } else if (UFixedType uft = t.cast<UFixedType>()) {
+    } else if (auto uft = t.dyn_cast_or_null<UFixedType>()) {
       width = uft.getWidth();
+    } else {
+      // Not a fixed-point alloc operation
+      // Return without changing anything
+      return;
     }
     Type newType = IntegerType::get(f.getContext(), width);
     Type newMemRefType = memRefType.clone(newType);
@@ -242,84 +229,209 @@ void updateAlloc(FuncOp &f) {
 }
 
 void updateAffineStore(AffineStoreOp &op) {
-  // llvm::outs() << op->getOperand(0) << "\n";
-  // llvm::outs() << op->getOperand(1) << "\n";
   Type valueTyp = op->getOperand(0).getType();
-  Type memRefEleTyp = op->getOperand(1).getType().cast<MemRefType>().getElementType();
+  Type memRefEleTyp =
+      op->getOperand(1).getType().cast<MemRefType>().getElementType();
   OpBuilder builder(op);
-  if (valueTyp.cast<IntegerType>().getWidth() < memRefEleTyp.cast<IntegerType>().getWidth()) {
+  if (!valueTyp.isa<IntegerType>() || !memRefEleTyp.isa<IntegerType>()) {
+    return;
+  }
+  if (valueTyp.cast<IntegerType>().getWidth() <
+      memRefEleTyp.cast<IntegerType>().getWidth()) {
     // extend
-    Value v = builder.create<arith::ExtSIOp>(op->getLoc(), memRefEleTyp, op->getOperand(0));
+    Value v = builder.create<arith::ExtSIOp>(op->getLoc(), memRefEleTyp,
+                                             op->getOperand(0));
     op->setOperand(0, v);
-  } else {
+  } else if (valueTyp.cast<IntegerType>().getWidth() >
+             memRefEleTyp.cast<IntegerType>().getWidth()) {
     // truncate
-    Value v = builder.create<arith::TruncIOp>(op->getLoc(), memRefEleTyp, op->getOperand(0));
+    Value v = builder.create<arith::TruncIOp>(op->getLoc(), memRefEleTyp,
+                                              op->getOperand(0));
     op->setOperand(0, v);
   }
 }
 
-// Lower a Fixed-point add op to AddIOp
-void lowerFixedAdd(AddFixedOp &op) {
-  // FixedAddOps are binary ops, they have two operands
-  Value opr_l = op->getOperand(0);
-  Value opr_r = op->getOperand(1);
-  // IntegerAttr.getValue() values are of llvm::APInt type
-  // llvm::APInt class has special operators to compare them
-  // However, we know these values are non-negative integers
-  // We can get the sign-extended value from llvm::APInt
-  auto lwidth =
-      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
-  auto lfrac =
-      op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
-  auto rwidth =
-      op->getAttr("rwidth").cast<IntegerAttr>().getValue().getSExtValue();
-  auto rfrac =
-      op->getAttr("rfrac").cast<IntegerAttr>().getValue().getSExtValue();
-  auto reswidth =
-      op->getAttr("reswidth").cast<IntegerAttr>().getValue().getSExtValue();
-  auto resfrac =
-      op->getAttr("resfrac").cast<IntegerAttr>().getValue().getSExtValue();
+/* Cast integer to target bitwidth
+ */
+Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
+                       Value v, size_t target_width) {
+  Value result;
+  Type newType = IntegerType::get(ctx, target_width);
+  if (v.getType().cast<IntegerType>().getWidth() < target_width) {
+    // extend bits
+    result = builder.create<arith::ExtSIOp>(loc, newType, v);
+  } else {
+    // truncate bits
+    result = builder.create<arith::TruncIOp>(loc, newType, v);
+  }
+  return result;
+}
 
-  // llvm::outs() << "operation: " << op->getName()
-  //   << ", lwidth=" << lwidth << ", lfrac=" << lfrac
-  //   << ", rwidth=" << rwidth << ", rfrac=" << rfrac
-  //   << ", reswidth=" << reswidth << ", resfrac=" << resfrac
-  //   << "\n";
+// Lower AddFixedOp to AddIOp
+void lowerFixedAdd(AddFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
+
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+
+  arith::AddIOp newOp = rewriter.create<arith::AddIOp>(op->getLoc(), lhs, rhs);
+  op->replaceAllUsesWith(newOp);
+}
+
+// Lower FixedSubOp to SubIOp
+void lowerFixedSub(SubFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
+
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+
+  arith::SubIOp newOp = rewriter.create<arith::SubIOp>(op->getLoc(), lhs, rhs);
+  op->replaceAllUsesWith(newOp);
+}
+
+// Lower MulFixedop to MulIOp
+void lowerFixedMul(MulFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t frac =
+      op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
 
   OpBuilder rewriter(op);
 
-  // Cast lhs and rhs
-  Value lhs, rhs;
-  size_t width = lwidth > rwidth ? lwidth : rwidth; 
-  Type newType = IntegerType::get(op->getContext(), width);
-  if (opr_l.getType().cast<IntegerType>().getWidth() < width) {
-    // extend bits
-    lhs = rewriter.create<arith::ExtSIOp>(op->getLoc(), newType, opr_l);
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+
+  arith::MulIOp newOp = rewriter.create<arith::MulIOp>(op->getLoc(), lhs, rhs);
+
+  // lhs<width, frac> * rhs<width, frac> -> res<width, 2*frac>
+  // Therefore, we need to right shift the result for frac bit
+  // Right shift needs to consider signed/unsigned
+  Type opTy = op->getOperand(0).getType();
+  IntegerType intTy = IntegerType::get(op->getContext(), 32);
+  auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
+  auto fracCstOp =
+      rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
+
+  if (opTy.isa<FixedType>()) {
+    // use signed right shift
+    arith::ShRSIOp res =
+        rewriter.create<arith::ShRSIOp>(op->getLoc(), newOp, fracCstOp);
+    op->replaceAllUsesWith(res);
   } else {
-    // truncate bits
-    lhs = rewriter.create<arith::TruncIOp>(op->getLoc(), newType, opr_l);
+    // use unsigned right shift
+    arith::ShRUIOp res =
+        rewriter.create<arith::ShRUIOp>(op->getLoc(), newOp, fracCstOp);
+    op->replaceAllUsesWith(res);
   }
-  if (opr_r.getType().cast<IntegerType>().getWidth() < width) {
-    // extend bits
-    rhs = rewriter.create<arith::ExtSIOp>(op->getLoc(), newType, opr_r);
-  } else {
-    // truncate bits
-    rhs = rewriter.create<arith::TruncIOp>(op->getLoc(), newType, opr_r);
-  }
+}
 
-  // Change result type
-  IntegerType resType =
-      IntegerType::get(op->getContext(), reswidth);
-  op->getResult(0).setType(resType);
+// Lower CmpFixedOp to CmpIOp
+void lowerFixedCmp(CmpFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
 
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
 
+  auto prednum =
+      op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
   auto loc = op->getLoc();
-  arith::AddIOp newOp = rewriter.create<arith::AddIOp>(loc, lhs, rhs);
+  arith::CmpIOp newOp;
+  switch (prednum) {
+  case 0:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
+    break;
+  case 1:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
+    break;
+  case 2:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);
+    break;
+  case 3:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);
+    break;
+  case 4:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);
+    break;
+  case 5:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);
+    break;
+  case 6:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);
+    break;
+  case 7:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);
+    break;
+  case 8:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);
+    break;
+  case 9:
+    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);
+    break;
+  default:
+    llvm::errs() << "unknown predicate code in CmpFixedOp\n";
+  }
+
   op->replaceAllUsesWith(newOp);
+}
 
-  // Check width and cast
+// Lower MinFixedOp to MinSIOp or MinUIOp
+void lowerFixedMin(MinFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
 
-  // Check frac and shift
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(2), width);
+
+  Type opTy = op->getOperand(0).getType();
+  if (opTy.isa<FixedType>()) {
+    // use signed integer min
+    auto res = rewriter.create<arith::MinSIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  } else {
+    // use unsigned integer min
+    auto res = rewriter.create<arith::MinUIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  }
+}
+
+// Lower MaxFixedOp to MaxSIOp or MaxUIOp
+void lowerFixedMax(MaxFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  OpBuilder rewriter(op);
+
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(2), width);
+
+  Type opTy = op->getOperand(0).getType();
+  if (opTy.isa<FixedType>()) {
+    // use signed integer max
+    auto res = rewriter.create<arith::MaxSIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  } else {
+    // use unsigned integer max
+    auto res = rewriter.create<arith::MaxUIOp>(op->getLoc(), lhs, rhs);
+    op->replaceAllUsesWith(res);
+  }
 }
 
 /// Visitors to recursively update all operations
@@ -328,10 +440,18 @@ void visitRegion(Region &region);
 void visitBlock(Block &block);
 
 void visitOperation(Operation &op) {
-  SmallVector<Operation *, 10> opToRemove;
-
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
     lowerFixedAdd(new_op);
+  } else if (auto new_op = dyn_cast<SubFixedOp>(op)) {
+    lowerFixedSub(new_op);
+  } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
+    lowerFixedMul(new_op);
+  } else if (auto new_op = dyn_cast<CmpFixedOp>(op)) {
+    lowerFixedCmp(new_op);
+  } else if (auto new_op = dyn_cast<MinFixedOp>(op)) {
+    lowerFixedMin(new_op);
+  } else if (auto new_op = dyn_cast<MaxFixedOp>(op)) {
+    lowerFixedMax(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
     updateAffineStore(new_op);
   }
@@ -345,11 +465,14 @@ void visitBlock(Block &block) {
   SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
-    if (llvm::isa<AddFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp,
+                  MaxFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }
 
+  // Remove fixed-point operations after the block
+  // is visited.
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -369,8 +492,8 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     markFixedOperations(func);
     updateFunctionSignature(func);
     updateAffineLoad(func);
-    updateAlloc(func);
     updateReturnOp(func);
+    updateAlloc(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }

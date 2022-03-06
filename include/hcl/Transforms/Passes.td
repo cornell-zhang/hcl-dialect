@@ -22,4 +22,10 @@ def FixedToInteger : Pass<"fixed-to-integer", "ModuleOp"> {
   let constructor = "mlir::hcl::createFixedPointToIntegerPass()";
 }
 
+def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
+  let summary = "Transform anywidth-integer input to 64-bit";
+  let constructor = "mlir::hcl::createAnyWidthIntegerPass()";
+}
+
+
 #endif // HCL_MLIR_PASSES

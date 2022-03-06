@@ -1246,7 +1246,7 @@ class LoadOp(ExprOp):
         self.tensor = tensor
         self.indices = []
         for index in indices:
-            if not isinstance(index.dtype, IndexType):
+            if not isinstance(get_mlir_type(index.dtype), IndexType):
                 print(
                     "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
@@ -1334,9 +1334,9 @@ class StoreOp(ExprOp):
         self.to_tensor = to_tensor
         self.indices = []
         for index in indices:
-            if not isinstance(index.dtype, IndexType):
+            if not isinstance(get_mlir_type(index.dtype), IndexType):
                 print(
-                    "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
+                    "Warning: StoreOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
                     )
                 )

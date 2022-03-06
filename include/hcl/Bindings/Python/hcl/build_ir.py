@@ -1102,7 +1102,10 @@ class CastOp(ExprOp):
         # dtype is the result type
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
-        if (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (
+        self.val.dtype = get_mlir_type(self.val.dtype)
+        if res_type == self.val.dtype:
+            op = None
+        elif (is_index_type(res_type) and is_integer_type(self.val.dtype)) or (
             is_index_type(self.val.dtype) and is_integer_type(res_type)
         ):
             op = arith.IndexCastOp

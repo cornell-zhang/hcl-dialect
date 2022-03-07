@@ -1858,7 +1858,7 @@ def make_if(cond, ip=None):
         remover.visit(cond)
         builder = ASTVisitor(mode="build")
         builder.visit(cond)
-        if_op = scf.IfOp(cond.result, ip=ip)
+        if_op = scf.IfOp([], cond.result, ip=ip)
     else:  # Affine expression
         if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
             cond.rhs.dtype, (IntegerType, IndexType)

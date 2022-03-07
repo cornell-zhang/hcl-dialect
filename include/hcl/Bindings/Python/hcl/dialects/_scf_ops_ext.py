@@ -70,6 +70,7 @@ class IfOp:
   """Specialization for the SCF if op class."""
 
   def __init__(self,
+               results_,
                cond,
                withElseRegion=False,
                *,
@@ -83,6 +84,7 @@ class IfOp:
     operands = []
     operands.append(cond)
     results = []
+    results.extend(results_)
     super().__init__(
         self.build_generic(
             regions=2,

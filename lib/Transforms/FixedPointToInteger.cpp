@@ -52,6 +52,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
       } else {
         new_result_types.push_back(memrefType);
       }
+    } else { // If result type is not memref, do not change it
+      new_result_types.push_back(t);
     }
   }
 
@@ -67,6 +69,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
       } else {
         new_arg_types.push_back(memrefType);
       }
+    } else { // If argument type is not memref, do not change it
+      new_arg_types.push_back(t);
     }
   }
 
@@ -74,7 +78,7 @@ void updateFunctionSignature(FuncOp &funcOp) {
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
-      if (MemRefType memrefType = argType.cast<MemRefType>()) {
+      if (MemRefType memrefType = argType.dyn_cast<MemRefType>()) {
         Type et = memrefType.getElementType();
         if (et.isa<FixedType, UFixedType>()) {
           size_t width = 64;

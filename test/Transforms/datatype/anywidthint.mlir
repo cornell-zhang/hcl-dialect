@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s
+// RUN: hcl-opt %s --lower-anywidth-integer
 module {
   func @top_vadd(%arg0: memref<10xi10>, %arg1: memref<10xi10>) -> memref<10xi10> attributes {"top"} {
     %0 = memref.alloc() {name = "compute_2"} : memref<10xi10>

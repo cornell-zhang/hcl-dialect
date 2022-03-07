@@ -135,12 +135,13 @@ void updateReturnOp(FuncOp &funcOp) {
   for (auto op : returnOps) {
     for (unsigned i = 0; i < op->getNumOperands(); i++) {
       Value arg = op->getOperand(i);
-      MemRefType type = arg.getType().cast<MemRefType>();
-      Type etype = type.getElementType();
-      Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-      if (etype != newType and etype.isa<FixedType, UFixedType>()) {
-        if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-          allocOp->getResult(0).setType(newType);
+      if (MemRefType type = arg.getType().dyn_cast<MemRefType>()) {
+        Type etype = type.getElementType();
+        Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
+        if (etype != newType and etype.isa<FixedType, UFixedType>()) {
+          if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+            allocOp->getResult(0).setType(newType);
+          }
         }
       }
     }

@@ -30,6 +30,42 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
+/* CastIntMemRef
+ * Allocate a new Int MemRef of target width and build a 
+ * AffineForOp loop nest to load, cast, store the elements
+ * from oldMemRef to newMemRef.
+ */
+Value castIntMemRef(OpBuilder& builder, Location loc, const Value& oldMemRef, size_t newWidth) {
+  // first, alloc new memref
+  MemRefType oldMemRefType = oldMemRef.getType().cast<MemRefType>();   
+  Type newElementType = builder.getIntegerType(newWidth);
+  MemRefType newMemRefType = oldMemRefType.clone(newElementType).cast<MemRefType>();
+  Value newMemRef = builder.create<memref::AllocOp>(loc, newMemRefType);
+  // replace all uses
+  oldMemRef.replaceAllUsesWith(newMemRef);
+  // build loop nest 
+  SmallVector<int64_t, 4> lbs(oldMemRefType.getRank(), 0);
+  SmallVector<int64_t, 4> steps(oldMemRefType.getRank(), 1);
+  size_t oldWidth = oldMemRefType.getElementType().cast<IntegerType>().getWidth();
+  buildAffineLoopNest(
+    builder, loc, lbs, oldMemRefType.getShape(), steps,
+    [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+      Value v = nestedBuilder.create<AffineLoadOp>(loc, oldMemRef, ivs);
+      Value casted;
+      if (newWidth < oldWidth) {
+        // trunc 
+        casted = nestedBuilder.create<arith::TruncIOp>(loc, newElementType, v);
+      } else {
+        // extend
+        casted = nestedBuilder.create<arith::ExtSIOp>(loc, newElementType, v);
+      }
+      nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
+    }
+  );
+  return newMemRef;
+}
+
+
 
 void updateTopFunctionSignature(FuncOp &funcOp) {
   FunctionType functionType = funcOp.getType();
@@ -73,6 +109,8 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
   }
   
   // Update FuncOp's block argument types
+  // Also build loop nest to cast the input args
+  OpBuilder builder(funcOp->getRegion(0));
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
@@ -82,7 +120,9 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
           size_t width = 64;
           Type newType = IntegerType::get(funcOp.getContext(), width);
           Type newMemRefType = memrefType.clone(newType);
+          size_t oldWidth = et.cast<IntegerType>().getWidth();
           block.getArgument(i).setType(newMemRefType);
+          Value newMemRef = castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i), oldWidth);
         }
       }
     }
@@ -92,7 +132,25 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
   funcOp.setType(newFuncType);
+
+  llvm::outs() << funcOp << "\n";
 }
+
+
+// void castInputArgs(FuncOp &funcOp) {
+//   OpBuilder builder(funcOp->getRegion(0));
+//   for (Block& block : funcOp.getBlocks()) {
+//     for (Value& arg : block.getArguments()) {
+//       if (MemRefType argType = arg.getType().dyn_cast<MemRefType>()) {
+//         Type et = argType.getElementType();
+//         if (!et.isa<IntegerType>()) continue;
+//         // Build loop nests to cast argument
+//         castIntMemRef(builder, funcOp->getLoc(), arg, et.cast<IntegerType>().getWidth());
+//       }
+//     }
+//   }
+
+// }
 
 
 /// entry point
@@ -109,6 +167,7 @@ bool applyAnyWidthInteger(ModuleOp &mod) {
   }
 
   if (isFoundTopFunc && topFunc) {
+    // castInputArgs(*topFunc);
     updateTopFunctionSignature(*topFunc);
   }
 

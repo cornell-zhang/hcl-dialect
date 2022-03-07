@@ -1,5 +1,25 @@
 // RUN: hcl-opt %s --fixed-to-integer
 module {
+
+  func @func_call(%arg0: memref<10xi32>, %arg1: memref<10xi32>) attributes {extra_itypes = "ss", extra_otypes = ""} {
+    %0 = hcl.create_loop_handle "loop_0" : !hcl.LoopHandle
+    affine.for %arg2 = 0 to 10 {
+      affine.for %arg3 = 0 to 10 {
+        call @Stage_update_B(%arg0, %arg1, %arg3) {inputs = "compute_0,compute_1,"} : (memref<10xi32>, memref<10xi32>, index) -> ()
+      } {loop_name = "loop_1"}
+    } {loop_name = "loop_0"}
+    %1 = hcl.create_loop_handle "loop_1" : !hcl.LoopHandle
+    return
+  }
+  func @Stage_update_B(%arg0: memref<10xi32>, %arg1: memref<10xi32>, %arg2: index) attributes {extra_itypes = "sss"} {
+    %0 = affine.load %arg0[%arg2] {from = "compute_0"} : memref<10xi32>
+    %c1_i32 = arith.constant 1 : i32
+    %1 = arith.addi %0, %c1_i32 : i32
+    affine.store %1, %arg1[%arg2] {to = "compute_1"} : memref<10xi32>
+    return
+  }
+
+
   func @no_return(%arg0: memref<10x!hcl.Fixed<32, 2>>, %arg1: memref<10x!hcl.Fixed<32, 2>>, %arg3: memref<10x!hcl.Fixed<32, 2>>) -> () {
     affine.for %arg2 = 0 to 10 {
       %1 = affine.load %arg0[%arg2] {from = "compute_0"} : memref<10x!hcl.Fixed<32, 2>>

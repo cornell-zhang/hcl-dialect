@@ -504,8 +504,9 @@ class ExprOp(object):
 class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
-    def __init__(self, op):
+    def __init__(self, op, name=""):
         super().__init__(op, dtype="index")
+        self.name = name
         self.built_op = op
 
     def update_op(self, op):
@@ -519,8 +520,7 @@ class ReduceVar(IterVar):
     """
 
     def __init__(self, op, bound=None, name=""):
-        super().__init__(op)
-        self.name = name
+        super().__init__(op, name)
         self.bound = bound
 
     @property

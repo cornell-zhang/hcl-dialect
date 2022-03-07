@@ -86,6 +86,10 @@ static llvm::cl::opt<bool> fixedPointToInteger("fixed-to-integer",
                       llvm::cl::desc("Lower fixed-point operations to integer"),
                       llvm::cl::init(false));          
 
+static llvm::cl::opt<bool> anyWidthInteger("lower-anywidth-integer", 
+                      llvm::cl::desc("Lower anywidth integer to 64-bit integer"),
+                      llvm::cl::init(false));   
+
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile(inputFilename, &context);
   if (!module) {
@@ -160,6 +164,10 @@ int main(int argc, char **argv) {
 
   if (fixedPointToInteger) {
     pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
+  }
+
+  if (anyWidthInteger) {
+    pm.addPass(mlir::hcl::createAnyWidthIntegerPass());
   }
 
   if (enableNormalize) {

@@ -128,6 +128,11 @@ static bool lowerFixedPointToInteger(MlirModule &mlir_mod) {
   return applyFixedPointToInteger(mod);
 }
 
+static bool lowerAnyWidthInteger(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyAnyWidthInteger(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -164,4 +169,5 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("emit_hlscpp", &emitHlsCpp);
   hcl_m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
+  hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
 }

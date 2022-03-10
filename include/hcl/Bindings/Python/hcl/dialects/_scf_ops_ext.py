@@ -70,16 +70,16 @@ class IfOp:
   """Specialization for the SCF if op class."""
 
   def __init__(self,
-               results_,
                cond,
-               withElseRegion=False,
+               results_=[],
                *,
+               hasElse=False,
                loc=None,
                ip=None):
     """Creates an SCF `if` operation.
 
-    - `cond` is a boolean value to determine which regions of code will be executed.
-    - `withElseRegion` determines whether the if operation has the else branch.
+    - `cond` is a MLIR value of 'i1' type to determine which regions of code will be executed.
+    - `hasElse` determines whether the if operation has the else branch.
     """
     operands = []
     operands.append(cond)
@@ -92,9 +92,9 @@ class IfOp:
             operands=operands,
             loc=loc,
             ip=ip))
-    self.regions[0].blocks.append(*results)
-    if withElseRegion:
-        self.regions[1].blocks.append(*results)
+    self.regions[0].blocks.append(*[])
+    if hasElse:
+        self.regions[1].blocks.append(*[])
 
   @property
   def then_block(self):

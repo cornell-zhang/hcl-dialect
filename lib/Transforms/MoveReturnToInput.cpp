@@ -31,9 +31,20 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-
-void moveReturnToInput(FuncOp& f) {
-
+void moveReturnToInput(FuncOp& funcOp) {
+  FunctionType functionType = funcOp.getType();
+  SmallVector<Type, 4> resTypes = llvm::to_vector<4>(functionType.getResults());
+  SmallVector<Type, 4> argTypes;
+  for (auto& arg : funcOp.getArguments()) {
+    argTypes.push_back(arg.getType());
+  }
+  // Append resTypes to argTypes and clear resTypes
+  argTypes.insert(std::end(argTypes), std::begin(resTypes), std::end(resTypes));
+  resTypes.clear();
+  // Update function signature
+  FunctionType newFuncType = 
+    FunctionType::get(funcOp.getContext(), argTypes, resTypes);
+  funcOp.setType(newFuncType);
 }
 
 /// entry point

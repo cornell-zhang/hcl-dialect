@@ -36,13 +36,16 @@ namespace hcl {
  * from oldMemRef to newMemRef.
  */
 Value castIntMemRef(OpBuilder &builder, Location loc, const Value &oldMemRef,
-                    size_t newWidth, bool replace = true) {
+                    size_t newWidth, bool unsign=false, bool replace = true, const Value& dstMemRef=NULL) {
   // first, alloc new memref
   MemRefType oldMemRefType = oldMemRef.getType().cast<MemRefType>();
   Type newElementType = builder.getIntegerType(newWidth);
   MemRefType newMemRefType =
       oldMemRefType.clone(newElementType).cast<MemRefType>();
-  Value newMemRef = builder.create<memref::AllocOp>(loc, newMemRefType);
+  Value newMemRef;
+  if (!dstMemRef) {
+    newMemRef = builder.create<memref::AllocOp>(loc, newMemRefType);
+  }
   // replace all uses
   if (replace)
     oldMemRef.replaceAllUsesWith(newMemRef);
@@ -62,9 +65,17 @@ Value castIntMemRef(OpBuilder &builder, Location loc, const Value &oldMemRef,
               nestedBuilder.create<arith::TruncIOp>(loc, newElementType, v);
         } else {
           // extend
-          casted = nestedBuilder.create<arith::ExtSIOp>(loc, newElementType, v);
+          if (unsign) {
+            casted = nestedBuilder.create<arith::ExtUIOp>(loc, newElementType, v);
+          } else {  
+            casted = nestedBuilder.create<arith::ExtSIOp>(loc, newElementType, v);
+          }
         }
-        nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
+        if (dstMemRef) {
+          nestedBuilder.create<AffineStoreOp>(loc, casted, dstMemRef, ivs);
+        } else {
+          nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
+        }
       });
   return newMemRef;
 }
@@ -110,8 +121,20 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
     }
   }
 
+  // Get signedness hint information
+  std::string extra_itypes = "";
+  if (funcOp->hasAttr("extra_itypes")) {
+    extra_itypes = funcOp->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  }
+  std::string extra_otypes = "";
+  if (funcOp->hasAttr("extra_otypes")) {
+    extra_otypes = funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  }
+
   // Update FuncOp's block argument types
   // Also build loop nest to cast the input args
+  SmallVector<Value, 4> newMemRefs;
+  SmallVector<Value, 4> blockArgs;
   OpBuilder builder(funcOp->getRegion(0));
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
@@ -124,8 +147,14 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
           Type newMemRefType = memrefType.clone(newType);
           size_t oldWidth = et.cast<IntegerType>().getWidth();
           block.getArgument(i).setType(newMemRefType);
-          castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i),
-                        oldWidth);
+          bool is_unsigned = false;
+          if (i < extra_itypes.length()) {
+            is_unsigned = extra_itypes[i] == 'u';
+          }
+          Value newMemRef = castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i),
+                        oldWidth, is_unsigned);
+          newMemRefs.push_back(newMemRef);
+          blockArgs.push_back(block.getArgument(i));
         }
       }
     }
@@ -140,18 +169,33 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
   });
   for (auto op : returnOps) {
     OpBuilder returnRewriter(op);
+    // Cast the return values
     for (unsigned i = 0; i < op->getNumOperands(); i++) {
       Value arg = op->getOperand(i);
       MemRefType type = arg.getType().cast<MemRefType>();
       Type etype = type.getElementType();
       if (etype.isa<IntegerType>()) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+          bool is_unsigned = false;
+          if (i < extra_otypes.length()) {
+            is_unsigned = extra_otypes[i] == 'u';
+          }
           Value newMemRef = castIntMemRef(returnRewriter, op->getLoc(),
-                                          allocOp.getResult(), 64, false);
+                                          allocOp.getResult(), 64, is_unsigned, false);
           // Only replace the single use of oldMemRef: returnOp
           op->setOperand(i, newMemRef);
         }
       }
+    }
+    // Cast the input arguments
+    for (auto v : llvm::enumerate(newMemRefs)) {
+      Value newMemRef = v.value();
+      Value& blockArg = blockArgs[v.index()];
+      bool is_unsigned = false;
+      if (v.index() < extra_itypes.length()) {
+        is_unsigned = extra_itypes[v.index()] == 'u';
+      }
+      castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned, false, blockArg);
     }
   }
 

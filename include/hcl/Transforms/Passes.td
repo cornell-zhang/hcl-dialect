@@ -27,5 +27,9 @@ def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
   let constructor = "mlir::hcl::createAnyWidthIntegerPass()";
 }
 
+def MoveReturnToInput : Pass<"return-to-input", "ModuleOp"> {
+  let summary = "Move return values to input argument list";
+  let constructor = "mlir::hcl::createMoveReturnToInputPass()";
+}
 
 #endif // HCL_MLIR_PASSES

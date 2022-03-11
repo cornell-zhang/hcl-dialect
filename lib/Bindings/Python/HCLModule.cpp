@@ -133,6 +133,11 @@ static bool lowerAnyWidthInteger(MlirModule &mlir_mod) {
   return applyAnyWidthInteger(mod);
 }
 
+static bool moveReturnToInput(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyMoveReturnToInput(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -167,7 +172,10 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Codegen APIs.
   hcl_m.def("emit_hlscpp", &emitHlsCpp);
+
+  // LLVM backend APIs.
   hcl_m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
   hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
+  hcl_m.def("move_return_to_input", &moveReturnToInput);
 }

@@ -90,6 +90,10 @@ static llvm::cl::opt<bool> anyWidthInteger("lower-anywidth-integer",
                       llvm::cl::desc("Lower anywidth integer to 64-bit integer"),
                       llvm::cl::init(false));   
 
+static llvm::cl::opt<bool> moveReturnToInput("return-to-input", 
+                      llvm::cl::desc("Move return values to input argument list"),
+                      llvm::cl::init(false));                       
+
 int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile(inputFilename, &context);
   if (!module) {
@@ -168,6 +172,10 @@ int main(int argc, char **argv) {
 
   if (anyWidthInteger) {
     pm.addPass(mlir::hcl::createAnyWidthIntegerPass());
+  }
+
+  if (moveReturnToInput) {
+    pm.addPass(mlir::hcl::createMoveReturnToInputPass());
   }
 
   if (enableNormalize) {

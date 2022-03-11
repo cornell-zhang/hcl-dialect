@@ -31,8 +31,27 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
+
+void moveReturnToInput(FuncOp& f) {
+
+}
+
 /// entry point
 bool applyMoveReturnToInput(ModuleOp &mod) {
+  // Find top-level function
+  bool isFoundTopFunc = false;
+  FuncOp *topFunc;
+  for (FuncOp func : mod.getOps<FuncOp>()) {
+    if (func->hasAttr("top")) {
+      isFoundTopFunc = true;
+      topFunc = &func;
+      break;
+    }
+  }
+
+  if (isFoundTopFunc && topFunc) {
+    moveReturnToInput(*topFunc);
+  }
   return true;
 }
 

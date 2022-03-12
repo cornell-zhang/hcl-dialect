@@ -1,6 +1,6 @@
-// RUN: hcl-opt %s
+// RUN: hcl-opt %s --return-to-input
 module {
-  func @top(%arg0: memref<10xi32>) -> (memref<10xi32>, memref<10xi32>) attributes {extra_itypes = "s", extra_otypes = "ss"} {
+  func @top(%arg0: memref<10xi32>) -> (memref<10xi32>, memref<10xi32>) attributes {extra_itypes = "s", extra_otypes = "ss", top} {
     %0 = memref.alloc() {name = "compute_1"} : memref<10xi32>
     affine.for %arg1 = 0 to 10 {
       %2 = affine.load %arg0[%arg1] {from = "compute_0"} : memref<10xi32>

@@ -1276,6 +1276,44 @@ class GetSliceOp(ExprOp):
         return self.built_op
 
 
+class SetSliceOp(ExprOp):
+    def __init__(self, num, hi, lo, val):
+        super().__init__(hcl_d.SetIntSliceOp, None)  # No return value!
+        self.num = num  # actually a LoadOp
+        def normalize(index):
+            if isinstance(index, int):
+                index = ConstantOp(IndexType.get(), index)
+            if not isinstance(index.dtype, IndexType):
+                print(
+                    "Warning: SetSliceOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            return index
+        self.hi = normalize(hi)
+        self.lo = normalize(lo)
+        if isinstance(val, int):
+            val = ConstantOp(num.dtype, val)
+        self.val = val
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.num.result,
+            self.hi.result,
+            self.lo.result,
+            self.val.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        flags.BIT_OP = True
+        return self.built_op
+
+
 class LoadOp(ExprOp):
     def __init__(self, tensor, indices):
         super().__init__(affine.AffineLoadOp, tensor.dtype)
@@ -1345,12 +1383,16 @@ class LoadOp(ExprOp):
     def __setitem__(self, bit_idx, expr):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
-        if not isinstance(bit_idx, tuple):
-            bit_idx = (bit_idx,)
-        if not len(bit_idx) == 1:
-            raise RuntimeError("Can only access one bit of the integer")
-        bit_idx = bit_idx[0]
-        return SetBitOp(self, bit_idx, expr)
+        if isinstance(bit_idx, slice):
+            hi, lo = bit_idx.start, bit_idx.stop
+            return SetSliceOp(self, hi, lo, expr)
+        else:
+            if not isinstance(bit_idx, tuple):
+                bit_idx = (bit_idx,)
+            if not len(bit_idx) == 1:
+                raise RuntimeError("Can only access one bit of the integer")
+            bit_idx = bit_idx[0]
+            return SetBitOp(self, bit_idx, expr)
 
 
 class StoreOp(ExprOp):
@@ -1525,6 +1567,8 @@ class ASTVisitor:
             return self.visit_setbit_op(expr)
         elif isinstance(expr, GetSliceOp):
             return self.visit_getslice_op(expr)
+        elif isinstance(expr, SetSliceOp):
+            return self.visit_setslice_op(expr)
         elif isinstance(expr, CastOp):
             return self.visit_cast_op(expr)
         elif isinstance(expr, ReduceOp):
@@ -1666,6 +1710,16 @@ class ASTVisitor:
             expr.built_op.operation.erase()
         self.visit(expr.num)
         self.visit(expr.index)
+        self.visit(expr.val)
+        if self.mode == "build":
+            return expr.build()
+
+    def visit_setslice_op(self, expr):
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
+        self.visit(expr.num)
+        self.visit(expr.hi)
+        self.visit(expr.lo)
         self.visit(expr.val)
         if self.mode == "build":
             return expr.build()

@@ -1801,6 +1801,13 @@ class ASTVisitor:
 def make_affine_for(
     lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
 ):
+    # Construct step
+    if not isinstance(step, int):
+        raise RuntimeError("Not supported")
+    if step < 0:  # need to also change induction variable
+        lb, ub = ub + 1, lb + 1  # swap
+        step = -step
+    step = IntegerAttr.get(IntegerType.get_signless(32), step)
     # Construct lower bound
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
@@ -1822,11 +1829,6 @@ def make_affine_for(
         ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
         ub_expr = ub.op
     ubMapAttr = AffineMapAttr.get(ubMap)
-
-    # Construct step
-    if not isinstance(step, int):
-        raise RuntimeError("Not supported")
-    step = IntegerAttr.get(IntegerType.get_signless(32), step)
 
     # Create AffineForOp
     forOp = affine.AffineForOp(

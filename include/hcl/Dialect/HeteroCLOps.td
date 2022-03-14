@@ -423,4 +423,13 @@ def SetIntBitOp : HeteroCL_Op<"set_bit"> {
     }];
 }
 
+def GetIntSliceOp : HeteroCL_Op<"get_slice"> {
+    let summary = "get slice of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $hi `,` $lo `)` attr-dict `->` type($result)
+    }];
+}
+
 #endif // HCL_OPS

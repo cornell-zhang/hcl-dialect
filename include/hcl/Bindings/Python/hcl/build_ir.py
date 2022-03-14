@@ -1854,8 +1854,9 @@ def make_if(cond, ip=None):
     visitor = ASTVisitor(mode="profile")
     visitor.visit(cond)
     if len(visitor.load) != 0 or len(visitor.store) != 0:
-        remover = ASTVisitor(mode="remove")
-        remover.visit(cond)
+        if cond.built_op is not None:
+            remover = ASTVisitor(mode="remove")
+            remover.visit(cond)
         builder = ASTVisitor(mode="build")
         builder.visit(cond)
         if_op = scf.IfOp(cond.result, ip=ip)

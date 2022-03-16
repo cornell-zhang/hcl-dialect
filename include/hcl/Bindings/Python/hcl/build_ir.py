@@ -448,10 +448,51 @@ class ExprOp(object):
         return self.generic_op(CmpOp, self, other, arg="ge")
 
     def __getitem__(self, indices):
-        raise RuntimeError("Not implemented")
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can access the bits")
+        if isinstance(indices, slice):
+            lo, hi = indices.start, indices.stop
+            if lo > hi:
+                raise RuntimeError(
+                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                )
+            elif lo == hi:
+                return self
+            else:
+                return GetSliceOp(self, hi - 1, lo)
+        else:
+            if not isinstance(indices, tuple):
+                indices = (indices,)
+            if not len(indices) == 1:
+                raise RuntimeError("Can only access one bit of the integer")
+            index = indices[0]
+            return GetBitOp(self, index)
 
     def __setitem__(self, indices, expr):
-        raise RuntimeError("Cannot set bit/slice of an expression")
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can access the bits")
+        if isinstance(indices, slice):
+            lo, hi = indices.start, indices.stop
+            if lo > hi:
+                raise RuntimeError(
+                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                )
+            elif lo == hi:  # e.g. [2:2]
+                if not isinstance(expr, LoadOp):
+                    raise RuntimeError(
+                        "Please check the expression to make sure the lower bound not equal to the upper bound"
+                    )
+                else:
+                    return StoreOp(expr, self.tensor, self.indices)
+            else:
+                return SetSliceOp(self, hi - 1, lo, expr)
+        else:
+            if not isinstance(indices, tuple):
+                indices = (indices,)
+            if not len(indices) == 1:
+                raise RuntimeError("Can only access one bit of the integer")
+            indices = indices[0]
+            return SetBitOp(self, indices, expr)
 
     def __nonzero__(self):
         raise RuntimeError(
@@ -1211,10 +1252,14 @@ class SetBitOp(ExprOp):
         if isinstance(index, int):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
-        if val not in [0, 1]:
-            raise RuntimeError("Can only set a bit of 0/1. Got {}.".format(val))
         if isinstance(val, int):
             val = ConstantOp(IntegerType.get_signless(1), val)
+        if not (is_integer_type(val.dtype) and val.dtype.width == 1):
+            raise RuntimeError(
+                "Can only set a bit of 0/1. Got {} with dtype {}.".format(
+                    val, val.dtype
+                )
+            )
         self.val = val
         if not isinstance(self.index.dtype, IndexType):
             print(
@@ -1235,7 +1280,8 @@ class SetBitOp(ExprOp):
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
-        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        if isinstance(self.num, LoadOp):
+            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
         flags.BIT_OP = True
         return self.built_op
 
@@ -1311,7 +1357,8 @@ class SetSliceOp(ExprOp):
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
-        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        if isinstance(self.num, LoadOp):
+            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
         flags.BIT_OP = True
         return self.built_op
 
@@ -1367,48 +1414,6 @@ class LoadOp(ExprOp):
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
-
-    def __getitem__(self, indices):
-        if not is_integer_type(self.dtype):
-            raise RuntimeError("Only fixed integers can access the bits")
-        if isinstance(indices, slice):
-            lo, hi = indices.start, indices.stop
-            if lo > hi:
-                raise RuntimeError(
-                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
-                )
-            elif lo == hi:
-                return self
-            else:
-                return GetSliceOp(self, hi - 1, lo)
-        else:
-            if not isinstance(indices, tuple):
-                indices = (indices,)
-            if not len(indices) == 1:
-                raise RuntimeError("Can only access one bit of the integer")
-            index = indices[0]
-            return GetBitOp(self, index)
-
-    def __setitem__(self, indices, expr):
-        if not is_integer_type(self.dtype):
-            raise RuntimeError("Only fixed integers can access the bits")
-        if isinstance(indices, slice):
-            lo, hi = indices.start, indices.stop
-            if lo > hi:
-                raise RuntimeError(
-                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
-                )
-            elif lo == hi:  # e.g. [2:2]
-                return StoreOp(expr, self.tensor, self.indices)
-            else:
-                return SetSliceOp(self, hi - 1, lo, expr)
-        else:
-            if not isinstance(indices, tuple):
-                indices = (indices,)
-            if not len(indices) == 1:
-                raise RuntimeError("Can only access one bit of the integer")
-            indices = indices[0]
-            return SetBitOp(self, indices, expr)
 
 
 class StoreOp(ExprOp):

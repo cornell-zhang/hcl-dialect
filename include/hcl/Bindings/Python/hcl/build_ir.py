@@ -1280,6 +1280,7 @@ class SetSliceOp(ExprOp):
     def __init__(self, num, hi, lo, val):
         super().__init__(hcl_d.SetIntSliceOp, None)  # No return value!
         self.num = num  # actually a LoadOp
+
         def normalize(index):
             if isinstance(index, int):
                 index = ConstantOp(IndexType.get(), index)
@@ -1291,6 +1292,7 @@ class SetSliceOp(ExprOp):
                 )
                 index = CastOp(index, IndexType.get())
             return index
+
         self.hi = normalize(hi)
         self.lo = normalize(lo)
         if isinstance(val, int):
@@ -1370,8 +1372,15 @@ class LoadOp(ExprOp):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
         if isinstance(indices, slice):
-            hi, lo = indices.start, indices.stop
-            return GetSliceOp(self, hi, lo)
+            lo, hi = indices.start, indices.stop
+            if lo > hi:
+                raise RuntimeError(
+                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                )
+            elif lo == hi:
+                return self
+            else:
+                return GetSliceOp(self, hi - 1, lo)
         else:
             if not isinstance(indices, tuple):
                 indices = (indices,)
@@ -1380,24 +1389,32 @@ class LoadOp(ExprOp):
             index = indices[0]
             return GetBitOp(self, index)
 
-    def __setitem__(self, bit_idx, expr):
+    def __setitem__(self, indices, expr):
         if not is_integer_type(self.dtype):
             raise RuntimeError("Only fixed integers can access the bits")
-        if isinstance(bit_idx, slice):
-            hi, lo = bit_idx.start, bit_idx.stop
-            return SetSliceOp(self, hi, lo, expr)
+        if isinstance(indices, slice):
+            lo, hi = indices.start, indices.stop
+            if lo > hi:
+                raise RuntimeError(
+                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                )
+            elif lo == hi:  # e.g. [2:2]
+                return StoreOp(expr, self.tensor, self.indices)
+            else:
+                return SetSliceOp(self, hi - 1, lo, expr)
         else:
-            if not isinstance(bit_idx, tuple):
-                bit_idx = (bit_idx,)
-            if not len(bit_idx) == 1:
+            if not isinstance(indices, tuple):
+                indices = (indices,)
+            if not len(indices) == 1:
                 raise RuntimeError("Can only access one bit of the integer")
-            bit_idx = bit_idx[0]
-            return SetBitOp(self, bit_idx, expr)
+            indices = indices[0]
+            return SetBitOp(self, indices, expr)
 
 
 class StoreOp(ExprOp):
     def __init__(self, val, to_tensor, indices):
         super().__init__(affine.AffineStoreOp)
+        val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
             print(
                 "Warning: store operation has different input types. Cast from {} to {}.".format(

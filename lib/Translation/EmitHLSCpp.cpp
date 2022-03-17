@@ -285,6 +285,7 @@ public:
   void emitSetBit(hcl::SetIntBitOp op);
   void emitGetSlice(hcl::GetIntSliceOp op);
   void emitSetSlice(hcl::SetIntSliceOp op);
+  void emitBitReverse(hcl::BitReverseOp op);
   void emitBitcast(arith::BitcastOp op);
 
   /// Top-level MLIR module emitter.
@@ -503,6 +504,9 @@ public:
   bool visitOp(hcl::SetIntBitOp op) { return emitter.emitSetBit(op), true; }
   bool visitOp(hcl::GetIntSliceOp op) { return emitter.emitGetSlice(op), true; }
   bool visitOp(hcl::SetIntSliceOp op) { return emitter.emitSetSlice(op), true; }
+  bool visitOp(hcl::BitReverseOp op) {
+    return emitter.emitBitReverse(op), true;
+  }
 
   /// Unary expressions.
   bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
@@ -1404,6 +1408,17 @@ void ModuleEmitter::emitSetSlice(hcl::SetIntSliceOp op) {
   os << ") = ";
   emitValue(op.val());
   os << ";";
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitBitReverse(hcl::BitReverseOp op) {
+  indent();
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result);
+  os << " = ";
+  emitValue(op.num());
+  os << ".reverse();";
   emitInfoAndNewLine(op);
 }
 

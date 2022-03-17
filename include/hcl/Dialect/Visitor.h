@@ -61,7 +61,7 @@ public:
             // Logical expressions.
             arith::XOrIOp, arith::AndIOp, arith::OrIOp, arith::ShLIOp,
             arith::ShRSIOp, arith::ShRUIOp, hcl::GetIntBitOp, hcl::SetIntBitOp,
-            hcl::GetIntSliceOp, hcl::SetIntSliceOp,
+            hcl::GetIntSliceOp, hcl::SetIntSliceOp, hcl::BitReverseOp,
             // Special operations.
             CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
@@ -186,6 +186,7 @@ public:
   HANDLE(hcl::SetIntBitOp);
   HANDLE(hcl::GetIntSliceOp);
   HANDLE(hcl::SetIntSliceOp);
+  HANDLE(hcl::BitReverseOp);
 
   // Special operations.
   HANDLE(CallOp);

@@ -441,4 +441,13 @@ def SetIntSliceOp : HeteroCL_Op<"set_slice"> {
     }];
 }
 
+def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
+    let summary = "reverse bits of an integer";
+    let arguments = (ins SignlessIntegerLike:$num);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `)` attr-dict
+    }];
+}
+
 #endif // HCL_OPS

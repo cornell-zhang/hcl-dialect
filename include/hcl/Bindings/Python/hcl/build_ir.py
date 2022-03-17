@@ -493,6 +493,11 @@ class ExprOp(object):
             indices = indices[0]
             return SetBitOp(self, indices, expr)
 
+    def reverse(self):
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can reverse the bits")
+        return BitReverseOp(self)
+
     def __nonzero__(self):
         raise RuntimeError(
             "1) Cannot use and / or / not operator to Expr, "
@@ -1055,6 +1060,11 @@ class NegOp(UnaryOp):
         super().__init__(
             {"float": arith.NegFOp, "int": arith.NegFOp}, val.dtype, val
         )  # use the same op
+
+
+class BitReverseOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(hcl_d.BitReverseOp, val.dtype, val)
 
 
 class BitCastOp(UnaryOp):

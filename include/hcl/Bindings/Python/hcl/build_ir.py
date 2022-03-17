@@ -398,8 +398,7 @@ class ExprOp(object):
         return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
-        expr = NegOp(self.dtype, self)
-        return expr
+        return NegOp(self)
 
     def __lshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
@@ -1052,9 +1051,9 @@ class XOrOp(BinaryOp):
 
 
 class NegOp(UnaryOp):
-    def __init__(self, dtype, val):
+    def __init__(self, val):
         super().__init__(
-            {"float": arith.NegFOp, "int": arith.NegFOp}, dtype, val
+            {"float": arith.NegFOp, "int": arith.NegFOp}, val.dtype, val
         )  # use the same op
 
 

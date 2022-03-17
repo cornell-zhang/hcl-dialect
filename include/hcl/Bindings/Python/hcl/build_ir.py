@@ -451,12 +451,15 @@ class ExprOp(object):
             raise RuntimeError("Only integers can access the bits")
         if isinstance(indices, slice):
             lo, hi = indices.start, indices.stop
-            if lo > hi:
-                raise RuntimeError(
-                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
-                )
-            elif lo == hi:
-                return self
+            if isinstance(lo, int) and isinstance(hi, int):
+                if lo > hi:
+                    raise RuntimeError(
+                        "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                    )
+                elif lo == hi:
+                    return self
+                else:
+                    return GetSliceOp(self, hi - 1, lo)
             else:
                 return GetSliceOp(self, hi - 1, lo)
         else:
@@ -472,17 +475,20 @@ class ExprOp(object):
             raise RuntimeError("Only integers can access the bits")
         if isinstance(indices, slice):
             lo, hi = indices.start, indices.stop
-            if lo > hi:
-                raise RuntimeError(
-                    "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
-                )
-            elif lo == hi:  # e.g. [2:2]
-                if not isinstance(expr, LoadOp):
+            if isinstance(lo, int) and isinstance(hi, int):
+                if lo > hi:
                     raise RuntimeError(
-                        "Please check the expression to make sure the lower bound not equal to the upper bound"
+                        "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
                     )
+                elif lo == hi:  # e.g. [2:2]
+                    if not isinstance(expr, LoadOp):
+                        raise RuntimeError(
+                            "Please check the expression to make sure the lower bound not equal to the upper bound"
+                        )
+                    else:
+                        return StoreOp(expr, self.tensor, self.indices)
                 else:
-                    return StoreOp(expr, self.tensor, self.indices)
+                    return SetSliceOp(self, hi - 1, lo, expr)
             else:
                 return SetSliceOp(self, hi - 1, lo, expr)
         else:

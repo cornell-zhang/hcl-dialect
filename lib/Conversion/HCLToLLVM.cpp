@@ -73,8 +73,10 @@ public:
     auto printOp = cast<hcl::PrintOp>(op);
     auto elementLoad =
         rewriter.create<memref::LoadOp>(loc, printOp.input(), loopIvs);
+    // Cast element to f64
+    auto casted = castToF64(rewriter, elementLoad);
     rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
-                            ArrayRef<Value>({formatSpecifierCst, elementLoad}));
+                            ArrayRef<Value>({formatSpecifierCst, casted}));
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);
@@ -82,6 +84,35 @@ public:
   }
 
 private:
+  /// To support printing MemRef with any element type, we cast
+  /// Int, Float32 types to Float64.
+  static Value castToF64(ConversionPatternRewriter &rewriter,
+                         const Value &src) {
+    Type t = src.getType();
+    Type F64Type = rewriter.getF64Type();
+    Value casted;
+    if (t.isa<IntegerType>()) {
+      if (t.isUnsignedInteger()) {
+        casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type, src);
+      } else { // signed and signless integer
+        casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type, src);
+      }
+    } else if (t.isa<FloatType>()) {
+      unsigned width = t.cast<FloatType>().getWidth();
+      if (width < 64) {
+        casted = rewriter.create<arith::ExtFOp>(src.getLoc(), F64Type, src);
+      } else if (width > 64) {
+        casted = rewriter.create<arith::TruncFOp>(src.getLoc(), F64Type, src);
+      } else {
+        casted = src;
+      }
+    } else {
+      llvm::errs() << src.getLoc() << "could not cast value of type "
+                   << src.getType() << " to F64.\n";
+    }
+    return casted;
+  }
+
   /// Return a symbol reference to the printf function, inserting it into the
   /// module if necessary.
   static FlatSymbolRefAttr getOrInsertPrintf(PatternRewriter &rewriter,

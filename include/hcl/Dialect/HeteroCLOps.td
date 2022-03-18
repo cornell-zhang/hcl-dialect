@@ -466,4 +466,16 @@ def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
     }];
 }
 
+def PrintOp : HeteroCL_Op<"print"> {
+  let summary = "print operation";
+  let description = [{
+    The "print" builtin operation prints a given input memref, and produces
+    no results.
+  }];
+
+  // The print operation takes an input tensor to print.
+  let arguments = (ins AnyMemRef:$input);
+  let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
+}
+
 #endif // HCL_OPS

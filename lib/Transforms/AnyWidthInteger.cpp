@@ -63,13 +63,15 @@ Value castIntMemRef(OpBuilder &builder, Location loc, const Value &oldMemRef,
           // trunc
           casted =
               nestedBuilder.create<arith::TruncIOp>(loc, newElementType, v);
-        } else {
+        } else if (newWidth > oldWidth){
           // extend
           if (unsign) {
             casted = nestedBuilder.create<arith::ExtUIOp>(loc, newElementType, v);
           } else {  
             casted = nestedBuilder.create<arith::ExtSIOp>(loc, newElementType, v);
           }
+        } else {
+          casted = v; // no cast happened
         }
         if (dstMemRef) {
           nestedBuilder.create<AffineStoreOp>(loc, casted, dstMemRef, ivs);

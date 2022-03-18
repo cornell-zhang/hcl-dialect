@@ -1144,6 +1144,11 @@ class MathExpOp(UnaryOp):
         super().__init__(math.ExpOp, F32Type.get(), val)
 
 
+class PrintOp(UnaryOp):
+    def __init__(self, val, dtype):
+        super().__init__(hcl_d.PrintOp, get_mlir_type(dtype), val)
+
+
 class MathPowOp(BinaryOp):
     def __init__(self, x, y):
         if not isinstance(x, (int, float)):

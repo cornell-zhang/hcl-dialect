@@ -473,7 +473,7 @@ def PrintOp : HeteroCL_Op<"print"> {
     no results.
   }];
 
-  // The print operation takes an input tensor to print.
+  // The print operation takes an input memref to print.
   let arguments = (ins AnyMemRef:$input);
   let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
 }

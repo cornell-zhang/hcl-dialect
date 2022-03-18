@@ -71,7 +71,7 @@ public:
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
             hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,
-            hcl::MaxFixedOp>([&](auto opNode) -> ResultType {
+            hcl::MaxFixedOp, hcl::PrintOp>([&](auto opNode) -> ResultType {
           return thisCast->visitOp(opNode, args...);
         })
         .Default([&](auto opNode) -> ResultType {
@@ -210,6 +210,7 @@ public:
   // HCL operations
   HANDLE(hcl::CreateLoopHandleOp);
   HANDLE(hcl::CreateStageHandleOp);
+  HANDLE(hcl::PrintOp);
 
   // Fixed point operations
   HANDLE(hcl::AddFixedOp);

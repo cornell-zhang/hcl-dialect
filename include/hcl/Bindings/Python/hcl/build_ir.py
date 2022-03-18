@@ -603,11 +603,13 @@ class ConstantOp(ExprOp):
                     np_dtype = np.int16
                 elif self.dtype.width <= 32:
                     np_dtype = np.int32
-                elif self.dtype.width <= 64:
-                    np_dtype = np.int64
+                # elif self.dtype.width <= 64:
+                #     np_dtype = np.int64
                 else:
                     raise RuntimeError(
-                        "Integer width too large, not supported by numpy"
+                        "Integer width ({}) too large, not supported by numpy".format(
+                            self.dtype
+                        )
                     )
             elif is_floating_point_type(self.dtype):
                 if isinstance(self.dtype, F16Type):

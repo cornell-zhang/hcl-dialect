@@ -1416,6 +1416,87 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
+LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
+  // 1) Get the schedule
+  auto oldType = array.getType().dyn_cast<MemRefType>();
+  auto newType = reshapeOp.output().getType().dyn_cast<MemRefType>();
+  int oldRank = oldType.getRank();
+  int newRank = newType.getRank();
+  auto oldShape = oldType.getShape();
+  auto newShape = newType.getShape();
+  SmallVector<int64_t> prodOldShape;
+  prodOldShape.push_back(1);
+  for (int i = oldRank - 1; i >= 0; --i)
+    prodOldShape.push_back(oldShape[i] * prodOldShape[oldRank - 1 - i]);
+
+  // 2) Set new type
+  array.setType(newType);
+
+  // 3) Update memory access
+  SmallVector<Operation *> opToRemove;
+  for (auto user : array.getUsers()) {
+    if (auto op = dyn_cast<AffineStoreOp>(user)) {
+      OpBuilder rewriter(op);
+      SmallVector<AffineExpr> memAffineIndices;
+      memAffineIndices.clear();
+      auto oldAffineMap = op.getAffineMap();
+      auto linear_addr = rewriter.getAffineConstantExpr(0);
+      for (int i = oldRank - 1; i >= 0; --i) {
+        AffineExpr idx = oldAffineMap.getResult(i);
+        linear_addr = idx * prodOldShape[oldRank - i - 1] + linear_addr;
+      }
+      for (int i = 1; i < newRank; ++i) {
+        memAffineIndices.push_back(linear_addr % newShape[newRank - i]);
+        linear_addr = linear_addr.floorDiv(newShape[newRank - i]);
+      }
+      memAffineIndices.push_back(linear_addr);
+      std::reverse(memAffineIndices.begin(), memAffineIndices.end());
+      auto affineMap = AffineMap::get(oldRank, 0 /* symbols */,
+                                      memAffineIndices, rewriter.getContext());
+      rewriter.create<AffineStoreOp>(
+          op->getLoc(), op.getOperand(0) /*valueToStore*/,
+          op.getOperand(1) /*memref*/, affineMap, op.indices());
+      // remove original op
+      opToRemove.push_back(op);
+    } else if (auto op = dyn_cast<AffineLoadOp>(user)) {
+      OpBuilder rewriter(op);
+      SmallVector<AffineExpr> memAffineIndices;
+      memAffineIndices.clear();
+      auto oldAffineMap = op.getAffineMap();
+      auto linear_addr = rewriter.getAffineConstantExpr(0);
+      for (int i = oldRank - 1; i >= 0; --i) {
+        AffineExpr idx = oldAffineMap.getResult(i);
+        linear_addr = idx * prodOldShape[oldRank - i - 1] + linear_addr;
+      }
+      for (int i = 1; i < newRank; ++i) {
+        memAffineIndices.push_back(linear_addr % newShape[newRank - i]);
+        linear_addr = linear_addr.floorDiv(newShape[newRank - i]);
+      }
+      memAffineIndices.push_back(linear_addr);
+      std::reverse(memAffineIndices.begin(), memAffineIndices.end());
+      auto affineMap = AffineMap::get(oldRank, 0 /* symbols */,
+                                      memAffineIndices, rewriter.getContext());
+      auto load = rewriter.create<AffineLoadOp>(
+          op->getLoc(), op.getOperand(0) /*memref*/, affineMap, op.indices());
+      // remove original op
+      op.getResult().replaceAllUsesWith(load);
+      opToRemove.push_back(op);
+    }
+  }
+
+  // 4) update function signature
+  auto builder = Builder(array.getContext());
+  auto resultTypes = f.front().getTerminator()->getOperandTypes();
+  auto inputTypes = f.front().getArgumentTypes();
+  f.setType(builder.getFunctionType(inputTypes, resultTypes));
+
+  // 5) Remove all the useless operations
+  for (Operation *op : opToRemove) {
+    op->erase();
+  }
+  return success();
+}
+
 LogicalResult
 runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
                             Value &arrayToStream, int fifo_depth = -1) {
@@ -1473,7 +1554,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   InterKernelToOp>(op);
+                   ReshapeOp, InterKernelToOp>(op);
 }
 
 template <class HCLOp>
@@ -1546,6 +1627,14 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
       } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
         if (failed(runBufferAt(f, new_op)))
           return false;
+      } else if (auto new_op = dyn_cast<ReshapeOp>(op)) {
+        Value array;
+        if (findArray(f, new_op.target(), array)) {
+          if (failed(runReshape(f, new_op, array)))
+            return false;
+        } else {
+          return false;
+        }
       } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
         // if (failed(runInterKernelDataPlacement(f, new_op)))
         //   return false;
@@ -1619,6 +1708,21 @@ bool applyLoopTransformation(ModuleOp &mod) {
           runSchedule<ReuseAtOp>(funcMap, new_op, &runReuseAt);
         } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
           runSchedule<BufferAtOp>(funcMap, new_op, &runBufferAt);
+        } else if (auto new_op = dyn_cast<ReshapeOp>(op)) {
+          Value array;
+          bool isDone = false;
+          for (FuncOp f : mod.getOps<FuncOp>()) {
+            if (findArray(f, new_op.target(), array)) {
+              if (failed(runReshape(f, new_op, array))) {
+                return false;
+              } else {
+                isDone = true;
+                break;
+              }
+            }
+          }
+          if (!isDone)
+            return false;
         } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
           Value array;
           auto optional_fifo_depth = new_op.fifo_depth();

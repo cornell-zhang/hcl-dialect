@@ -309,6 +309,22 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     }];
 }
 
+def HeteroCL_ReshapeOp : HeteroCL_Op<"reshape"> 
+{
+    let summary = "reshape";
+    let description = [{
+        hcl.reshape(target)
+
+        Reshape the tensor by modifying the memref
+    }];
+
+    let arguments = (ins AnyMemRef:$target);
+    let results = (outs AnyMemRef:$output);
+    let assemblyFormat = [{
+        $target `:` type($target) `to` type($output) attr-dict
+    }];
+}
+
 def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to"> 
 {
     let summary = "inter-kernel data placement";

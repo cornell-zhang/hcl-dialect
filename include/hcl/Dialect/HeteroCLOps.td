@@ -478,4 +478,22 @@ def PrintOp : HeteroCL_Op<"print"> {
   let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
 }
 
+def FixedToFloatOp : HeteroCL_Op<"fixed_to_float"> {
+  let summary = "fixed to float cast operation";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FloatLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
+  let summary = "float to fixed cast operation";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FloatLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
 #endif // HCL_OPS

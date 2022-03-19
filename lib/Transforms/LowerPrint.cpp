@@ -109,6 +109,10 @@ private:
       } else {
         casted = src;
       }
+    } else if (t.isa<FixedType>()) {
+      // TODO(Niansong): implement this after we have fixed-to-float cast
+    } else if (t.isa<UFixedType>()) {
+      // TODO(Niansong): implement this after we have fixed-to-float cast
     } else {
       llvm::errs() << src.getLoc() << "could not cast value of type "
                    << src.getType() << " to F64.\n";

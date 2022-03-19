@@ -40,6 +40,7 @@ public:
     auto loc = op->getLoc();
 
     ModuleOp parentModule = op->getParentOfType<ModuleOp>();
+    // ModuleOp parentModule = getModule();
 
     // Get a symbol reference to the printf function, inserting it if necessary.
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
@@ -83,6 +84,7 @@ public:
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);
+    llvm::outs() << parentModule << "\n";
     return success();
   }
 
@@ -109,10 +111,8 @@ private:
       } else {
         casted = src;
       }
-    } else if (t.isa<FixedType>()) {
-      // TODO(Niansong): implement this after we have fixed-to-float cast
-    } else if (t.isa<UFixedType>()) {
-      // TODO(Niansong): implement this after we have fixed-to-float cast
+    } else if (t.isa<FixedType, UFixedType>()) {
+      casted = rewriter.create<hcl::FixedToFloatOp>(src.getLoc(), F64Type, src);
     } else {
       llvm::errs() << src.getLoc() << "could not cast value of type "
                    << src.getType() << " to F64.\n";
@@ -196,6 +196,7 @@ bool applyLowerPrintPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<PrintOpLowering>(&context);
   if (failed(applyPartialConversion(module, target, std::move(patterns))))
     return false;
+  llvm::outs() << module << "\n";
   return true;
 }
 } // namespace hcl
@@ -203,8 +204,11 @@ bool applyLowerPrintPass(ModuleOp &module, MLIRContext &context) {
 
 void LowerPrintPass::runOnOperation() {
   auto module = getOperation();
-  if (!applyLowerPrintPass(module, getContext()))
+  if (!applyLowerPrintPass(module, getContext())) {
+    llvm::outs() << "pass failed\n";
     signalPassFailure();
+  }
+  llvm::outs() << module << "\n";
 }
 
 namespace mlir {

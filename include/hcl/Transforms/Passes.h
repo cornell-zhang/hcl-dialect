@@ -30,7 +30,7 @@ bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
 bool applyFixedPointToInteger(ModuleOp &module);
 bool applyAnyWidthInteger(ModuleOp &module);
 bool applyMoveReturnToInput(ModuleOp &module);
-bool applyLowerPrintPass(ModuleOp &module, MLIRContext &context);
+bool applyLowerPrintPass(ModuleOp &module);
 
 /// Registers all HCL transformation passes
 void registerHCLPasses();

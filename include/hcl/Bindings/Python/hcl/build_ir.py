@@ -649,12 +649,18 @@ class ConstantOp(ExprOp):
                         value_attr = IntegerAttr.get(
                             IntegerType.get_signless(self.dtype.width), self.val
                         )
+                elif isinstance(self.dtype, F16Type):
+                    value_attr = FloatAttr.get(F16Type.get(), self.val)
                 elif isinstance(self.dtype, F32Type):
                     value_attr = FloatAttr.get(F32Type.get(), self.val)
+                elif isinstance(self.dtype, F64Type):
+                    value_attr = FloatAttr.get(F64Type.get(), self.val)
                 elif isinstance(self.dtype, IndexType):
                     value_attr = IntegerAttr.get(IndexType.get(), self.val)
                 else:
-                    raise RuntimeError("Type error")
+                    raise RuntimeError(
+                        "Type error: unrecognized type: " + str(self.dtype)
+                    )
                 if is_unsigned_type(self.dtype):
                     dtype = IntegerType.get_signless(self.dtype.width)
                     self.built_op = self.op(

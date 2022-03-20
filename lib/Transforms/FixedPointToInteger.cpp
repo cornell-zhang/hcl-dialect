@@ -188,10 +188,11 @@ void lowerPrintOp(FuncOp &funcOp) {
             casted = nestedBuilder.create<arith::UIToFPOp>(loc, F64, v);
             frac = oldType.cast<UFixedType>().getFrac();
           }
-          // TODO(Niansong): divf the fraction
           Value const_frac = nestedBuilder.create<mlir::arith::ConstantOp>(
               loc, F64, nestedBuilder.getFloatAttr(F64, std::pow(2, frac)));
-          nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
+          Value realV = nestedBuilder.create<mlir::arith::DivFOp>(
+              loc, F64, casted, const_frac);
+          nestedBuilder.create<AffineStoreOp>(loc, realV, newMemRef, ivs);
         });
     printOp->setOperand(0, newMemRef);
   }

@@ -156,7 +156,12 @@ void lowerPrintOp(FuncOp &funcOp) {
   SmallVector<Operation *, 4> printOps;
   funcOp.walk([&](Operation *op) {
     if (auto new_op = dyn_cast<PrintOp>(op)) {
-      printOps.push_back(op);
+      // Only lower fixed-point prints
+      MemRefType memRefType =
+          new_op->getOperand(0).getType().cast<MemRefType>();
+      Type elemType = memRefType.getElementType();
+      if (elemType.isa<FixedType, UFixedType>())
+        printOps.push_back(op);
     }
   });
   for (auto *printOp : printOps) {
@@ -175,14 +180,17 @@ void lowerPrintOp(FuncOp &funcOp) {
         [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
           Value v = nestedBuilder.create<AffineLoadOp>(loc, oldMemRef, ivs);
           Value casted;
+          size_t frac;
           if (oldType.isa<FixedType>()) {
             casted = nestedBuilder.create<arith::SIToFPOp>(loc, F64, v);
-          } else if (oldType.isa<UFixedType>()) {
-            casted = nestedBuilder.create<arith::UIToFPOp>(loc, F64, v);
+            frac = oldType.cast<FixedType>().getFrac();
           } else {
-            casted = v;
+            casted = nestedBuilder.create<arith::UIToFPOp>(loc, F64, v);
+            frac = oldType.cast<UFixedType>().getFrac();
           }
           // TODO(Niansong): divf the fraction
+          Value const_frac = nestedBuilder.create<mlir::arith::ConstantOp>(
+              loc, F64, nestedBuilder.getFloatAttr(F64, std::pow(2, frac)));
           nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
         });
     printOp->setOperand(0, newMemRef);

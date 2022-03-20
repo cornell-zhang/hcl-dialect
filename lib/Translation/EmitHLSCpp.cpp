@@ -1608,37 +1608,42 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
 
   auto arrayType = array.getType().cast<ShapedType>();
   if (arrayType.hasStaticShape()) {
-    auto attr = array.getType().dyn_cast<MemRefType>().getMemorySpace();
-    if (attr &&
-        attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
-      // Value has been declared before or is a constant number.
-      if (isDeclared(array)) {
-        os << getName(array);
-        return;
-      }
+    auto memref = array.getType().dyn_cast<MemRefType>();
+    if (memref) {
+      auto attr = memref.getMemorySpace();
+      if (attr &&
+          attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+        // Value has been declared before or is a constant number.
+        if (isDeclared(array)) {
+          os << getName(array);
+          return;
+        }
 
-      // print stream type
-      os << "hls::stream< " << getTypeName(array) << " > ";
-      if (isFunc) {
-        os << "&"; // pass by reference
-      }
+        // print stream type
+        os << "hls::stream< " << getTypeName(array) << " > ";
+        if (isFunc) {
+          os << "&"; // pass by reference
+        }
 
-      // Add the new value to nameTable and emit its name.
-      os << addName(array, /*isPtr=*/false, name);
-      // Add original array declaration as comment
-      os << " /* ";
-      emitValue(array, 0, false, name);
-      for (auto &shape : arrayType.getShape())
-        os << "[" << shape << "]";
-      os << " */";
-    } else {
-      emitValue(array, 0, false, name);
-      if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
-        // do nothing;
-      } else {
+        // Add the new value to nameTable and emit its name.
+        os << addName(array, /*isPtr=*/false, name);
+        // Add original array declaration as comment
+        os << " /* ";
+        emitValue(array, 0, false, name);
         for (auto &shape : arrayType.getShape())
           os << "[" << shape << "]";
+        os << " */";
+      } else {
+        emitValue(array, 0, false, name);
+        if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+          // do nothing;
+        } else {
+          for (auto &shape : arrayType.getShape())
+            os << "[" << shape << "]";
+        }
       }
+    } else { // tensor
+      emitValue(array, 0, false, name);
     }
   } else
     emitValue(array, /*rank=*/0, /*isPtr=*/true, name);

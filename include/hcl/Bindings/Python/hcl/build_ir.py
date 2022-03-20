@@ -5,9 +5,12 @@
 # ===----------------------------------------------------------------------=== #
 
 
+from typing import List
+
+import numpy as np
 from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-from hcl_mlir.dialects import math, memref, std, scf
+from hcl_mlir.dialects import math, memref, scf, std, tensor
 from hcl_mlir.ir import *
 
 
@@ -592,47 +595,93 @@ class ConstantOp(ExprOp):
             self.build()
 
     def build(self):
-        if not is_fixed_type(self.dtype):
-            if isinstance(self.dtype, IntegerType):
-                if self.dtype.width == 1:
-                    value_attr = BoolAttr.get(self.val)
+        if isinstance(self.val, (List, np.ndarray)):
+            if is_integer_type(self.dtype):
+                if self.dtype.width <= 8:
+                    np_dtype = np.int8
+                elif self.dtype.width <= 16:
+                    np_dtype = np.int16
+                elif self.dtype.width <= 32:
+                    np_dtype = np.int32
+                # elif self.dtype.width <= 64:
+                #     np_dtype = np.int64
                 else:
-                    value_attr = IntegerAttr.get(
-                        IntegerType.get_signless(self.dtype.width), self.val
+                    raise RuntimeError(
+                        "Integer width ({}) too large, not supported by numpy".format(
+                            self.dtype
+                        )
                     )
-            elif isinstance(self.dtype, F32Type):
-                value_attr = FloatAttr.get(F32Type.get(), self.val)
-            elif isinstance(self.dtype, IndexType):
-                value_attr = IntegerAttr.get(IndexType.get(), self.val)
-            else:
-                raise RuntimeError("Type error")
-            if is_unsigned_type(self.dtype):
-                dtype = IntegerType.get_signless(self.dtype.width)
-                self.built_op = self.op(
-                    dtype, value_attr, ip=GlobalInsertionPoint.get()
-                )
-                self.built_op.attributes["unsigned"] = UnitAttr.get()
-            else:
-                self.built_op = self.op(
-                    self.dtype, value_attr, ip=GlobalInsertionPoint.get()
-                )
+            elif is_floating_point_type(self.dtype):
+                if isinstance(self.dtype, F16Type):
+                    np_dtype = np.float16
+                elif isinstance(self.dtype, F32Type):
+                    np_dtype = np.float32
+                elif isinstance(self.dtype, F64Type):
+                    np_dtype = np.float64
+                else:
+                    raise RuntimeError("Unrecognized data type")
+            else:  # Fixed point
+                raise RuntimeError("Not supported by numpy")
+            self.val = np.array(self.val, dtype=np_dtype)
+            tensor_type = RankedTensorType.get(self.val.shape, self.dtype)
+            attr = DenseElementsAttr.get(self.val, type=self.dtype)
+            const_tensor = arith.ConstantOp(
+                tensor_type, attr, ip=GlobalInsertionPoint.get()
+            )
+            tensor_wrapper = TensorOp(
+                self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
+            )
+            tensor_wrapper.build()
+            self.tensor = tensor_wrapper
+            store = memref.TensorStoreOp(
+                const_tensor.result,
+                tensor_wrapper.result,
+                ip=GlobalInsertionPoint.get(),
+            )
+            self.built_op = store
             return self.built_op
-        else:  # fixed types
-            if isinstance(self.val, float):
-                value_attr = FloatAttr.get(F32Type.get(), self.val)
-                self.built_op = self.op(
-                    F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
-                )
-            elif isinstance(self.val, int):
-                value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
-                self.built_op = self.op(
-                    IntegerType.get_signless(32),
-                    value_attr,
-                    ip=GlobalInsertionPoint.get(),
-                )
-            else:
-                raise RuntimeError("Type error")
-            return self.built_op
+        else:
+            if not is_fixed_type(self.dtype):
+                if isinstance(self.dtype, IntegerType):
+                    if self.dtype.width == 1:
+                        value_attr = BoolAttr.get(self.val)
+                    else:
+                        value_attr = IntegerAttr.get(
+                            IntegerType.get_signless(self.dtype.width), self.val
+                        )
+                elif isinstance(self.dtype, F32Type):
+                    value_attr = FloatAttr.get(F32Type.get(), self.val)
+                elif isinstance(self.dtype, IndexType):
+                    value_attr = IntegerAttr.get(IndexType.get(), self.val)
+                else:
+                    raise RuntimeError("Type error")
+                if is_unsigned_type(self.dtype):
+                    dtype = IntegerType.get_signless(self.dtype.width)
+                    self.built_op = self.op(
+                        dtype, value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                    self.built_op.attributes["unsigned"] = UnitAttr.get()
+                else:
+                    self.built_op = self.op(
+                        self.dtype, value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                return self.built_op
+            else:  # fixed types
+                if isinstance(self.val, float):
+                    value_attr = FloatAttr.get(F32Type.get(), self.val)
+                    self.built_op = self.op(
+                        F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                elif isinstance(self.val, int):
+                    value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
+                    self.built_op = self.op(
+                        IntegerType.get_signless(32),
+                        value_attr,
+                        ip=GlobalInsertionPoint.get(),
+                    )
+                else:
+                    raise RuntimeError("Type error")
+                return self.built_op
 
 
 class TensorSlice(ExprOp):

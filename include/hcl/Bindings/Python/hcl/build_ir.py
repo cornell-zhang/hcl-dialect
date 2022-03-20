@@ -104,7 +104,7 @@ def get_mlir_type(dtype):
         else:
             raise RuntimeError("Unrecognized data type")
     else:
-        raise RuntimeError("Unrecognized data type format")
+        raise RuntimeError("Unrecognized data type format: {} of Type({})".format(dtype, type(dtype)))
 
 
 def get_concrete_type(dtype):
@@ -749,7 +749,7 @@ class TensorSlice(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
-            return StoreOp(expr, self.parent, self.indices + new_indices)
+            return StoreOp(expr, self.parent, list(self.indices) + new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
 

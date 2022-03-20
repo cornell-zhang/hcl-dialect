@@ -185,6 +185,7 @@ void lowerPrintOp(FuncOp &funcOp) {
           // TODO(Niansong): divf the fraction
           nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
         });
+    printOp->setOperand(0, newMemRef);
   }
 }
 

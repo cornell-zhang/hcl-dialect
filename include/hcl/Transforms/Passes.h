@@ -16,7 +16,6 @@ std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass();
 std::unique_ptr<OperationPass<ModuleOp>> createFixedPointToIntegerPass();
 std::unique_ptr<OperationPass<ModuleOp>> createAnyWidthIntegerPass();
 std::unique_ptr<OperationPass<ModuleOp>> createMoveReturnToInputPass();
-std::unique_ptr<OperationPass<ModuleOp>> createLowerPrintPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 
@@ -30,7 +29,6 @@ bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
 bool applyFixedPointToInteger(ModuleOp &module);
 bool applyAnyWidthInteger(ModuleOp &module);
 bool applyMoveReturnToInput(ModuleOp &module);
-bool applyLowerPrintPass(ModuleOp &module);
 
 /// Registers all HCL transformation passes
 void registerHCLPasses();

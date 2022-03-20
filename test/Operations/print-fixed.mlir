@@ -1,4 +1,4 @@
-// RUN: hcl-opt -jit %s | FileCheck %s
+// RUN: hcl-opt %s
 
 module {
   func @top(%0: memref<4x4x!hcl.Fixed<4, 2>>) -> () {

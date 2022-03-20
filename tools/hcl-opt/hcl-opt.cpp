@@ -96,10 +96,6 @@ static llvm::cl::opt<bool> moveReturnToInput(
     "return-to-input",
     llvm::cl::desc("Move return values to input argument list"),
     llvm::cl::init(false));
-static llvm::cl::opt<bool>
-    lowerPrint("lower-print",
-               llvm::cl::desc("Lower hcl.print to scf.for loops"),
-               llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module) {
@@ -184,10 +180,6 @@ int main(int argc, char **argv) {
 
   if (moveReturnToInput) {
     pm.addPass(mlir::hcl::createMoveReturnToInputPass());
-  }
-
-  if (lowerPrint) {
-    pm.addPass(mlir::hcl::createLowerPrintPass());
   }
 
   if (enableNormalize) {

@@ -38,10 +38,16 @@ public:
 
     ModuleOp parentModule = op->getParentOfType<ModuleOp>();
 
+    // If the PrintOp has string attribute, it is the format string
+    std::string format_str = "%f \0";
+    if (op->hasAttr("format")) {
+      format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
+    }
+
     // Get a symbol reference to the printf function, inserting it if necessary.
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
     Value formatSpecifierCst = getOrCreateGlobalString(
-        loc, rewriter, "frmt_spec", StringRef("%f \0", 4), parentModule);
+        loc, rewriter, "frmt_spec", StringRef(format_str), parentModule);
     Value newLineCst = getOrCreateGlobalString(
         loc, rewriter, "nl", StringRef("\n\0", 2), parentModule);
 

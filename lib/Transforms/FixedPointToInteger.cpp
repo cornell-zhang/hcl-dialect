@@ -148,6 +148,56 @@ void updateReturnOp(FuncOp &funcOp) {
   }
 }
 
+/* Update hcl.print (PrintOp) operations.
+ * Create a float64 memref to store the real value
+ * of hcl.print's operand memref
+ */
+void lowerPrintOp(FuncOp &funcOp) {
+  SmallVector<Operation *, 4> printOps;
+  funcOp.walk([&](Operation *op) {
+    if (auto new_op = dyn_cast<PrintOp>(op)) {
+      // Only lower fixed-point prints
+      MemRefType memRefType =
+          new_op->getOperand(0).getType().cast<MemRefType>();
+      Type elemType = memRefType.getElementType();
+      if (elemType.isa<FixedType, UFixedType>())
+        printOps.push_back(op);
+    }
+  });
+  for (auto *printOp : printOps) {
+    OpBuilder builder(printOp);
+    Type F64 = builder.getF64Type();
+    Location loc = printOp->getLoc();
+    Value oldMemRef = printOp->getOperand(0);
+    MemRefType oldMemRefType = oldMemRef.getType().cast<MemRefType>();
+    Type oldType = oldMemRefType.getElementType();
+    MemRefType newMemRefType = oldMemRefType.clone(F64).cast<MemRefType>();
+    Value newMemRef = builder.create<memref::AllocOp>(loc, newMemRefType);
+    SmallVector<int64_t, 4> lbs(oldMemRefType.getRank(), 0);
+    SmallVector<int64_t, 4> steps(oldMemRefType.getRank(), 1);
+    buildAffineLoopNest(
+        builder, loc, lbs, oldMemRefType.getShape(), steps,
+        [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+          Value v = nestedBuilder.create<AffineLoadOp>(loc, oldMemRef, ivs);
+          Value casted;
+          size_t frac;
+          if (oldType.isa<FixedType>()) {
+            casted = nestedBuilder.create<arith::SIToFPOp>(loc, F64, v);
+            frac = oldType.cast<FixedType>().getFrac();
+          } else {
+            casted = nestedBuilder.create<arith::UIToFPOp>(loc, F64, v);
+            frac = oldType.cast<UFixedType>().getFrac();
+          }
+          Value const_frac = nestedBuilder.create<mlir::arith::ConstantOp>(
+              loc, F64, nestedBuilder.getFloatAttr(F64, std::pow(2, frac)));
+          Value realV = nestedBuilder.create<mlir::arith::DivFOp>(
+              loc, F64, casted, const_frac);
+          nestedBuilder.create<AffineStoreOp>(loc, realV, newMemRef, ivs);
+        });
+    printOp->setOperand(0, newMemRef);
+  }
+}
+
 /* Add attributes to fixed-point operations
  * to preserve operands and result's fixed-type
  * information. After block arguments and
@@ -494,6 +544,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (FuncOp func : mod.getOps<FuncOp>()) {
     // lowerFixedAdd(func);
+    lowerPrintOp(func);
     markFixedOperations(func);
     updateFunctionSignature(func);
     updateAffineLoad(func);

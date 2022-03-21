@@ -1255,7 +1255,9 @@ class CastOp(ExprOp):
             elif res_type.width == self.val.dtype.width:
                 op = None
             else:
-                if not is_unsigned_type(res_type) and not isinstance(self.val, (GetBitOp, GetSliceOp)):
+                if not is_unsigned_type(res_type) and not isinstance(
+                    self.val, (GetBitOp, GetSliceOp)
+                ):
                     op = arith.ExtSIOp
                 else:
                     op = arith.ExtUIOp
@@ -1324,8 +1326,12 @@ class GetBitOp(ExprOp):
             self.build()
 
     def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
         self.built_op = self.op(
-            self.dtype,
+            dtype,
             self.num.result,
             self.index.result,
             ip=GlobalInsertionPoint.get(),
@@ -1400,8 +1406,12 @@ class GetSliceOp(ExprOp):
             self.build()
 
     def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
         self.built_op = self.op(
-            self.dtype,
+            dtype,
             self.num.result,
             self.hi.result,
             self.lo.result,

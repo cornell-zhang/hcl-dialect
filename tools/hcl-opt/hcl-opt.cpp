@@ -74,6 +74,10 @@ static llvm::cl::opt<bool> enableOpt("opt",
                                      llvm::cl::desc("Enable HCL schedules"),
                                      llvm::cl::init(false));
 
+static llvm::cl::opt<bool> lowerToLLVM("lower-to-llvm",
+                                       llvm::cl::desc("Lower to LLVM Dialect"),
+                                       llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -166,7 +170,7 @@ int main(int argc, char **argv) {
   mlir::PassManager pm(&context);
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
-  if (enableOpt || runJiT) {
+  if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
   }
 
@@ -200,7 +204,7 @@ int main(int argc, char **argv) {
     // pm.addPass(mlir::createCSEPass());
   }
 
-  if (runJiT) {
+  if (runJiT || lowerToLLVM) {
     pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
   }
 

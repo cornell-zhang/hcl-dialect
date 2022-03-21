@@ -202,7 +202,7 @@ public:
 class SetIntBitOpLowering : public ConversionPattern {
 public:
   explicit SetIntBitOpLowering(MLIRContext *context)
-      : ConversionPattern(hcl::SetIntBitOp::getOperationName(), 1, context) {}
+      : ConversionPattern(hcl::SetIntBitOp::getOperationName(), 3, context) {}
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
@@ -242,7 +242,7 @@ public:
 class GetIntBitOpLowering : public ConversionPattern {
 public:
   explicit GetIntBitOpLowering(MLIRContext *context)
-      : ConversionPattern(hcl::GetIntBitOp::getOperationName(), 1, context) {}
+      : ConversionPattern(hcl::GetIntBitOp::getOperationName(), 2, context) {}
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
@@ -257,6 +257,18 @@ public:
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
     Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
     op->getResult(0).replaceAllUsesWith(singleBit);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+class GetIntSliceOpLowering : public ConversionPattern {
+public:
+  explicit GetIntSliceOpLower(MLIRContext *context)
+      : ConversionPattern(hcl::GetIntSliceOp::getOperationName(), 4, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatterRewriter &rewriter) const override {
     rewriter.eraseOp(op);
     return success();
   }

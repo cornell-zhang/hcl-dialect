@@ -202,10 +202,24 @@ public:
 class SetIntBitOpLowering : public ConversionPattern {
 public:
   explicit SetIntBitOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::SetIntBitOp::getOperationName(), 1, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    rewriter.eraseOp(op);
+    return success();
+  }
+}
+
+class GetIntBitOpLowering : public ConversionPattern {
+public:
+  explicit GetIntBitOpLowering(MLIRContext *context)
       : ConversionPattern(hcl::GetIntBitOp::getOperationName(), 1, context) {}
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
+
     rewriter.eraseOp(op);
     return success();
   }
@@ -265,6 +279,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<CreateStageHandleOpLowering>(&context);
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
+  patterns.add<GetIntBitOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

@@ -104,7 +104,9 @@ def get_mlir_type(dtype):
         else:
             raise RuntimeError("Unrecognized data type")
     else:
-        raise RuntimeError("Unrecognized data type format: {} of Type({})".format(dtype, type(dtype)))
+        raise RuntimeError(
+            "Unrecognized data type format: {} of Type({})".format(dtype, type(dtype))
+        )
 
 
 def get_concrete_type(dtype):
@@ -1073,13 +1075,22 @@ class MulOp(BinaryOp):
 
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"float": arith.DivFOp, "int": arith.DivUIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": arith.DivFOp, "int": arith.DivSIOp, "uint": arith.DivUIOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class FloorDivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": arith.DivFOp, "int": arith.DivUIOp},  # not supported!
+            {
+                "float": arith.DivFOp,
+                "int": arith.DivSIOp,
+                "uint": arith.DivUIOp,
+            },  # not supported!
             dtype,
             lhs,
             rhs,
@@ -1088,7 +1099,12 @@ class FloorDivOp(BinaryOp):
 
 class RemOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"float": arith.RemFOp, "int": arith.RemUIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": arith.RemFOp, "int": arith.RemSIOp, "uint": arith.RemUIOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class LeftShiftOp(BinaryOp):

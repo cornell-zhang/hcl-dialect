@@ -334,7 +334,7 @@ public:
     Value res = rewriter.create<mlir::arith::OrIOp>(loc, peripheral_slices,
                                                     val_shifted);
 
-    op->getResult(0).replaceAllUsesWith(res);
+    op->getOperand(0).replaceAllUsesWith(res);
     rewriter.eraseOp(op);
     return success();
   }

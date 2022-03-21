@@ -212,18 +212,17 @@ public:
     Value val = operands[2];
     Location loc = op->getLoc();
     // Cast val to the same with as input
-    Value val_casted =
-        rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
+    unsigned width = input.getType().getIntOrFloatBitWidth();
+    Value const_1 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, width);
     // Cast index to i32
     Type i32 = rewriter.getI32Type();
     Value idx_casted =
         rewriter.create<mlir::arith::IndexCastOp>(loc, index, i32);
     Value bitmask =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val_casted, idx_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
-    unsigned width = bitmask.getType().getIntOrFloatBitWidth();
-    Value all_one_mask = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, (unsigned)std::pow(2, width), width);
+    Value all_one_mask =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, -1, width);
     Value inversed_mask =
         rewriter.create<mlir::arith::XOrIOp>(loc, all_one_mask, bitmask);
     // If val == 1, SetBit should be input OR bitmask (e.g. input || 000010000)

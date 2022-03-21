@@ -206,11 +206,11 @@ public:
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-
+    // SetIntBitOp should be lowered to left shift and bitwise AND/OR
     rewriter.eraseOp(op);
     return success();
   }
-}
+};
 
 class GetIntBitOpLowering : public ConversionPattern {
 public:
@@ -219,11 +219,21 @@ public:
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-
+    // GetIntBitOp should be lowered to right shift and truncation
+    Value input = operands[0];
+    Value idx = operands[1];
+    Location loc = op->getLoc();
+    Type i32 = rewriter.getI32Type();
+    Type i1 = rewriter.getI1Type();
+    Value idx_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, idx, i32);
+    Value shifted =
+        rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
+    Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
+    op->getResult(0).replaceAllUsesWith(singleBit);
     rewriter.eraseOp(op);
     return success();
   }
-}
+};
 
 } // namespace
 

@@ -1255,7 +1255,7 @@ class CastOp(ExprOp):
             elif res_type.width == self.val.dtype.width:
                 op = None
             else:
-                if not is_unsigned_type(res_type):
+                if not is_unsigned_type(res_type) and not isinstance(self.val, (GetBitOp, GetSliceOp)):
                     op = arith.ExtSIOp
                 else:
                     op = arith.ExtUIOp

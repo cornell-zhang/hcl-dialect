@@ -261,6 +261,7 @@ public:
   }
 };
 
+/*
 class GetIntSliceOpLowering : public ConversionPattern {
 public:
   explicit GetIntSliceOpLowering(MLIRContext *context)
@@ -282,6 +283,41 @@ public:
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
     Value slice = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, resType);
     op->getResult(0).replaceAllUsesWith(slice);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+*/
+
+// Another way to implement GetIntSliceOp with just shifting
+class GetIntSliceOpLowering : public ConversionPattern {
+public:
+  explicit GetIntSliceOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::GetIntSliceOp::getOperationName(), 4, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    Value input = operands[0];
+    Value hi = operands[1];
+    Value lo = operands[2];
+    // cast low and high index to int32 type
+    Type i32 = rewriter.getI32Type();
+    Location loc = op->getLoc();
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
+    Value width = rewriter.create<mlir::arith::ConstantIntOp>(
+        loc, input.getType().getIntOrFloatBitWidth() - 1, 32);
+    Value lshift_width =
+        rewriter.create<mlir::arith::SubIOp>(loc, width, hi_casted);
+    // We do four shifts to extract the target bit slices
+    Value shift1 =
+        rewriter.create<mlir::arith::ShLIOp>(loc, input, lshift_width);
+    Value shift2 =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, shift1, lshift_width);
+    Value shift3 =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, shift2, lo_casted);
+    Value shift4 = rewriter.create<mlir::arith::ShLIOp>(loc, shift3, lo_casted);
+    op->getResult(0).replaceAllUsesWith(shift4);
     rewriter.eraseOp(op);
     return success();
   }

@@ -264,11 +264,25 @@ public:
 
 class GetIntSliceOpLowering : public ConversionPattern {
 public:
-  explicit GetIntSliceOpLower(MLIRContext *context)
+  explicit GetIntSliceOpLowering(MLIRContext *context)
       : ConversionPattern(hcl::GetIntSliceOp::getOperationName(), 4, context) {}
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                  ConversionPatterRewriter &rewriter) const override {
+                  ConversionPatternRewriter &rewriter) const override {
+    Value input = operands[0];
+    Value hi = operands[1];
+    Value lo = operands[2];
+    // cast low and high index to int32 type
+    Type i32 = rewriter.getI32Type();
+    Location loc = op->getLoc();
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    // Shift and truncate
+    Type resType = op->getResult(0).getType();
+    Value shifted =
+        rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
+    Value slice = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, resType);
+    op->getResult(0).replaceAllUsesWith(slice);
     rewriter.eraseOp(op);
     return success();
   }

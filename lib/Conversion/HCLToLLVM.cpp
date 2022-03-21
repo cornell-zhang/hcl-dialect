@@ -288,6 +288,58 @@ public:
   }
 };
 
+class SetIntSliceOpLowering : public ConversionPattern {
+public:
+  explicit SetIntSliceOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::SetIntSliceOp::getOperationName(), 4, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    // Three steps to implement setslice:
+    // 1. Get higher slice
+    // 2. Get lower slice
+    // 3. Shift value and use bitwise OR to get result
+    Value input = operands[0];
+    Value hi = operands[1];
+    Value lo = operands[2];
+    Value val = operands[3];
+    // Cast hi, lo to int32, cast val to same dtype as input
+    Type i32 = rewriter.getI32Type();
+    Location loc = op->getLoc();
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
+    Value val_casted =
+        rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
+    // Step 1: get higher slice - shift right, then shift left
+    Value hi_rshifted =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, input, hi_casted);
+    Value hi_slice =
+        rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_casted);
+
+    // Step 2: get lower slice - shift left, then shift right
+    Value width = rewriter.create<mlir::arith::ConstantIntOp>(
+        loc, input.getType().getIntOrFloatBitWidth(), 32);
+    Value shift_width =
+        rewriter.create<mlir::arith::SubIOp>(loc, width, lo_casted);
+    Value lo_lshifted =
+        rewriter.create<mlir::arith::ShLIOp>(loc, input, shift_width);
+    Value lo_slice =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, shift_width);
+
+    // Step 3: shift left val, and then use OR to "concat" three pieces
+    Value val_shifted =
+        rewriter.create<mlir::arith::ShLIOp>(loc, val, lo_casted);
+    Value peripheral_slices =
+        rewriter.create<mlir::arith::OrIOp>(loc, hi_slice, lo_slice);
+    Value res = rewriter.create<mlir::arith::OrIOp>(loc, peripheral_slices,
+                                                    val_shifted);
+
+    op->getResult(0).replaceAllUsesWith(res);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {

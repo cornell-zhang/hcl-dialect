@@ -423,4 +423,71 @@ def SetIntBitOp : HeteroCL_Op<"set_bit"> {
     }];
 }
 
+
+// Floating-point operators
+def AnyBfloat : Type<CPred<"$_self.isa<hcl::BfloatType>()">, "Bfloating-point",
+                    "hcl::AnyBfloatType">;
+def BfloatLike: TypeConstraint<Or<[AnyBfloat.predicate,
+        VectorOf<[AnyBfloat]>.predicate, TensorOf<[AnyBfloat]>.predicate]>,
+    "Bfloating-point-like">;
+
+class BfloatBinaryOp<string mnemonic, list<Trait> traits = []> :
+    Op<HeteroCL_Dialect, mnemonic, traits # [SameOperandsAndResultType]>,
+    Arguments<(ins BfloatLike:$lhs, BfloatLike:$rhs)>,
+    Results<(outs BfloatLike:$result)>;
+
+def AddBfloatOp : BfloatBinaryOp<"add_bfloat"> {
+  let summary = "Bfloating-point addition operation";
+}
+
+def SubBfloatOp : BfloatBinaryOp<"sub_bfloat"> {
+  let summary = "Bfloating-point subtraction operation";
+}
+
+def MulBfloatOp : BfloatBinaryOp<"mul_bfloat"> {
+  let summary = "Bfloating-point mulplication operation";
+}
+
+def CmpBfloatOp : HeteroCL_Op<"cmp_bfloat", [NoSideEffect, SameTypeOperands, TypesMatchWith<
+    "result type has i1 element type and same shape as operands",
+    "lhs", "result", "getI1SameShape($_self)">] # ElementwiseMappable.traits> {
+  let summary = "Bfloating-point comparison operation";
+
+  let arguments = (ins
+      CmpBfloatPredicateAttr:$predicate,
+      BfloatLike:$lhs,
+      BfloatLike:$rhs
+  );
+  let results = (outs BoolLike:$result);
+
+  let builders = [
+    OpBuilder<(ins "CmpBfloatPredicate":$predicate, "Value":$lhs,
+                 "Value":$rhs), [{
+      mlir::hcl::buildCmpBfloatOp($_builder, $_state, predicate, lhs, rhs);
+    }]>];
+
+  let extraClassDeclaration = [{
+    static StringRef getPredicateAttrName() { return "predicate"; }
+    static CmpBfloatPredicate getPredicateByName(StringRef name);
+
+    CmpBfloatPredicate getPredicate() {
+      return (CmpBfloatPredicate)(*this)->getAttrOfType<IntegerAttr>(
+          getPredicateAttrName()).getInt();
+    }
+  }];
+
+  let verifier = [{ return success(); }];
+
+  let assemblyFormat = "$predicate `,` $lhs `,` $rhs attr-dict `:` type($lhs)";
+}
+
+def MinBfloatOp : BfloatBinaryOp<"min_bfloat"> {
+  let summary = "Bfloating-point minimum operation";
+}
+
+def MaxBfloatOp : BfloatBinaryOp<"max_bfloat"> {
+  let summary = "Bfloatingpoint maximum operation";
+}
+
+
 #endif // HCL_OPS

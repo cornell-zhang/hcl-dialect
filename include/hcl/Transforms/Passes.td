@@ -27,5 +27,10 @@ def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
   let constructor = "mlir::hcl::createAnyWidthIntegerPass()";
 }
 
+def FloatingPointToInteger : Pass<"bfloat-integer", "ModuleOp"> {
+  let summary = "Transform anywidth-floating point input to 64-bit";
+  let constructor = "mlir::hcl::createFloatingPointToIntegerPass()";
+}
+
 
 #endif // HCL_MLIR_PASSES

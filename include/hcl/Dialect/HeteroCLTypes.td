@@ -75,15 +75,15 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
 def Bfloat : HeteroCL_Type<"Bfloat", [MemRefElementTypeInterface]> {
   let summary = "Bfloat floating number";
   let mnemonic = "Bfloat";
-  let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
+  let parameters = (ins "std::size_t":$exp, "std::size_t":$frac);
   let printer = [{
-    $_printer << "<" << getImpl()->width << ", " << getImpl()->frac << ">";
+    $_printer << "<" << getImpl()->exp<< ", " << getImpl()->frac<< ">";
   }];
   let parser = [{
     if (parser.parseLess())
       return Type();
-    std::size_t width;
-    if ($_parser.parseInteger(width))
+    std::size_t exp;
+    if ($_parser.parseInteger(exp))
       return Type();
     if ($_parser.parseComma())
       return Type();
@@ -92,7 +92,7 @@ def Bfloat : HeteroCL_Type<"Bfloat", [MemRefElementTypeInterface]> {
       return Type();
     if ($_parser.parseGreater())
       return Type();
-    return get($_ctxt, width, frac);
+    return get($_ctxt, exp, frac);
   }];
 }
 

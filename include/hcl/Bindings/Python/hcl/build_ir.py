@@ -224,21 +224,21 @@ def get_type_rank(dtype):
     if is_integer_type(dtype):
         base = 0
         width = dtype.width
-        if width > 64:
-            raise RuntimeError("Cannot support integer width larger than 64")
+        if width > 2048:
+            raise RuntimeError("Cannot support integer width larger than 2048")
         base += width
         return base
     elif is_index_type(dtype):  # width 32
-        base = 65
+        base = 2049
         return base
     elif is_fixed_type(dtype):
-        base = 100
+        base = 3000
         width = dtype.width
         frac = dtype.frac
         base += width
         return base
     elif is_floating_point_type(dtype):
-        base = 1000
+        base = 10000
         if isinstance(dtype, F16Type):
             base += 1
         elif isinstance(dtype, F32Type):

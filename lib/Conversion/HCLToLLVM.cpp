@@ -207,6 +207,33 @@ public:
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
     // SetIntBitOp should be lowered to left shift and bitwise AND/OR
+    Value input = operands[0];
+    Value index = operands[1];
+    Value val = operands[2];
+    Location loc = op->getLoc();
+    // Cast val to the same with as input
+    Value val_casted =
+        rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
+    // Cast index to i32
+    Type i32 = rewriter.getI32Type();
+    Value idx_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, index, i32);
+    Value bitmask =
+        rewriter.create<mlir::arith::ShLIOp>(loc, val_casted, idx_casted);
+    // take the inverse of bitmask
+    unsigned width = bitmask.getType().getIntOrFloatBitWidth();
+    Value all_one_mask = rewriter.create<mlir::arith::ConstantIntOp>(
+        loc, (unsigned)std::pow(2, width), width);
+    Value inversed_mask =
+        rewriter.create<mlir::arith::XOrIOp>(loc, all_one_mask, bitmask);
+    // If val == 1, SetBit should be input OR bitmask (e.g. input || 000010000)
+    Value Val1Res = rewriter.create<mlir::arith::OrIOp>(loc, input, bitmask);
+    // If val == 0, SetBit should be input AND inversed bitmask
+    // (e.g. input && 111101111)
+    Value Val0Res =
+        rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
+    Value trueRes = rewriter.create<SelectOp>(loc, val, Val1Res, Val0Res);
+    op->getResult(0).replaceAllUsesWith(trueRes);
     rewriter.eraseOp(op);
     return success();
   }

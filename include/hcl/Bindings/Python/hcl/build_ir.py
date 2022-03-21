@@ -5,9 +5,12 @@
 # ===----------------------------------------------------------------------=== #
 
 
+from typing import List
+
+import numpy as np
 from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-from hcl_mlir.dialects import math, memref, std, scf
+from hcl_mlir.dialects import math, memref, scf, std, tensor
 from hcl_mlir.ir import *
 
 
@@ -101,7 +104,9 @@ def get_mlir_type(dtype):
         else:
             raise RuntimeError("Unrecognized data type")
     else:
-        raise RuntimeError("Unrecognized data type format")
+        raise RuntimeError(
+            "Unrecognized data type format: {} of Type({})".format(dtype, type(dtype))
+        )
 
 
 def get_concrete_type(dtype):
@@ -398,8 +403,7 @@ class ExprOp(object):
         return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
-        expr = NegOp(self.dtype, self)
-        return expr
+        return NegOp(self)
 
     def __lshift__(self, other):
         if isinstance(self, float) or isinstance(other, float):
@@ -448,10 +452,62 @@ class ExprOp(object):
         return self.generic_op(CmpOp, self, other, arg="ge")
 
     def __getitem__(self, indices):
-        raise RuntimeError("Not implemented")
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can access the bits")
+        if isinstance(indices, slice):
+            lo, hi = indices.start, indices.stop
+            if isinstance(lo, int) and isinstance(hi, int):
+                if lo > hi:
+                    raise RuntimeError(
+                        "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                    )
+                elif lo == hi:
+                    return self
+                else:
+                    return GetSliceOp(self, hi - 1, lo)
+            else:
+                return GetSliceOp(self, hi - 1, lo)
+        else:
+            if not isinstance(indices, tuple):
+                indices = (indices,)
+            if not len(indices) == 1:
+                raise RuntimeError("Can only access one bit of the integer")
+            index = indices[0]
+            return GetBitOp(self, index)
 
     def __setitem__(self, indices, expr):
-        raise RuntimeError("Cannot set bit/slice of an expression")
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can access the bits")
+        if isinstance(indices, slice):
+            lo, hi = indices.start, indices.stop
+            if isinstance(lo, int) and isinstance(hi, int):
+                if lo > hi:
+                    raise RuntimeError(
+                        "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
+                    )
+                elif lo == hi:  # e.g. [2:2]
+                    if not isinstance(expr, LoadOp):
+                        raise RuntimeError(
+                            "Please check the expression to make sure the lower bound not equal to the upper bound"
+                        )
+                    else:
+                        return StoreOp(expr, self.tensor, self.indices)
+                else:
+                    return SetSliceOp(self, hi - 1, lo, expr)
+            else:
+                return SetSliceOp(self, hi - 1, lo, expr)
+        else:
+            if not isinstance(indices, tuple):
+                indices = (indices,)
+            if not len(indices) == 1:
+                raise RuntimeError("Can only access one bit of the integer")
+            indices = indices[0]
+            return SetBitOp(self, indices, expr)
+
+    def reverse(self):
+        if not is_integer_type(self.dtype):
+            raise RuntimeError("Only integers can reverse the bits")
+        return BitReverseOp(self)
 
     def __nonzero__(self):
         raise RuntimeError(
@@ -504,8 +560,9 @@ class ExprOp(object):
 class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
-    def __init__(self, op):
+    def __init__(self, op, name=""):
         super().__init__(op, dtype="index")
+        self.name = name
         self.built_op = op
 
     def update_op(self, op):
@@ -519,8 +576,7 @@ class ReduceVar(IterVar):
     """
 
     def __init__(self, op, bound=None, name=""):
-        super().__init__(op)
-        self.name = name
+        super().__init__(op, name)
         self.bound = bound
 
     @property
@@ -541,47 +597,99 @@ class ConstantOp(ExprOp):
             self.build()
 
     def build(self):
-        if not is_fixed_type(self.dtype):
-            if isinstance(self.dtype, IntegerType):
-                if self.dtype.width == 1:
-                    value_attr = BoolAttr.get(self.val)
+        if isinstance(self.val, (List, np.ndarray)):
+            if is_integer_type(self.dtype):
+                if self.dtype.width <= 8:
+                    np_dtype = np.int8
+                elif self.dtype.width <= 16:
+                    np_dtype = np.int16
+                elif self.dtype.width <= 32:
+                    np_dtype = np.int32
+                # elif self.dtype.width <= 64:
+                #     np_dtype = np.int64
                 else:
-                    value_attr = IntegerAttr.get(
-                        IntegerType.get_signless(self.dtype.width), self.val
+                    raise RuntimeError(
+                        "Integer width ({}) too large, not supported by numpy".format(
+                            self.dtype
+                        )
                     )
-            elif isinstance(self.dtype, F32Type):
-                value_attr = FloatAttr.get(F32Type.get(), self.val)
-            elif isinstance(self.dtype, IndexType):
-                value_attr = IntegerAttr.get(IndexType.get(), self.val)
-            else:
-                raise RuntimeError("Type error")
-            if is_unsigned_type(self.dtype):
-                dtype = IntegerType.get_signless(self.dtype.width)
-                self.built_op = self.op(
-                    dtype, value_attr, ip=GlobalInsertionPoint.get()
-                )
-                self.built_op.attributes["unsigned"] = UnitAttr.get()
-            else:
-                self.built_op = self.op(
-                    self.dtype, value_attr, ip=GlobalInsertionPoint.get()
-                )
+            elif is_floating_point_type(self.dtype):
+                if isinstance(self.dtype, F16Type):
+                    np_dtype = np.float16
+                elif isinstance(self.dtype, F32Type):
+                    np_dtype = np.float32
+                elif isinstance(self.dtype, F64Type):
+                    np_dtype = np.float64
+                else:
+                    raise RuntimeError("Unrecognized data type")
+            else:  # Fixed point
+                raise RuntimeError("Not supported by numpy")
+            self.val = np.array(self.val, dtype=np_dtype)
+            tensor_type = RankedTensorType.get(self.val.shape, self.dtype)
+            attr = DenseElementsAttr.get(self.val, type=self.dtype)
+            const_tensor = arith.ConstantOp(
+                tensor_type, attr, ip=GlobalInsertionPoint.get()
+            )
+            tensor_wrapper = TensorOp(
+                self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
+            )
+            tensor_wrapper.build()
+            self.tensor = tensor_wrapper
+            store = memref.TensorStoreOp(
+                const_tensor.result,
+                tensor_wrapper.result,
+                ip=GlobalInsertionPoint.get(),
+            )
+            self.built_op = store
             return self.built_op
-        else:  # fixed types
-            if isinstance(self.val, float):
-                value_attr = FloatAttr.get(F32Type.get(), self.val)
-                self.built_op = self.op(
-                    F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
-                )
-            elif isinstance(self.val, int):
-                value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
-                self.built_op = self.op(
-                    IntegerType.get_signless(32),
-                    value_attr,
-                    ip=GlobalInsertionPoint.get(),
-                )
-            else:
-                raise RuntimeError("Type error")
-            return self.built_op
+        else:
+            if not is_fixed_type(self.dtype):
+                if isinstance(self.dtype, IntegerType):
+                    if self.dtype.width == 1:
+                        value_attr = BoolAttr.get(self.val)
+                    else:
+                        value_attr = IntegerAttr.get(
+                            IntegerType.get_signless(self.dtype.width), self.val
+                        )
+                elif isinstance(self.dtype, F16Type):
+                    value_attr = FloatAttr.get(F16Type.get(), self.val)
+                elif isinstance(self.dtype, F32Type):
+                    value_attr = FloatAttr.get(F32Type.get(), self.val)
+                elif isinstance(self.dtype, F64Type):
+                    value_attr = FloatAttr.get(F64Type.get(), self.val)
+                elif isinstance(self.dtype, IndexType):
+                    value_attr = IntegerAttr.get(IndexType.get(), self.val)
+                else:
+                    raise RuntimeError(
+                        "Type error: unrecognized type: " + str(self.dtype)
+                    )
+                if is_unsigned_type(self.dtype):
+                    dtype = IntegerType.get_signless(self.dtype.width)
+                    self.built_op = self.op(
+                        dtype, value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                    self.built_op.attributes["unsigned"] = UnitAttr.get()
+                else:
+                    self.built_op = self.op(
+                        self.dtype, value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                return self.built_op
+            else:  # fixed types
+                if isinstance(self.val, float):
+                    value_attr = FloatAttr.get(F32Type.get(), self.val)
+                    self.built_op = self.op(
+                        F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
+                    )
+                elif isinstance(self.val, int):
+                    value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
+                    self.built_op = self.op(
+                        IntegerType.get_signless(32),
+                        value_attr,
+                        ip=GlobalInsertionPoint.get(),
+                    )
+                else:
+                    raise RuntimeError("Type error")
+                return self.built_op
 
 
 class TensorSlice(ExprOp):
@@ -649,7 +757,7 @@ class TensorSlice(ExprOp):
                 if isinstance(index, int):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
-            return StoreOp(expr, self.parent, self.indices + new_indices)
+            return StoreOp(expr, self.parent, list(self.indices) + new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
 
@@ -967,13 +1075,22 @@ class MulOp(BinaryOp):
 
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"float": arith.DivFOp, "int": arith.DivUIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": arith.DivFOp, "int": arith.DivSIOp, "uint": arith.DivUIOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class FloorDivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": arith.DivFOp, "int": arith.DivUIOp},  # not supported!
+            {
+                "float": arith.DivFOp,
+                "int": arith.DivSIOp,
+                "uint": arith.DivUIOp,
+            },  # not supported!
             dtype,
             lhs,
             rhs,
@@ -982,7 +1099,12 @@ class FloorDivOp(BinaryOp):
 
 class RemOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
-        super().__init__({"float": arith.RemFOp, "int": arith.RemUIOp}, dtype, lhs, rhs)
+        super().__init__(
+            {"float": arith.RemFOp, "int": arith.RemSIOp, "uint": arith.RemUIOp},
+            dtype,
+            lhs,
+            rhs,
+        )
 
 
 class LeftShiftOp(BinaryOp):
@@ -1011,10 +1133,15 @@ class XOrOp(BinaryOp):
 
 
 class NegOp(UnaryOp):
-    def __init__(self, dtype, val):
+    def __init__(self, val):
         super().__init__(
-            {"float": arith.NegFOp, "int": arith.NegFOp}, dtype, val
+            {"float": arith.NegFOp, "int": arith.NegFOp}, val.dtype, val
         )  # use the same op
+
+
+class BitReverseOp(UnaryOp):
+    def __init__(self, val):
+        super().__init__(hcl_d.BitReverseOp, val.dtype, val)
 
 
 class BitCastOp(UnaryOp):
@@ -1039,6 +1166,11 @@ class BitCastOp(UnaryOp):
 class MathExpOp(UnaryOp):
     def __init__(self, val):
         super().__init__(math.ExpOp, F32Type.get(), val)
+
+
+class PrintOp(UnaryOp):
+    def __init__(self, val, dtype):
+        super().__init__(hcl_d.PrintOp, get_mlir_type(dtype), val)
 
 
 class MathPowOp(BinaryOp):
@@ -1211,10 +1343,14 @@ class SetBitOp(ExprOp):
         if isinstance(index, int):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
-        if val not in [0, 1]:
-            raise RuntimeError("Can only set a bit of 0/1. Got {}.".format(val))
         if isinstance(val, int):
             val = ConstantOp(IntegerType.get_signless(1), val)
+        if not (is_integer_type(val.dtype) and val.dtype.width == 1):
+            raise RuntimeError(
+                "Can only set a bit of 0/1. Got {} with dtype {}.".format(
+                    val, val.dtype
+                )
+            )
         self.val = val
         if not isinstance(self.index.dtype, IndexType):
             print(
@@ -1235,7 +1371,85 @@ class SetBitOp(ExprOp):
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
-        self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        if isinstance(self.num, LoadOp):
+            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+        flags.BIT_OP = True
+        return self.built_op
+
+
+class GetSliceOp(ExprOp):
+    def __init__(self, num, hi, lo):
+        super().__init__(hcl_d.GetIntSliceOp, num.dtype)
+        self.num = num
+
+        def normalize(index):
+            if isinstance(index, int):
+                index = ConstantOp(IndexType.get(), index)
+            if not isinstance(index.dtype, IndexType):
+                print(
+                    "Warning: GetSliceOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            return index
+
+        self.hi = normalize(hi)
+        self.lo = normalize(lo)
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.dtype,
+            self.num.result,
+            self.hi.result,
+            self.lo.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        flags.BIT_OP = True
+        return self.built_op
+
+
+class SetSliceOp(ExprOp):
+    def __init__(self, num, hi, lo, val):
+        super().__init__(hcl_d.SetIntSliceOp, None)  # No return value!
+        self.num = num  # actually a LoadOp
+
+        def normalize(index):
+            if isinstance(index, int):
+                index = ConstantOp(IndexType.get(), index)
+            if not isinstance(index.dtype, IndexType):
+                print(
+                    "Warning: SetSliceOp's input is not an index. Cast from {} to {}.".format(
+                        index.dtype, IndexType.get()
+                    )
+                )
+                index = CastOp(index, IndexType.get())
+            return index
+
+        self.hi = normalize(hi)
+        self.lo = normalize(lo)
+        if isinstance(val, int):
+            val = ConstantOp(num.dtype, val)
+        self.val = val
+        if flags.BUILD_INPLACE:
+            self.build()
+
+    def build(self):
+        self.built_op = self.op(
+            self.num.result,
+            self.hi.result,
+            self.lo.result,
+            self.val.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        if isinstance(self.num, LoadOp):
+            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
         flags.BIT_OP = True
         return self.built_op
 
@@ -1292,37 +1506,11 @@ class LoadOp(ExprOp):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
-    def __getitem__(self, indices):
-        if not is_integer_type(self.dtype):
-            raise RuntimeError("Only fixed integers can access the bits")
-        if not isinstance(indices, tuple):
-            indices = (indices,)
-        if not len(indices) == 1:
-            raise RuntimeError("Can only access one bit of the integer")
-        index = indices[0]
-        # TODO: Not necessary be a constant
-        # if index >= self.dtype.width:
-        #     raise RuntimeError(
-        #         "Index ({}) is larger than the width of the integer ({})".format(
-        #             index, self.dtype.width
-        #         )
-        #     )
-        return GetBitOp(self, index)
-
-    def __setitem__(self, bit_idx, expr):
-        if not is_integer_type(self.dtype):
-            raise RuntimeError("Only fixed integers can access the bits")
-        if not isinstance(bit_idx, tuple):
-            bit_idx = (bit_idx,)
-        if not len(bit_idx) == 1:
-            raise RuntimeError("Can only access one bit of the integer")
-        bit_idx = bit_idx[0]
-        return SetBitOp(self, bit_idx, expr)
-
 
 class StoreOp(ExprOp):
     def __init__(self, val, to_tensor, indices):
         super().__init__(affine.AffineStoreOp)
+        val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
             print(
                 "Warning: store operation has different input types. Cast from {} to {}.".format(
@@ -1490,6 +1678,10 @@ class ASTVisitor:
             return self.visit_getbit_op(expr)
         elif isinstance(expr, SetBitOp):
             return self.visit_setbit_op(expr)
+        elif isinstance(expr, GetSliceOp):
+            return self.visit_getslice_op(expr)
+        elif isinstance(expr, SetSliceOp):
+            return self.visit_setslice_op(expr)
         elif isinstance(expr, CastOp):
             return self.visit_cast_op(expr)
         elif isinstance(expr, ReduceOp):
@@ -1610,11 +1802,37 @@ class ASTVisitor:
             self.visit(expr.num)
             self.visit(expr.index)
 
+    def visit_getslice_op(self, expr):
+        if self.mode == "build":
+            self.visit(expr.num)
+            self.visit(expr.hi)
+            self.visit(expr.lo)
+            return expr.build()
+        elif self.mode == "remove":
+            expr.built_op.operation.erase()
+            self.visit(expr.lo)
+            self.visit(expr.hi)
+            self.visit(expr.num)
+        else:
+            self.visit(expr.num)
+            self.visit(expr.hi)
+            self.visit(expr.lo)
+
     def visit_setbit_op(self, expr):
         if self.mode == "remove":
             expr.built_op.operation.erase()
         self.visit(expr.num)
         self.visit(expr.index)
+        self.visit(expr.val)
+        if self.mode == "build":
+            return expr.build()
+
+    def visit_setslice_op(self, expr):
+        if self.mode == "remove":
+            expr.built_op.operation.erase()
+        self.visit(expr.num)
+        self.visit(expr.hi)
+        self.visit(expr.lo)
         self.visit(expr.val)
         if self.mode == "build":
             return expr.build()
@@ -1801,6 +2019,13 @@ class ASTVisitor:
 def make_affine_for(
     lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
 ):
+    # Construct step
+    if not isinstance(step, int):
+        raise RuntimeError("Not supported")
+    if step < 0:  # need to also change induction variable
+        lb, ub = ub + 1, lb + 1  # swap
+        step = -step
+    step = IntegerAttr.get(IntegerType.get_signless(32), step)
     # Construct lower bound
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
@@ -1822,11 +2047,6 @@ def make_affine_for(
         ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
         ub_expr = ub.op
     ubMapAttr = AffineMapAttr.get(ubMap)
-
-    # Construct step
-    if not isinstance(step, int):
-        raise RuntimeError("Not supported")
-    step = IntegerAttr.get(IntegerType.get_signless(32), step)
 
     # Create AffineForOp
     forOp = affine.AffineForOp(
@@ -1854,8 +2074,9 @@ def make_if(cond, ip=None):
     visitor = ASTVisitor(mode="profile")
     visitor.visit(cond)
     if len(visitor.load) != 0 or len(visitor.store) != 0:
-        remover = ASTVisitor(mode="remove")
-        remover.visit(cond)
+        if cond.built_op is not None:
+            remover = ASTVisitor(mode="remove")
+            remover.visit(cond)
         builder = ASTVisitor(mode="build")
         builder.visit(cond)
         if_op = scf.IfOp(cond.result, ip=ip)

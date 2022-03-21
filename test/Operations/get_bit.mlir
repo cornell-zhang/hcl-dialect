@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s 
+// RUN: hcl-opt %s --lower-to-llvm
 module {
   func @top(%arg0: memref<10xi32>) -> memref<10xi32> attributes {bit, extra_itypes = "s", extra_otypes = "s", top} {
     %0 = memref.alloc() {name = "compute_1"} : memref<10xi32>

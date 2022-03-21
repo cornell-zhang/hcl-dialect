@@ -270,14 +270,14 @@ public:
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
     Value input = operands[0];
-    Value hi = operands[1];
+    // Value hi = operands[1];
     Value lo = operands[2];
     // cast low and high index to int32 type
     Type i32 = rewriter.getI32Type();
     Location loc = op->getLoc();
     Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    // Shift and truncate
+    // Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi,
+    // i32); Shift and truncate
     Type resType = op->getResult(0).getType();
     Value shifted =
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
@@ -328,7 +328,7 @@ public:
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val, lo_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, val_casted, lo_casted);
     Value peripheral_slices =
         rewriter.create<mlir::arith::OrIOp>(loc, hi_slice, lo_slice);
     Value res = rewriter.create<mlir::arith::OrIOp>(loc, peripheral_slices,
@@ -395,6 +395,8 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
+  patterns.add<SetIntSliceOpLowering>(&context);
+  patterns.add<GetIntSliceOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

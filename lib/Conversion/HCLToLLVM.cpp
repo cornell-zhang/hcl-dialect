@@ -233,7 +233,7 @@ public:
     Value Val0Res =
         rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
     Value trueRes = rewriter.create<SelectOp>(loc, val, Val1Res, Val0Res);
-    op->getResult(0).replaceAllUsesWith(trueRes);
+    op->getOperand(0).replaceAllUsesWith(trueRes);
     rewriter.eraseOp(op);
     return success();
   }

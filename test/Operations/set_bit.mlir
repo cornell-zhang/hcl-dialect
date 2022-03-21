@@ -15,7 +15,7 @@ module {
       hcl.set_bit(%1 : i32, %c2, %val : i1)
       affine.store %1, %res[%arg1] : memref<1xi32>
     } 
-// CHECK: 1
+// CHECK: 4
     hcl.print(%res) {format="%.0f \n"}: memref<1xi32>
     return
   }

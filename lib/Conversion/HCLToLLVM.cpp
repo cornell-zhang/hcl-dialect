@@ -338,28 +338,52 @@ public:
     Value hi = operands[1];
     Value lo = operands[2];
     Value val = operands[3];
-    // Cast hi, lo to int32, cast val to same dtype as input
-    Type i32 = rewriter.getI32Type();
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
-    Value val_casted =
-        rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
-    // Step 1: get higher slice - shift right, then shift left
-    Value hi_rshifted =
-        rewriter.create<mlir::arith::ShRUIOp>(loc, input, hi_casted);
-    Value hi_slice =
-        rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_casted);
-
-    // Step 2: get lower slice - shift left, then shift right
+    // Cast hi, lo to int32, cast val to same dtype as input
+    // Note: val's width may be different than (hi-low+1), so
+    // we need to clear the peripheral bits.
+    Type i32 = rewriter.getI32Type();
     Value width = rewriter.create<mlir::arith::ConstantIntOp>(
         loc, input.getType().getIntOrFloatBitWidth(), 32);
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
+    Value const1 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, 32);
+    Value slice_width_inter =
+        rewriter.create<mlir::arith::SubIOp>(loc, hi_casted, lo_casted);
+    Value slice_width =
+        rewriter.create<mlir::arith::AddIOp>(loc, slice_width_inter, const1);
+    Value val_lshift_bit =
+        rewriter.create<mlir::arith::SubIOp>(loc, width, slice_width);
+    Value val_ext =
+        rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
+    Value val_shift1 =
+        rewriter.create<mlir::arith::ShLIOp>(loc, val_ext, val_lshift_bit);
+    Value val_casted =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, val_shift1, val_lshift_bit);
+
+    // Step 1: get higher slice - shift right, then shift left
+    Value hi_shift_width =
+        rewriter.create<mlir::arith::AddIOp>(loc, hi_casted, const1);
+    Value hi_rshifted =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, input, hi_shift_width);
+    Value hi_slice =
+        rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_shift_width);
+
+    // Step 2: get lower slice - shift left, then shift right
+    // Note: left shifting `width` bits would result in unchanged result
+    // Therefore, we need to build a SelectOp:
+    // shifted = shift < width ? lshift : zero
     Value shift_width =
         rewriter.create<mlir::arith::SubIOp>(loc, width, lo_casted);
     Value lo_lshifted =
         rewriter.create<mlir::arith::ShLIOp>(loc, input, shift_width);
-    Value lo_slice =
+    Value lo_slice_possible =
         rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, shift_width);
+    Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, 32);
+    Value condition = rewriter.create<mlir::arith::CmpIOp>(
+        loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
+    Value lo_slice =
+        rewriter.create<SelectOp>(loc, condition, lo_slice_possible, zero);
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =

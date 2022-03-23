@@ -216,9 +216,9 @@ public:
     unsigned width = input.getType().getIntOrFloatBitWidth();
     Value const_1 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, width);
     // Cast index to i32
-    Type i32 = rewriter.getI32Type();
+    Type itype = rewriter.getIntegerType(width);
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, index, i32);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, index, itype);
     Value bitmask =
         rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
@@ -250,9 +250,11 @@ public:
     Value input = operands[0];
     Value idx = operands[1];
     Location loc = op->getLoc();
-    Type i32 = rewriter.getI32Type();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Type itype = rewriter.getIntegerType(iwidth);
     Type i1 = rewriter.getI1Type();
-    Value idx_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, idx, i32);
+    Value idx_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, idx, itype);
     Value shifted =
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
     Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
@@ -302,12 +304,13 @@ public:
     Value hi = operands[1];
     Value lo = operands[2];
     // cast low and high index to int32 type
-    Type i32 = rewriter.getI32Type();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Type itype = rewriter.getIntegerType(iwidth);
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, itype);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, itype);
     Value width = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, input.getType().getIntOrFloatBitWidth() - 1, 32);
+        loc, input.getType().getIntOrFloatBitWidth() - 1, iwidth);
     Value lshift_width =
         rewriter.create<mlir::arith::SubIOp>(loc, width, hi_casted);
     // We do four shifts to extract the target bit slices

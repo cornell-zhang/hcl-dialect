@@ -342,12 +342,16 @@ public:
     // Cast hi, lo to int32, cast val to same dtype as input
     // Note: val's width may be different than (hi-low+1), so
     // we need to clear the peripheral bits.
-    Type i32 = rewriter.getI32Type();
-    Value width = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, input.getType().getIntOrFloatBitWidth(), 32);
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
-    Value const1 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, 32);
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Value width =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, iwidth);
+    Type int_type = rewriter.getIntegerType(iwidth);
+    Value lo_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, lo, int_type);
+    Value hi_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, hi, int_type);
+    Value const1 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, int_type);
     Value slice_width_inter =
         rewriter.create<mlir::arith::SubIOp>(loc, hi_casted, lo_casted);
     Value slice_width =
@@ -379,7 +383,7 @@ public:
         rewriter.create<mlir::arith::ShLIOp>(loc, input, shift_width);
     Value lo_slice_possible =
         rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, shift_width);
-    Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, 32);
+    Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, iwidth);
     Value condition = rewriter.create<mlir::arith::CmpIOp>(
         loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
     Value lo_slice =

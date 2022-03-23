@@ -43,6 +43,7 @@ public:
     if (op->hasAttr("format")) {
       format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
     }
+    bool hasUnsignedAttr = op->hasAttr("unsigned");
 
     // Get a symbol reference to the printf function, inserting it if necessary.
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
@@ -80,7 +81,7 @@ public:
     auto elementLoad =
         rewriter.create<memref::LoadOp>(loc, printOp.input(), loopIvs);
     // Cast element to f64
-    auto casted = castToF64(rewriter, elementLoad);
+    auto casted = castToF64(rewriter, elementLoad, hasUnsignedAttr);
     rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
                             ArrayRef<Value>({formatSpecifierCst, casted}));
 
@@ -92,13 +93,13 @@ public:
 private:
   /// To support printing MemRef with any element type, we cast
   /// Int, Float32 types to Float64.
-  static Value castToF64(ConversionPatternRewriter &rewriter,
-                         const Value &src) {
+  static Value castToF64(ConversionPatternRewriter &rewriter, const Value &src,
+                         bool hasUnsignedAttr) {
     Type t = src.getType();
     Type F64Type = rewriter.getF64Type();
     Value casted;
     if (t.isa<IntegerType>()) {
-      if (t.isUnsignedInteger()) {
+      if (t.isUnsignedInteger() or hasUnsignedAttr) {
         casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type, src);
       } else { // signed and signless integer
         casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type, src);

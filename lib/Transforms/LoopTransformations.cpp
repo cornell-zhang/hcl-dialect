@@ -129,6 +129,19 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
     auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
     OpBuilder opBuilder(tiledNest[1]);
     tiledNest[1].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+  } else {
+    auto addMap =
+        AffineMap::get(/*numDims=*/1, /*numSymbols=*/0, ubMap.getResult(1));
+    auto applyOp = dyn_cast<AffineApplyOp>(
+        tiledNest[1].getUpperBoundOperands()[0].getDefiningOp());
+    auto outerIV = applyOp.getOperand(0);
+    auto mulMap = applyOp.getAffineMap();
+    auto composedMap = addMap.compose(mulMap);
+    SmallVector<AffineExpr> newExprs{ubMap.getResult(0),
+                                     composedMap.getResult(0)};
+    auto finalMinMap = AffineMap::get(/*numDims=*/1, /*numSymbols=*/0, newExprs,
+                                      tiledNest[1].getContext());
+    tiledNest[1].setUpperBound(outerIV, finalMinMap);
   }
 
   // 6) Sink AffineApply Operations
@@ -150,7 +163,7 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
           return WalkResult::interrupt();
         return WalkResult::advance();
       });
-  if (result.wasInterrupted() && ubMap.isConstant())
+  if (result.wasInterrupted())
     fstApply->moveBefore(sndApply);
 
   // 7) Add names to new loops
@@ -252,6 +265,19 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
       auto cstUb = ubMap.getResult(0).dyn_cast<AffineConstantExpr>().getValue();
       OpBuilder opBuilder(tiledNest[i]);
       tiledNest[i].setUpperBound({}, opBuilder.getConstantAffineMap(cstUb));
+    } else {
+      auto addMap =
+          AffineMap::get(/*numDims=*/1, /*numSymbols=*/0, ubMap.getResult(1));
+      auto applyOp = dyn_cast<AffineApplyOp>(
+          tiledNest[i].getUpperBoundOperands()[0].getDefiningOp());
+      auto outerIV = applyOp.getOperand(0);
+      auto mulMap = applyOp.getAffineMap();
+      auto composedMap = addMap.compose(mulMap);
+      SmallVector<AffineExpr> newExprs{ubMap.getResult(0),
+                                      composedMap.getResult(0)};
+      auto finalMinMap = AffineMap::get(/*numDims=*/1, /*numSymbols=*/0, newExprs,
+                                        tiledNest[i].getContext());
+      tiledNest[i].setUpperBound(outerIV, finalMinMap);
     }
   }
 
@@ -275,8 +301,7 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
             return WalkResult::interrupt();
           return WalkResult::advance();
         });
-    if (result.wasInterrupted() &&
-        tiledNest[i + 2].getUpperBound().getMap().isConstant())
+    if (result.wasInterrupted())
       fstApply->moveBefore(sndApply);
   }
 

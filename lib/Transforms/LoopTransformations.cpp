@@ -652,8 +652,6 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
   // 5. Sink AffineApply operations
   std::reverse(opToSink.begin(), opToSink.end());
   loops[0]->walk([&](AffineForOp forOp) -> WalkResult { // from the innermost
-    if (forOp == loops[0])
-      return WalkResult::advance();
     bool isDominance = true;
     for (auto applyOp : opToSink) {
       applyOp->moveBefore(&(*forOp.getBody()->getOperations().begin()));

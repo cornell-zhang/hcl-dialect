@@ -274,9 +274,9 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
       auto mulMap = applyOp.getAffineMap();
       auto composedMap = addMap.compose(mulMap);
       SmallVector<AffineExpr> newExprs{ubMap.getResult(0),
-                                      composedMap.getResult(0)};
-      auto finalMinMap = AffineMap::get(/*numDims=*/1, /*numSymbols=*/0, newExprs,
-                                        tiledNest[i].getContext());
+                                       composedMap.getResult(0)};
+      auto finalMinMap = AffineMap::get(/*numDims=*/1, /*numSymbols=*/0,
+                                        newExprs, tiledNest[i].getContext());
       tiledNest[i].setUpperBound(outerIV, finalMinMap);
     }
   }
@@ -717,7 +717,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   if (band[0]->hasAttr("stage_name"))
     isOuterMost = true;
 
-  // 3) Construct new loop
+  // 4) Construct new loop
   MutableArrayRef<AffineForOp> fusedLoops =
       llvm::makeMutableArrayRef(band.data(), sizeOfFusedLoops);
   if (failed(coalesceLoops(fusedLoops, rootForOp)))
@@ -725,7 +725,30 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   if (isOuterMost)
     rootForOp = fusedLoops[0];
 
-  // 5) Add name to the new loop
+  // 5) Constant propagation into the affine map
+  SmallVector<Operation *> opToRemove;
+  rootForOp.walk([&](AffineApplyOp applyOp) {
+    auto applyMap = applyOp.getAffineMap();
+    if (applyMap.getNumSymbols() == 0)
+      return;
+    if (auto cst = dyn_cast<arith::ConstantOp>(
+            applyOp.getOperand(1).getDefiningOp())) { // get symbolic operand
+      int cstVal = cst.getValue().cast<IntegerAttr>().getInt();
+      auto builder = OpBuilder(applyOp);
+      SmallVector<AffineExpr> newDims{builder.getAffineDimExpr(0)};
+      SmallVector<AffineExpr> newSymbols{builder.getAffineConstantExpr(cstVal)};
+      auto newMap = applyMap.replaceDimsAndSymbols(newDims, newSymbols, 1, 0);
+      auto newApplyOp = builder.create<AffineApplyOp>(
+          applyOp.getLoc(), newMap, llvm::makeArrayRef(applyOp.getOperand(0)));
+      applyOp.getResult().replaceAllUsesWith(newApplyOp);
+      opToRemove.push_back(applyOp);
+    }
+  });
+  for (Operation *op : opToRemove) {
+    op->erase();
+  }
+
+  // 6) Add name to the new loop
   std::string new_name;
   for (auto name : nameArr) {
     new_name += name.str() + "_";
@@ -735,7 +758,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   if (isOuterMost)
     setStageName(fusedLoops[0], stage_name);
 
-  // 6) Create new loop handles &
+  // 7) Create new loop handles &
   //    Link the loop handles with SSA values
   auto firstOp = *(f.getOps<AffineForOp>().begin());
   OpBuilder builder(firstOp);

@@ -288,7 +288,7 @@ def cast_types(lhs, rhs):
     elif is_fixed_type(ltype):
         # TODO: UFixed type
         if is_integer_type(rtype):
-            res_type = hcl_d.FixedType.get(rtype.width, ltype.frac)
+            res_type = hcl_d.FixedType.get(rtype.width + ltype.frac, ltype.frac)
         else:
             raise RuntimeError("Type conversion not implemented")
     else:

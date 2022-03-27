@@ -177,6 +177,8 @@ def print_mlir_type(dtype):
                 return "unsigned int"
             elif dtype.width == 64:
                 return "unsigned long int"
+            elif dtype.width == 1:
+                return "bool"
             else:
                 return "ap_uint<{}>".format(dtype.width)
     elif is_fixed_type(dtype):

@@ -7,13 +7,14 @@ This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](htt
 ### Preliminary tools
 - gcc >= 5.4
 - cmake >= 3.13.4
+- python >= 3.7
 
 ### Install LLVM 14.0.0
-- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.0-rc1) or checkout the Github branch
+- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.0) or checkout the Github branch
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout tags/llvmorg-14.0.0-rc1
+git checkout tags/llvmorg-14.0.0
 ```
 
 - Build
@@ -27,7 +28,7 @@ git checkout tags/llvmorg-14.0.0-rc1
       -DCMAKE_BUILD_TYPE=Release \
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_UTILS=ON
-   make -j
+   make -j8
    ```
    - With Python binding: Please follow the [official guide](https://mlir.llvm.org/docs/Bindings/Python/#generating-_dialect_namespace_ops_genpy-wrapper-modules) to set up the environment. In the following, we set up a virtual environment called `hcl-dev` using Python venv, but we prefer you to install Anaconda3 and create an environment there. If you want to use your own Python environment, please specify the path for `-DPython3_EXECUTABLE`.
    ```sh
@@ -41,6 +42,8 @@ git checkout tags/llvmorg-14.0.0-rc1
 
    # Install required packages. Suppose you are inside the llvm-project folder.
    python3 -m pip install -r mlir/python/requirements.txt
+   # for Python<=3.6, you need to install the following package
+   python3 -m pip install contextvars
 
    # Run cmake
    mkdir build && cd build
@@ -53,8 +56,7 @@ git checkout tags/llvmorg-14.0.0-rc1
       -DLLVM_INSTALL_UTILS=ON \
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
       -DPython3_EXECUTABLE=`which python3`
-   mkdir tools/mlir/python/dialects # Makefile bug
-   make -j
+   make -j8
 
    # Export the generated MLIR Python library
    export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
@@ -82,7 +84,7 @@ cmake -G "Unix Makefiles" .. \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=OFF \
    -DOPENSCOP=OFF
-make -j
+make -j8
 ```
 
 - Build with Python binding
@@ -93,22 +95,14 @@ cmake -G "Unix Makefiles" .. \
    -DPYTHON_BINDING=ON \
    -DOPENSCOP=OFF \
    -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
-make -j
+make -j8
 
 # Export the generated HCL-MLIR Python library
 export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 ```
 
-- Build with OpenSCoP extraction enabled
+- Build with OpenSCoP extraction enabled: Set `-DOPENSCOP=ON` and export the library path.
 ```sh
-cmake -G "Unix Makefiles" .. \
-   -DMLIR_DIR=$LLVM_BUILD_DIR/lib/cmake/mlir \
-   -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
-   -DPYTHON_BINDING=OFF \
-   -DOPENSCOP=ON
-make -j
-
-# Export the LD_LIBRARY_PATH for OpenSCoP library
 export LD_LIBRARY_PATH=$(pwd)/openscop/lib:$LD_LIBRARY_PATH
 ```
 
@@ -133,10 +127,10 @@ cmake --build . --target check-hcl
 ./bin/hcl-translate --extract-scop-stmt
 
 # run code on CPU
-./bin/hcl-opt -jit ../test/Translation/mm.mlir
+./bin/hcl-opt -opt -jit ../test/Translation/mm.mlir
 ```
 
-Or you can use our provided script to directly generate C++ HLS code from MLIR.
+Or you can use our provided script to directly generate C++ Vivado HLS code from MLIR.
 
 ```sh
 cd ../examples
@@ -147,8 +141,8 @@ make ../test/Transforms/compute/tiling
 Make sure you have correctly built the above HCL-MLIR dialect, and follow the instruction below.
 
 ```sh
-# clone the HeteroCL repo
-git clone https://github.com/chhzh123/heterocl.git heterocl-mlir
+# clone the HeteroCL repo and switch to the hcl-mlir branch
+git clone https://github.com/cornell-zhang/heterocl.git heterocl-mlir
 cd heterocl-mlir
 git checkout hcl-mlir
 
@@ -159,7 +153,7 @@ git checkout hcl-mlir
 
 # build frontend (for TVM IR)
 # notice: no need to build if you use HCL-MLIR as IR
-make -j
+make -j8
 
 # export library
 export HCL_HOME=$(pwd)
@@ -169,7 +163,7 @@ export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 python3 tests/mlir/test_gemm.py
 ```
 
-We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/chhzh123/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.
+We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/cornell-zhang/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.
 
 ```sh
 # run original TVM flow (v1)
@@ -179,7 +173,7 @@ HCLIR=tvm python3 tests/mlir/test_gemm.py
 HCLIR=mlir python3 tests/mlir/test_gemm.py
 ```
 
-Notice the integration is still in a very early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
+Notice the integration is still in an early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
 
 
 ## Coding Style

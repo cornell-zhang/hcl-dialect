@@ -123,8 +123,9 @@ private:
   /// C++ component emitters.
   void emitValue(Value val, unsigned rank = 0, bool isPtr = false,
                  std::string name = "", bool noType = false);
-  void emitArrayDecl(Value array, bool isAccessor = false,
-                     bool isReadOnly = false, std::string name = "");
+  void emitArrayDecl(Value array, bool isFunc = false, std::string name = "");
+  void emitBufferDecl(Value array, bool isAccessor = false,
+                      bool isReadOnly = false, std::string name = "");
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
   void emitFunction(FuncOp func, bool isAccessor = false);
@@ -345,14 +346,15 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
   assert(!(rank && isPtr) && "should be either an array or a pointer.");
 
   // Value has been declared before or is a constant number.
-  if (isDeclared(val) || noType) {
+  if (isDeclared(val)) {
     os << getName(val);
     for (unsigned i = 0; i < rank; ++i)
       os << "[iv" << i << "]";
     return;
   }
 
-  os << getTypeName(val) << " ";
+  if (!noType)
+    os << getTypeName(val) << " ";
 
   if (name == "") {
     // Add the new value to nameTable and emit its name.
@@ -372,17 +374,11 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   if (op->hasAttr("loop_name")) { // loop label
     loop_name = op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
-    os << "l_";
-    os << addName(iterVar, false, loop_name);
-    os << ": ";
   }
   os << "for (";
 
   // Emit lower bound.
-  if (op->hasAttr("loop_name")) {
-    os << getTypeName(iterVar) << " ";
-  }
-  emitValue(iterVar, 0, false, loop_name);
+  emitValue(iterVar, 0, false);
   os << " = ";
   auto lowerMap = op.getLowerBoundMap();
   AffineExprEmitter lowerEmitter(state, lowerMap.getNumDims(),
@@ -456,7 +452,7 @@ template <typename OpType> void ModuleEmitter::emitAlloc(OpType op) {
   indent();
   Value result = op.getResult(); // memref
   fixUnsignedType(result, op->hasAttr("unsigned"));
-  emitArrayDecl(result, false, false, name);
+  emitArrayDecl(result, false, name);
   os << ";";
   emitInfoAndNewLine(op);
   // emitArrayDirectives(result);
@@ -508,8 +504,54 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   emitInfoAndNewLine(op);
 }
 
-void ModuleEmitter::emitArrayDecl(Value array, bool isAccessor, bool isReadOnly,
-                                  std::string name) {
+void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  if (arrayType.hasStaticShape()) {
+    auto memref = array.getType().dyn_cast<MemRefType>();
+    if (memref) {
+      auto attr = memref.getMemorySpace();
+      if (attr &&
+          attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+        // Value has been declared before or is a constant number.
+        if (isDeclared(array)) {
+          os << getName(array);
+          return;
+        }
+
+        // print stream type
+        os << "hls::stream< " << getTypeName(array) << " > ";
+        if (isFunc) {
+          os << "&"; // pass by reference
+        }
+
+        // Add the new value to nameTable and emit its name.
+        os << addName(array, /*isPtr=*/false, name);
+        // Add original array declaration as comment
+        os << " /* ";
+        emitValue(array, 0, false, name);
+        for (auto &shape : arrayType.getShape())
+          os << "[" << shape << "]";
+        os << " */";
+      } else {
+        emitValue(array, 0, false, name);
+        if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+          // do nothing;
+        } else {
+          for (auto &shape : arrayType.getShape())
+            os << "[" << shape << "]";
+        }
+      }
+    } else { // tensor
+      emitValue(array, 0, false, name);
+    }
+  } else
+    emitValue(array, /*rank=*/0, /*isPtr=*/true, name);
+}
+
+void ModuleEmitter::emitBufferDecl(Value array, bool isAccessor,
+                                   bool isReadOnly, std::string name) {
   auto arrayType = array.getType().cast<ShapedType>();
   assert(arrayType.hasStaticShape());
   auto memref = array.getType().dyn_cast<MemRefType>();
@@ -520,13 +562,13 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isAccessor, bool isReadOnly,
     os << arrayType.getRank() << "> ";
     os << "buf_";
     emitValue(array, 0, false, name, true);
-    os << "(";
+    os << "(range(";
     for (unsigned i = 0; i < arrayType.getRank(); ++i) {
       os << arrayType.getShape()[i];
       if (i != arrayType.getRank() - 1)
         os << ", ";
     }
-    os << ");\n";
+    os << "));\n";
   } else {
     os << "accessor ";
     emitValue(array, 0, false, name, true);
@@ -551,7 +593,7 @@ unsigned ModuleEmitter::emitNestedLoopHead(Value val) {
     // Declare a new array.
     if (!isDeclared(val)) {
       indent();
-      emitArrayDecl(val);
+      emitBufferDecl(val);
       os << ";\n";
     }
 
@@ -804,7 +846,7 @@ void ModuleEmitter::emitConstant(arith::ConstantOp op) {
     indent();
     Value result = op.getResult(); // memref
     fixUnsignedType(result, op->hasAttr("unsigned"));
-    emitArrayDecl(result);
+    emitBufferDecl(result);
     os << " = {";
     auto type = op.getResult().getType().cast<ShapedType>().getElementType();
 
@@ -909,9 +951,9 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
     fixUnsignedType(arg, extra_itypes[argIdx] == 'u');
     if (arg.getType().isa<ShapedType>()) {
       if (input_args.size() == 0) {
-        emitArrayDecl(arg, isAccessor, true);
+        emitBufferDecl(arg, isAccessor, true);
       } else {
-        emitArrayDecl(arg, isAccessor, true, input_args[argIdx]);
+        emitBufferDecl(arg, isAccessor, true, input_args[argIdx]);
       }
     } else {
       if (input_args.size() == 0) {
@@ -946,9 +988,9 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
         fixUnsignedType(result, extra_otypes[idx] == 'u');
         if (result.getType().isa<ShapedType>()) {
           if (output_names != "")
-            emitArrayDecl(result, isAccessor, false);
+            emitBufferDecl(result, isAccessor, false);
           else
-            emitArrayDecl(result, isAccessor, false, output_names);
+            emitBufferDecl(result, isAccessor, false, output_names);
         } else {
           // In Vivado HLS, pointer indicates the value is an output.
           if (output_names != "")
@@ -965,7 +1007,6 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
     emitError(func, "doesn't have a return operation as terminator.");
 
   reduceIndent();
-  emitInfoAndNewLine(func);
 }
 
 /// Top-level MLIR module emitter.
@@ -1058,7 +1099,6 @@ int main() {
   }
 
   snippet = R"XXX(
-
         // The kernel uses single_task rather than parallel_for.
         // The task's for loop is executed in pipeline parallel on the FPGA,
         // exploiting the same parallelism as an equivalent parallel_for.
@@ -1068,6 +1108,7 @@ int main() {
 )XXX";
   os << snippet;
 
+  addIndent();
   // Emit function body.
   for (auto &op : *module.getBody()) {
     if (auto func = dyn_cast<FuncOp>(op)) {
@@ -1080,9 +1121,6 @@ int main() {
   snippet = R"XXX(
         });
       });
-
-      // The buffer destructor is invoked when the buffers pass out of scope.
-      // buf_r's destructor updates the content of vec_r on the host.
     }
 
     // The queue destructor is invoked when q passes out of scope.

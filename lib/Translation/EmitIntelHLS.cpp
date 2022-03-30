@@ -101,6 +101,7 @@ public:
   void emitAffineFor(AffineForOp op);
   void emitAffineLoad(AffineLoadOp op);
   void emitAffineStore(AffineStoreOp op);
+  void emitAffineApply(AffineApplyOp op);
   void emitAffineYield(AffineYieldOp op);
 
   /// Memref-related statement emitters.
@@ -133,6 +134,7 @@ private:
 
   /// MLIR component and HLS C++ pragma emitters.
   void emitBlock(Block &block);
+  void emitLoopDirectives(Operation *op);
 };
 } // namespace
 
@@ -234,6 +236,7 @@ public:
   bool visitOp(AffineLoadOp op) { return emitter.emitAffineLoad(op), true; }
   bool visitOp(AffineStoreOp op) { return emitter.emitAffineStore(op), true; }
   bool visitOp(AffineYieldOp op) { return emitter.emitAffineYield(op), true; }
+  bool visitOp(AffineApplyOp op) { return emitter.emitAffineApply(op), true; }
 
   /// Memref-related statements.
   bool visitOp(memref::AllocOp op) {
@@ -366,8 +369,28 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
   }
 }
 
+void ModuleEmitter::emitLoopDirectives(Operation *op) {
+  if (auto ii = getLoopDirective(op, "pipeline_ii")) {
+    indent();
+    os << "[[intel::initiation_interval(" << ii.cast<IntegerAttr>().getValue()
+       << ")]]\n";
+  }
+
+  if (auto factor = getLoopDirective(op, "unroll")) {
+    indent();
+    auto val = factor.cast<IntegerAttr>().getValue();
+    if (val == 0)
+      os << "#pragma unroll\n";
+    else
+      os << "#pragma unroll " << val << "\n";
+  }
+}
+
 /// Affine statement emitters.
 void ModuleEmitter::emitAffineFor(AffineForOp op) {
+  // intel code put directives before the loop
+  emitLoopDirectives(op);
+
   indent();
   auto iterVar = op.getInductionVar();
   std::string loop_name = "";
@@ -423,13 +446,22 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
   emitInfoAndNewLine(op);
 
   addIndent();
-
-  // emitLoopDirectives(op);
   emitBlock(*op.getBody());
   reduceIndent();
 
   indent();
   os << "}\n";
+}
+
+void ModuleEmitter::emitAffineApply(AffineApplyOp op) {
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  auto affineMap = op.getAffineMap();
+  AffineExprEmitter(state, affineMap.getNumDims(), op.getOperands())
+      .emitAffineExpr(affineMap.getResult(0));
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 /// Memref-related statement emitters.
@@ -904,6 +936,7 @@ void ModuleEmitter::emitBlock(Block &block) {
     if (StmtVisitor(*this).dispatchVisitor(&op))
       continue;
 
+    op.dump();
     emitError(&op, "can't be correctly emitted.");
   }
 }

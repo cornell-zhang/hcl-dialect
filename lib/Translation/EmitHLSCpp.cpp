@@ -91,27 +91,6 @@ static SmallString<16> getTypeName(Value val) {
   return SmallString<16>();
 }
 
-void fixUnsignedType(Value &result, bool isUnsigned) {
-  if (isUnsigned) { // unsigned type
-    if (result.getType().isa<MemRefType>()) {
-      auto arrayType = result.getType().dyn_cast<MemRefType>();
-      Type elt = IntegerType::get(
-          arrayType.getContext(),
-          arrayType.getElementType().cast<IntegerType>().getWidth(),
-          IntegerType::SignednessSemantics::Unsigned);
-      result.setType(MemRefType::get(arrayType.getShape(), elt,
-                                     arrayType.getLayout(),
-                                     arrayType.getMemorySpace()));
-    } else if (result.getType().isa<IntegerType>()) {
-      Type type =
-          IntegerType::get(result.getType().getContext(),
-                           result.getType().cast<IntegerType>().getWidth(),
-                           IntegerType::SignednessSemantics::Unsigned);
-      result.setType(type);
-    }
-  }
-}
-
 //===----------------------------------------------------------------------===//
 // ModuleEmitter Class Declaration
 //===----------------------------------------------------------------------===//

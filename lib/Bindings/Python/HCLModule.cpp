@@ -7,17 +7,18 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 #include "hcl/Bindings/Python/HCLModule.h"
-#include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "hcl-c/Dialect/Dialects.h"
 #include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl-c/Translation/EmitHLSCpp.h"
+#include "hcl-c/Translation/EmitIntelHLS.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir-c/Dialect/Standard.h"
+#include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 
@@ -113,6 +114,13 @@ static bool emitHlsCpp(MlirModule &mod, py::object fileObject) {
       mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
 }
 
+static bool emitIntelHls(MlirModule &mod, py::object fileObject) {
+  PyFileAccumulator accum(fileObject, false);
+  py::gil_scoped_release();
+  return mlirLogicalResultIsSuccess(
+      mlirEmitIntelHls(mod, accum.getCallback(), accum.getUserData()));
+}
+
 //===----------------------------------------------------------------------===//
 // Lowering APIs
 //===----------------------------------------------------------------------===//
@@ -172,6 +180,7 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Codegen APIs.
   hcl_m.def("emit_hlscpp", &emitHlsCpp);
+  hcl_m.def("emit_ihls", &emitIntelHls);
 
   // LLVM backend APIs.
   hcl_m.def("lower_hcl_to_llvm", &lowerHCLToLLVM);

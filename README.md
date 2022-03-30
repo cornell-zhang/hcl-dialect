@@ -120,7 +120,7 @@ cmake --build . --target check-hcl
 
 # generate C++ HLS code
 ./bin/hcl-opt -opt ../test/Transforms/compute/tiling.mlir | \
-./bin/hcl-translate -emit-hlscpp
+./bin/hcl-translate -emit-vivado-hls
 
 # generate OpenSCoP
 ./bin/hcl-opt -opt ../test/Transforms/memory/buffer_add.mlir | \

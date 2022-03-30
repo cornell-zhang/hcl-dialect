@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Translation/EmitHLSCpp.h"
+#include "hcl/Translation/EmitVivadoHLS.h"
 #include "hcl/Dialect/Visitor.h"
 #include "hcl/Support/Utils.h"
 #include "hcl/Translation/Utils.h"
@@ -1984,15 +1984,15 @@ using namespace std;
 // Entry of hcl-translate
 //===----------------------------------------------------------------------===//
 
-LogicalResult hcl::emitHLSCpp(ModuleOp module, llvm::raw_ostream &os) {
+LogicalResult hcl::emitVivadoHLS(ModuleOp module, llvm::raw_ostream &os) {
   HCLEmitterState state(os);
   ModuleEmitter(state).emitModule(module);
   return failure(state.encounteredError);
 }
 
-void hcl::registerEmitHLSCppTranslation() {
-  static TranslateFromMLIRRegistration toHLSCpp(
-      "emit-hlscpp", emitHLSCpp, [&](DialectRegistry &registry) {
+void hcl::registerEmitVivadoHLSTranslation() {
+  static TranslateFromMLIRRegistration toVivadoHLS(
+      "emit-vivado-hls", emitVivadoHLS, [&](DialectRegistry &registry) {
         // clang-format off
         registry.insert<
           mlir::hcl::HeteroCLDialect,

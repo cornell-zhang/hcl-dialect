@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HCL_C_TRANSLATION_EMITHLSCPP_H
-#define HCL_C_TRANSLATION_EMITHLSCPP_H
+#ifndef HCL_C_TRANSLATION_EMITVIVADOHLS_H
+#define HCL_C_TRANSLATION_EMITVIVADOHLS_H
 
 #include "mlir-c/IR.h"
 
@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule module,
+MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitVivadoHls(MlirModule module,
                                                     MlirStringCallback callback,
                                                     void *userData);
 
@@ -21,4 +21,4 @@ MLIR_CAPI_EXPORTED MlirLogicalResult mlirEmitHlsCpp(MlirModule module,
 }
 #endif
 
-#endif // HCL_C_TRANSLATION_EMITHLSCPP_H
+#endif // HCL_C_TRANSLATION_EMITVIVADOHLS_H

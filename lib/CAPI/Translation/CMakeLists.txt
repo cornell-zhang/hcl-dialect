@@ -1,5 +1,5 @@
 add_mlir_public_c_api_library(MLIRHCLCAPIEmitHLSCpp
-  EmitHLSCpp.cpp
+  EmitVivadoHLS.cpp
   EmitIntelHLS.cpp
 
   ADDITIONAL_HEADER_DIRS

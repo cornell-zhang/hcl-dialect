@@ -11,8 +11,8 @@
 #include "hcl-c/Dialect/HCLAttributes.h"
 #include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl-c/Dialect/Registration.h"
-#include "hcl-c/Translation/EmitHLSCpp.h"
 #include "hcl-c/Translation/EmitIntelHLS.h"
+#include "hcl-c/Translation/EmitVivadoHLS.h"
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
@@ -107,11 +107,11 @@ static bool hostXcelSeparation(MlirModule &pyhost, MlirModule &pyxcel,
 // Emission APIs
 //===----------------------------------------------------------------------===//
 
-static bool emitHlsCpp(MlirModule &mod, py::object fileObject) {
+static bool emitVivadoHls(MlirModule &mod, py::object fileObject) {
   PyFileAccumulator accum(fileObject, false);
   py::gil_scoped_release();
   return mlirLogicalResultIsSuccess(
-      mlirEmitHlsCpp(mod, accum.getCallback(), accum.getUserData()));
+      mlirEmitVivadoHls(mod, accum.getCallback(), accum.getUserData()));
 }
 
 static bool emitIntelHls(MlirModule &mod, py::object fileObject) {
@@ -179,7 +179,7 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("host_device_separation", &hostXcelSeparation);
 
   // Codegen APIs.
-  hcl_m.def("emit_hlscpp", &emitHlsCpp);
+  hcl_m.def("emit_vhls", &emitVivadoHls);
   hcl_m.def("emit_ihls", &emitIntelHls);
 
   // LLVM backend APIs.

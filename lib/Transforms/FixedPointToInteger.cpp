@@ -8,6 +8,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -141,6 +142,38 @@ void updateReturnOp(FuncOp &funcOp) {
         if (etype != newType and etype.isa<FixedType, UFixedType>()) {
           if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
             allocOp->getResult(0).setType(newType);
+            for (auto &use : allocOp->getResult(0).getUses()) {
+              Value storeEle;
+              bool isStore= false;
+              if (auto storeOp = dyn_cast<memref::StoreOp>(use.getOwner())) {
+                storeEle = storeOp.getOperand(0);
+                isStore = true;
+              } else if (auto storeOp =
+                             dyn_cast<AffineStoreOp>(use.getOwner())) {
+                storeEle = storeOp.getOperand(0);
+                isStore = true;
+              }
+              if (isStore) {
+                // check storeEle's type and cast it if necessary
+                OpBuilder builder(use.getOwner());
+                Location loc = use.getOwner()->getLoc();
+                unsigned width;
+                if (etype.isa<FixedType>()) {
+                  width = etype.cast<FixedType>().getWidth();
+                } else {
+                  width = etype.cast<UFixedType>().getWidth();
+                }
+                Type oldType = builder.getIntegerType(width);
+                if (oldType != IntegerType::get(funcOp.getContext(), 64)) {
+                  // cast it
+                  Value casted =
+                      castInteger(builder, loc, storeEle, oldType,
+                                  IntegerType::get(funcOp.getContext(), 64),
+                                  etype.isa<FixedType>());
+                  use.getOwner()->setOperand(0, casted);
+                }
+              }
+            }
           }
         }
       }
@@ -550,6 +583,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateReturnOp(func);
     updateAlloc(func);
+    updateAffineLoad(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }

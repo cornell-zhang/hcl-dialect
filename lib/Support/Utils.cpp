@@ -689,3 +689,7 @@ std::string hcl::getSliceStr(const mlir::ComputationSliceState &sliceUnion) {
   }
   return os.str();
 }
+
+void hcl::castInteger(OpBuilder builder, Type srcType, Type tgtType, bool is_signed) {
+
+}

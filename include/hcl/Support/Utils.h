@@ -170,7 +170,17 @@ template <> struct DenseMapInfo<mlir::hcl::PtrLikeMemRefAccess> {
     return lhs == rhs;
   }
 };
-
 } // namespace llvm
+
+//===----------------------------------------------------------------------===//
+// Cast utilities
+//===----------------------------------------------------------------------===//
+namespace mlir {
+namespace hcl {
+
+void castInteger(OpBuilder builder, Type srcType, Type tgtType, bool is_signed);
+
+} // namespace hcl
+} // namespace mlir
 
 #endif // HCL_ANALYSIS_UTILS_H

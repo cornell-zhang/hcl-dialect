@@ -690,6 +690,23 @@ std::string hcl::getSliceStr(const mlir::ComputationSliceState &sliceUnion) {
   return os.str();
 }
 
-void hcl::castInteger(OpBuilder builder, Type srcType, Type tgtType, bool is_signed) {
-
+Value hcl::castInteger(OpBuilder builder, Location loc, Value input,
+                       Type srcType, Type tgtType, bool is_signed) {
+  int oldWidth = srcType.cast<IntegerType>().getWidth();
+  int newWidth = tgtType.cast<IntegerType>().getWidth();
+  Value casted;
+  if (newWidth < oldWidth) {
+    // trunc
+    casted = builder.create<arith::TruncIOp>(loc, tgtType, input);
+  } else if (newWidth > oldWidth) {
+    // extend
+    if (is_signed) {
+      casted = builder.create<arith::ExtSIOp>(loc, tgtType, input);
+    } else {
+      casted = builder.create<arith::ExtUIOp>(loc, tgtType, input);
+    }
+  } else {
+    casted = input;
+  }
+  return casted;
 }

@@ -178,7 +178,8 @@ template <> struct DenseMapInfo<mlir::hcl::PtrLikeMemRefAccess> {
 namespace mlir {
 namespace hcl {
 
-void castInteger(OpBuilder builder, Type srcType, Type tgtType, bool is_signed);
+Value castInteger(OpBuilder builder, Location loc, Value input, Type srcType,
+                  Type tgtType, bool is_signed);
 
 } // namespace hcl
 } // namespace mlir

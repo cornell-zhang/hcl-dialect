@@ -5,6 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl-c/Dialect/HCLAttributes.h"
+#include "hcl/Dialect/HeteroCLAttrs.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "mlir/CAPI/Registration.h"
 
@@ -17,4 +18,14 @@ using namespace hcl;
 
 MlirAttribute mlirIntegerSetAttrGet(MlirIntegerSet set) {
   return wrap(IntegerSetAttr::get(unwrap(set)));
+}
+
+bool mlirAttributeIsAPartitionKind(MlirAttribute attr) {
+  return unwrap(attr).isa<PartitionKindEnumAttr>();
+}
+
+MlirAttribute mlirPartitionKindGet(MlirContext ctx, MlirAttribute kind) {
+  IntegerAttr attr = unwrap(kind).cast<IntegerAttr>();
+  PartitionKindEnum kindEnum = static_cast<PartitionKindEnum>(attr.getInt());
+  return wrap(PartitionKindEnumAttr::get(unwrap(ctx), kindEnum));
 }

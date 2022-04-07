@@ -362,6 +362,16 @@ public:
         rewriter.create<mlir::arith::AddIOp>(loc, slice_width_inter, const1);
     Value val_lshift_bit =
         rewriter.create<mlir::arith::SubIOp>(loc, width, slice_width);
+    // Comment: we have to change the front-end for set/get slice
+    // to let val be exactly the same with as the slice to set. 
+    // Because lo and high are only known at runtime, we may get
+    // invalid cast ops if we try to cast val:
+    // e.g. hcl.set_slice(%input, %hi, %lo, %val : i4)
+    // we don't know if `%hi - %lo` would be wider or narrower than 4-bit,
+    // but we can't build a selectOp either, because there will always be
+    // illegal cast op: either it's extending val to hi-low+1 or truncating 
+    // val to hi-low+1, since hi-low+1 is either greater or less than 4-bit.
+    // It can't be both at the same time
     Value val_ext =
         rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
     Value val_shift1 =

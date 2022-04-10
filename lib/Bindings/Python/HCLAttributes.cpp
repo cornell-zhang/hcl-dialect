@@ -46,8 +46,8 @@ template <> struct type_caster<MlirIntegerSet> {
   }
 };
 
-} // detail
-} // pybind11
+} // namespace detail
+} // namespace pybind11
 
 void mlir::python::populateHCLAttributes(py::module &m) {
   mlir_attribute_subclass(m, "IntegerSetAttr", mlirAttributeIsAIntegerSet)
@@ -59,4 +59,13 @@ void mlir::python::populateHCLAttributes(py::module &m) {
           py::arg("cls"), py::arg("integer_set"),
           py::arg("context") = py::none(),
           "Gets an attribute wrapping an IntegerSet.");
+
+  mlir_attribute_subclass(m, "PartitionKindEnum", mlirAttributeIsAPartitionKind)
+      .def_classmethod(
+          "get",
+          [](py::object cls, MlirAttribute kind, MlirContext ctx) {
+            return cls(mlirPartitionKindGet(ctx, kind));
+          },
+          py::arg("cls"), py::arg("kind"), py::arg("context") = py::none(),
+          "Gets an attribute wrapping a partition kind.");
 }

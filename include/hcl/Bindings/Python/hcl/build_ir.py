@@ -1961,6 +1961,7 @@ class ASTVisitor:
                 axis.lower_bound,
                 axis.upper_bound,
                 step=1,
+                reduction=True,
                 name=axis.name,
                 ip=body_ip,
             )
@@ -2080,9 +2081,7 @@ def make_affine_for(
         ubMapAttr,
         name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
         stage=("" if stage == "" else StringAttr.get(stage)),
-        reduction=(
-            IntegerAttr.get(IntegerType.get_signless(32), 1) if reduction else None
-        ),
+        reduction=(UnitAttr.get() if reduction else None),
         ip=ip,
         loc=loc,
     )

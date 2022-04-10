@@ -313,15 +313,14 @@ public:
         loc, input.getType().getIntOrFloatBitWidth() - 1, iwidth);
     Value lshift_width =
         rewriter.create<mlir::arith::SubIOp>(loc, width, hi_casted);
-    // We do four shifts to extract the target bit slices
+    // We do three shifts to extract the target bit slices
     Value shift1 =
         rewriter.create<mlir::arith::ShLIOp>(loc, input, lshift_width);
     Value shift2 =
         rewriter.create<mlir::arith::ShRUIOp>(loc, shift1, lshift_width);
     Value shift3 =
         rewriter.create<mlir::arith::ShRUIOp>(loc, shift2, lo_casted);
-    Value shift4 = rewriter.create<mlir::arith::ShLIOp>(loc, shift3, lo_casted);
-    op->getResult(0).replaceAllUsesWith(shift4);
+    op->getResult(0).replaceAllUsesWith(shift3);
     rewriter.eraseOp(op);
     return success();
   }
@@ -356,29 +355,9 @@ public:
         rewriter.create<mlir::arith::IndexCastOp>(loc, hi, int_type);
     Value const1 =
         rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, int_type);
-    Value slice_width_inter =
-        rewriter.create<mlir::arith::SubIOp>(loc, hi_casted, lo_casted);
-    Value slice_width =
-        rewriter.create<mlir::arith::AddIOp>(loc, slice_width_inter, const1);
-    Value val_lshift_bit =
-        rewriter.create<mlir::arith::SubIOp>(loc, width, slice_width);
-    // Comment: we have to change the front-end for set/get slice
-    // to let val be exactly the same with as the slice to set. 
-    // Because lo and high are only known at runtime, we may get
-    // invalid cast ops if we try to cast val:
-    // e.g. hcl.set_slice(%input, %hi, %lo, %val : i4)
-    // we don't know if `%hi - %lo` would be wider or narrower than 4-bit,
-    // but we can't build a selectOp either, because there will always be
-    // illegal cast op: either it's extending val to hi-low+1 or truncating 
-    // val to hi-low+1, since hi-low+1 is either greater or less than 4-bit.
-    // It can't be both at the same time
     Value val_ext =
         rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
-    Value val_shift1 =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val_ext, val_lshift_bit);
-    Value val_casted =
-        rewriter.create<mlir::arith::ShRUIOp>(loc, val_shift1, val_lshift_bit);
-
+    
     // Step 1: get higher slice - shift right, then shift left
     Value hi_shift_width =
         rewriter.create<mlir::arith::AddIOp>(loc, hi_casted, const1);
@@ -405,7 +384,7 @@ public:
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val_casted, lo_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, val_ext, lo_casted);
     Value peripheral_slices =
         rewriter.create<mlir::arith::OrIOp>(loc, hi_slice, lo_slice);
     Value res = rewriter.create<mlir::arith::OrIOp>(loc, peripheral_slices,

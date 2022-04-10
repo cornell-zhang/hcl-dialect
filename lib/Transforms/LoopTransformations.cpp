@@ -984,14 +984,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
-  // 2) Find the requested stage
+  // 2.1) Find the requested stage
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, stage_name))) {
     f.emitError("Cannot find Stage ") << stage_name.str();
     return failure();
   }
 
-  // 2.1) Find the requested loop and get the axis id
+  // 2.2) Find the requested loop and get the axis id
   AffineForOp reuseLoop = rootForOp;
   int axis = getLoop(reuseLoop, loop_name);
   if (axis == -1) {
@@ -999,27 +999,66 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return failure();
   }
 
-  // 3) Obtain AffineMaps of load instructions
+  // 3) Find (non-)reduction loops
+  AffineLoopBand nonReductionLoops;
+  // InductionVar -> Loop upper bound
+  DenseMap<Value, int> reductionVars;
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) {
+    if (!forOp->hasAttr("reduction"))
+      nonReductionLoops.push_back(forOp);
+    else {
+      auto reductionLoopName = getLoopName(forOp);
+      if (forOp.getStep() != 1 || !forOp.hasConstantLowerBound() ||
+          forOp.getConstantLowerBound() != 0 ||
+          !forOp.hasConstantUpperBound()) {
+        reuseAtOp.emitError("Reduction loop ")
+            << reductionLoopName.str()
+            << " must have (1) constant bounds (2) constant step (3) zero "
+               "lower bound";
+        return WalkResult::interrupt();
+      }
+      int64_t ub = forOp.getConstantUpperBound();
+      reductionVars[forOp.getInductionVar()] = ub;
+    }
+    return WalkResult::advance();
+  });
+  if (result.wasInterrupted())
+    return failure();
+  std::reverse(nonReductionLoops.begin(), nonReductionLoops.end());
+  AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
+
+  // 4) Obtain AffineMaps of load instructions
   SmallVector<AffineMap, 6> loadMap;
   std::set<AffineExpr, ExprCompare> requestedVars;
+  std::map<int, int> dimBounds; // dim expr->reduction bound
   // TODO: eliminate order in inputs
   reuseAtOp.emitWarning("Need to guarantee the loads have orders");
   rootForOp.walk([&](AffineLoadOp loadOp) {
     if (loadOp.getOperand(0) == target) {
       auto map = loadOp.getAffineMap();
       loadMap.push_back(map);
-      requestedVars.insert(map.getResult(axis));
+      AffineExpr expr = map.getResult(axis);
+      int numDims = map.getNumDims();
+      auto operands = loadOp.getMapOperands();
+      OpBuilder builder(loadOp);
+      bool flag = false;
+      for (int i = 0; i < numDims; i++) {
+        if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
+          int ub = reductionVars[operands[i]];
+          dimBounds[i] = ub;
+          for (int j = 0; j < ub; j++) {
+            auto ubCstExpr = builder.getAffineConstantExpr(j);
+            auto newExpr = expr.replace(builder.getAffineDimExpr(i), ubCstExpr);
+            requestedVars.insert(newExpr);
+          }
+          flag = true;
+          break;
+        }
+      }
+      if (!flag)
+        requestedVars.insert(expr);
     }
   });
-
-  // 4) Find reduction loops
-  AffineLoopBand band;
-  rootForOp.walk([&](AffineForOp forOp) {
-    if (!forOp->hasAttr("reduction"))
-      band.push_back(forOp);
-  });
-  std::reverse(band.begin(), band.end());
-  AffineForOp innerMostForOp = band[band.size() - 1];
 
   // 5) Try to find reuse pattern
   //    TODO: support more reuse patterns
@@ -1029,6 +1068,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     if (std::find(requestedVars.begin(), requestedVars.end(), var + 1) !=
         requestedVars.end()) {
       canReuse = true;
+      break;
     }
   }
   if (!canReuse) {
@@ -1039,26 +1079,55 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 
   // 6) Obtain indices and strides in load instructions
   SmallVector<SmallVector<AffineExpr>> allLoadAffineExpr;
-  rootForOp.walk([&](AffineLoadOp loadOp) {
+  result = rootForOp.walk([&](AffineLoadOp loadOp) {
     if (loadOp.getOperand(0) == target) {
-      auto var = loadOp.getAffineMap().getResult(axis);
+      auto map = loadOp.getAffineMap();
+      auto var = map.getResult(axis);
       auto diff = var - baseVar;
+      int numDims = map.getNumDims();
+      OpBuilder builder(loadOp);
+      bool flag = false;
       SmallVector<AffineExpr> singleLoadAffineExpr;
-      if (diff.isa<AffineConstantExpr>()) {
-        singleLoadAffineExpr.push_back(diff);
-      } else {
-        reuseAtOp.emitError("Cannot support non-constant stride");
-        return;
+      for (int i = 0; i < numDims; i++) {
+        if (diff.isFunctionOfDim(i) && dimBounds.count(i) > 0) {
+          int ub = dimBounds[i];
+          for (int j = 0; j < ub; j++) {
+            singleLoadAffineExpr.clear();
+            diff = builder.getAffineConstantExpr(j);
+            // i = axis
+            singleLoadAffineExpr.push_back(diff);
+            // i > axis
+            for (unsigned int i = axis + 1; i < rank; ++i) {
+              singleLoadAffineExpr.push_back(map.getResult(i));
+            }
+            allLoadAffineExpr.push_back(singleLoadAffineExpr);
+          }
+          flag = true;
+          break;
+        }
       }
-      for (unsigned int i = axis + 1; i < rank; ++i) {
-        singleLoadAffineExpr.push_back(loadOp.getAffineMap().getResult(i));
+      if (!flag) {
+        // i = axis
+        if (diff.isa<AffineConstantExpr>()) {
+          singleLoadAffineExpr.push_back(diff);
+        } else {
+          reuseAtOp.emitError("Cannot support non-constant stride");
+          return WalkResult::interrupt();
+        }
+        // i > axis
+        for (unsigned int i = axis + 1; i < rank; ++i) {
+          singleLoadAffineExpr.push_back(map.getResult(i));
+        }
+        allLoadAffineExpr.push_back(singleLoadAffineExpr);
       }
-      allLoadAffineExpr.push_back(singleLoadAffineExpr);
     }
+    return WalkResult::advance();
   });
+  if (result.wasInterrupted())
+    return failure();
 
   // 7) Create reuse buffer
-  unsigned int numLoad = loadMap.size();
+  //    e.g., %1 = memref.alloc() : memref<3xi32>
   int distance = (*(std::prev(allLoadAffineExpr.end())))[0]
                      .dyn_cast<AffineConstantExpr>()
                      .getValue();
@@ -1076,15 +1145,29 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 8) link the result SSA with the buffer
   reuseAtOp.getResult().replaceAllUsesWith(buf);
 
-  // 9) Update loop bound & store index
-  //    since some load/store will be created later, this step is done in
-  //    advance
+  // 9) Update loop bound
   SmallVector<AffineExpr> memAffineIndices;
-  SmallVector<Operation *> opToRemove;
   // TODO: support non-constant bound
-  band[axis].setConstantUpperBound(
+  nonReductionLoops[axis].setConstantUpperBound(
       target.getType().dyn_cast<MemRefType>().getShape()[axis]);
+
+  // 10) Update store index, since some load/store will be created later, this
+  // step is done in advance reduction case:
+  //   skip the first store (to reduction variable)
+  //     affine.store %0, %1[%c0] {to = "sum_rv"} : memref<1xi32>
+  //   update the outer store
+  //     affine.store %6, %3[%arg1, %arg2] : memref<10x8xi32>
+  // non-reduction case:
+  //   affine.store %9, %0[%arg1, %arg2] : memref<10x8xi32>
+  // * index should be changed to [%arg1, %arg2 - 2]
+  SmallVector<Operation *> opToRemove;
   innerMostForOp.walk([&](AffineStoreOp op) {
+    // skip reduction variable store
+    auto arrayType = op.getOperand(1).getType().dyn_cast<MemRefType>();
+    if (arrayType.getRank() == 1 && arrayType.getShape()[0] == 1) {
+      return WalkResult::advance();
+    }
+    // update the store to output tensor
     OpBuilder rewriter(op);
     memAffineIndices.clear();
     auto oldAffineMap = op.getAffineMap();
@@ -1104,30 +1187,59 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         op->getLoc(), op.getOperand(0) /*valueToStore*/,
         op.getOperand(1) /*memref*/, affineMap, op.indices());
     opToRemove.push_back(op);
+    return WalkResult::advance();
   });
 
-  // 10) Rewrite original memref to load from buffer
+  // 11) Rewrite original memref to load from buffer
+  // reduction case:
+  //   skip the first load (from reduction variable)
+  //     %1 = affine.load %0[%c0] {from = "sum_rv"} : memref<1xi32>
+  //   update the non-reduction load
+  //     %7 = affine.load %arg0[%arg1, %arg2 + %arg3] : memref<10x10xi32>
+  // * load should be changed to %buf[%arg3]
+  // non-reduction case:
+  //   %4 = affine.load %arg0[%arg1, %arg2 + 0,1,2] : memref<10x10xi32>
+  // * load should be changed to %buf[0,1,2]
+  // * buffer shifting will be done later
   innerMostForOp.walk([&](AffineLoadOp op) {
+    // skip reduction variable store
+    auto arrayType = op.getOperand(0).getType().dyn_cast<MemRefType>();
+    if (arrayType.getRank() == 1 && arrayType.getShape()[0] == 1) {
+      return WalkResult::advance();
+    }
     OpBuilder rewriter(op);
     memAffineIndices.clear();
+    SmallVector<Value> operands;
     auto idx = op.getAffineMap().getResult(axis) - baseVar;
-    memAffineIndices.push_back(idx);
+    if (idx.isa<AffineConstantExpr>()) {
+      memAffineIndices.push_back(idx);
+      unsigned int size = nonReductionLoops.size();
+      for (unsigned int j = size - buf_rank; j < size; ++j)
+        operands.push_back(nonReductionLoops[j].getInductionVar());
+    } else { // reduction
+      auto map = op.getAffineMap();
+      int numDims = map.getNumDims();
+      for (int i = 0; i < numDims; i++) {
+        if (idx.isFunctionOfDim(i) && dimBounds.count(i) > 0) {
+          memAffineIndices.push_back(rewriter.getAffineDimExpr(0));
+          break;
+        }
+      }
+      // TODO: support more reduction axes
+      operands.push_back(reductionVars.begin()->first);
+    }
     for (unsigned int i = axis + 1; i < rank; ++i)
       memAffineIndices.push_back(op.getAffineMap().getResult(i));
     auto affineMap = AffineMap::get(buf_rank /*rank*/, 0, memAffineIndices,
                                     rewriter.getContext());
-    // ValueRange operands{innerMostForOp.getInductionVar()};
-    SmallVector<Value> operands;
-    unsigned int size = band.size();
-    for (unsigned int j = size - buf_rank; j < size; ++j)
-      operands.push_back(band[j].getInductionVar());
     auto new_load =
         rewriter.create<AffineLoadOp>(op->getLoc(), buf, affineMap, operands);
     op->replaceAllUsesWith(new_load);
     opToRemove.push_back(op);
+    return WalkResult::advance();
   });
 
-  // 11) Create if structure
+  // 12) Create if structure
   //     only if the indices are inside the output tensor iteration space,
   //     results will be computed and written to output
   OpBuilder builder(&(*(innerMostForOp.getBody()->getOperations().begin())));
@@ -1139,7 +1251,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   auto ifCondSet = IntegerSet::get(
       1 /*dimCount*/, 0 /*symbolCount*/,
       constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
-  SmallVector<Value, 4> setOperands{band[axis].getInductionVar()};
+  SmallVector<Value, 4> setOperands{nonReductionLoops[axis].getInductionVar()};
   auto ifOp = builder.create<AffineIfOp>(loc, ifCondSet, setOperands,
                                          /*withElseRegion=*/false);
   auto &innerMostBody = innerMostForOp.getBody()->getOperations();
@@ -1148,8 +1260,17 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
                     std::next(innerMostBody.begin()),
                     std::prev(innerMostBody.end()));
 
-  // 12) shift buffer elements & load from memory to buffer
+  // 13) shift buffer elements & load from memory to buffer
+  // reduction case:
+  // non-reduction case:
+  //   %2 = affine.load %1[1] : memref<3xi32>
+  //   affine.store %2, %1[0] : memref<3xi32>
+  //   %3 = affine.load %1[2] : memref<3xi32>
+  //   affine.store %3, %1[1] : memref<3xi32>
+  //   %4 = affine.load %arg0[%arg1, %arg2] : memref<10x10xi32>
+  //   affine.store %4, %1[2] : memref<3xi32>
   loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
+  std::size_t numLoad = allLoadAffineExpr.size();
   for (std::size_t i = 0; i < numLoad; ++i) {
     // %tmp affine.load %buf[1]
     // affine.store %tmp, %buf[0]
@@ -1160,13 +1281,13 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
                          allLoadAffineExpr[i + 1] /*need to shift the element*/,
                          builder.getContext());
       SmallVector<Value> operands;
-      unsigned int size = band.size();
+      unsigned int size = nonReductionLoops.size();
       for (unsigned int j = size - buf_rank; j < size; ++j)
-        operands.push_back(band[j].getInductionVar());
+        operands.push_back(nonReductionLoops[j].getInductionVar());
       load = builder.create<AffineLoadOp>(loc, buf, affineMap, operands);
     } else { // load from memory
       SmallVector<Value> memIndices;
-      for (auto forOp : band)
+      for (auto forOp : nonReductionLoops)
         memIndices.push_back(forOp.getInductionVar());
       load = builder.create<AffineLoadOp>(loc, target, memIndices);
     }
@@ -1175,15 +1296,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto affineMap = AffineMap::get(buf_rank /*rank*/, 0, allLoadAffineExpr[i],
                                     builder.getContext());
     SmallVector<Value> operands;
-    unsigned int size = band.size();
+    unsigned int size = nonReductionLoops.size();
     for (unsigned int j = size - buf_rank; j < size; ++j)
-      operands.push_back(band[j].getInductionVar());
+      operands.push_back(nonReductionLoops[j].getInductionVar());
     auto store =
         builder.create<AffineStoreOp>(loc, load, buf, affineMap, operands);
     store->moveBefore(ifOp);
   }
 
-  // 13) Remove all the useless operations
+  // 14) Remove all the useless operations
   for (Operation *op : opToRemove) {
     op->erase();
   }

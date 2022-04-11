@@ -720,6 +720,12 @@ Value hcl::castIntMemRef(OpBuilder &builder, Location loc,
                          const Value &oldMemRef, size_t newWidth,
                          bool unsign, bool replace,
                          const Value &dstMemRef) {
+  // If newWidth == oldWidth, no need to cast.
+  if (newWidth == oldMemRef.getType().cast<MemRefType>().getElementType()
+                       .cast<IntegerType>()
+                       .getWidth()) {
+    return oldMemRef;
+  }
   // first, alloc new memref
   MemRefType oldMemRefType = oldMemRef.getType().cast<MemRefType>();
   Type newElementType = builder.getIntegerType(newWidth);

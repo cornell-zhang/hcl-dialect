@@ -1078,7 +1078,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 6) Obtain indices and strides in load instructions
-  SmallVector<SmallVector<AffineExpr>> allLoadAffineExpr;
+  SmallVector<AffineMap> allLoadAffineMaps;
+  SmallVector<SmallVector<Value>> allLoadOperands;
   result = rootForOp.walk([&](AffineLoadOp loadOp) {
     if (loadOp.getOperand(0) == target) {
       auto map = loadOp.getAffineMap();
@@ -1088,6 +1089,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       OpBuilder builder(loadOp);
       bool flag = false;
       SmallVector<AffineExpr> singleLoadAffineExpr;
+      int loadRank = loadOp.getMapOperands().size();
       for (int i = 0; i < numDims; i++) {
         if (diff.isFunctionOfDim(i) && dimBounds.count(i) > 0) {
           int ub = dimBounds[i];
@@ -1097,10 +1099,25 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
             // i = axis
             singleLoadAffineExpr.push_back(diff);
             // i > axis
+            // TODO: better mapping machanism for high-dimensional tensors
             for (unsigned int i = axis + 1; i < rank; ++i) {
               singleLoadAffineExpr.push_back(map.getResult(i));
             }
-            allLoadAffineExpr.push_back(singleLoadAffineExpr);
+            auto affineMap =
+                AffineMap::get(loadRank /*rank*/, 0, singleLoadAffineExpr,
+                               builder.getContext());
+            auto operands = loadOp.getMapOperands();
+            SmallVector<Value> memAffineIndices;
+            for (int i = 0; i < loadRank; ++i) {
+              if (!affineMap.isFunctionOfDim(i)) {
+                memAffineIndices.push_back(
+                    nonReductionLoops[0].getInductionVar());
+              } else {
+                memAffineIndices.push_back(operands[i]);
+              }
+            }
+            allLoadAffineMaps.push_back(affineMap);
+            allLoadOperands.push_back(memAffineIndices);
           }
           flag = true;
           break;
@@ -1118,7 +1135,10 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         for (unsigned int i = axis + 1; i < rank; ++i) {
           singleLoadAffineExpr.push_back(map.getResult(i));
         }
-        allLoadAffineExpr.push_back(singleLoadAffineExpr);
+        auto affineMap = AffineMap::get(
+            loadRank /*rank*/, 0, singleLoadAffineExpr, builder.getContext());
+        allLoadAffineMaps.push_back(affineMap);
+        allLoadOperands.push_back(loadOp.getMapOperands());
       }
     }
     return WalkResult::advance();
@@ -1128,7 +1148,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 
   // 7) Create reuse buffer
   //    e.g., %1 = memref.alloc() : memref<3xi32>
-  int distance = (*(std::prev(allLoadAffineExpr.end())))[0]
+  int distance = (*(std::prev(allLoadAffineMaps.end())))
+                     .getResult(0)
                      .dyn_cast<AffineConstantExpr>()
                      .getValue();
   OpBuilder out_builder(rootForOp); // outside the stage
@@ -1208,10 +1229,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     }
     OpBuilder rewriter(op);
     memAffineIndices.clear();
-    SmallVector<Value> operands;
-    unsigned int size = nonReductionLoops.size();
-    for (unsigned int j = 0; j < size; ++j)
-      operands.push_back(nonReductionLoops[j].getInductionVar());
+    SmallVector<Value> operands = op.getMapOperands();
     auto idx = op.getAffineMap().getResult(axis) - baseVar;
     if (idx.isa<AffineConstantExpr>()) {
       memAffineIndices.push_back(idx);
@@ -1224,14 +1242,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           break;
         }
       }
-      // TODO: support more reduction axes
-      operands.push_back(reductionVars.begin()->first);
-      size += 1;
     }
     for (unsigned int i = axis + 1; i < rank; ++i)
       memAffineIndices.push_back(op.getAffineMap().getResult(i));
-    auto affineMap = AffineMap::get(size /*rank*/, 0, memAffineIndices,
-                                    rewriter.getContext());
+    auto affineMap = AffineMap::get(operands.size() /*rank*/, 0,
+                                    memAffineIndices, rewriter.getContext());
     auto new_load =
         rewriter.create<AffineLoadOp>(op->getLoc(), buf, affineMap, operands);
     op->replaceAllUsesWith(new_load);
@@ -1270,29 +1285,23 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   //   %4 = affine.load %arg0[%arg1, %arg2] : memref<10x10xi32>
   //   affine.store %4, %1[2] : memref<3xi32>
   loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
-  std::size_t numLoad = allLoadAffineExpr.size();
-  SmallVector<Value> operands;
-  for (auto forOp : nonReductionLoops)
-    operands.push_back(forOp.getInductionVar());
+  std::size_t numLoad = allLoadAffineMaps.size();
   for (std::size_t i = 0; i < numLoad; ++i) {
     AffineLoadOp load;
-    unsigned int size = nonReductionLoops.size();
     if (i < numLoad - 1) { // load from buffer
-      auto affineMap =
-          AffineMap::get(size /*rank*/, 0,
-                         allLoadAffineExpr[i + 1] /*need to shift the element*/,
-                         builder.getContext());
-      load = builder.create<AffineLoadOp>(loc, buf, affineMap, operands);
+      load = builder.create<AffineLoadOp>(loc, buf, allLoadAffineMaps[i + 1],
+                                          allLoadOperands[i + 1]);
     } else { // load from memory
-      load = builder.create<AffineLoadOp>(loc, target, operands);
+      SmallVector<Value> memAffineIndices;
+      for (auto forOp : nonReductionLoops)
+        memAffineIndices.push_back(forOp.getInductionVar());
+      load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
     }
-    load->moveBefore(ifOp); // move inside if structure
+    load->moveBefore(ifOp);
 
     // store the load result to buffer
-    auto affineMap = AffineMap::get(size /*rank*/, 0, allLoadAffineExpr[i],
-                                    builder.getContext());
-    auto store =
-        builder.create<AffineStoreOp>(loc, load, buf, affineMap, operands);
+    auto store = builder.create<AffineStoreOp>(
+        loc, load, buf, allLoadAffineMaps[i], allLoadOperands[i]);
     store->moveBefore(ifOp);
   }
 

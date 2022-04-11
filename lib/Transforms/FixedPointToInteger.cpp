@@ -41,7 +41,20 @@ void updateFunctionSignature(FuncOp &funcOp) {
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;
 
-  for (Type t : result_types) {
+  // Set the extra type hint based on the input/output memref type
+  std::string extra_itypes = "";
+  if (funcOp->hasAttr("extra_itypes")) {
+    extra_itypes =
+        funcOp->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  }
+  std::string extra_otypes = "";
+  if (funcOp->hasAttr("extra_otypes")) {
+    extra_otypes =
+        funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  }
+
+  for (auto v : llvm::enumerate(result_types)) {
+    Type t = v.value();
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
       // If result memref element type is fixed
@@ -50,6 +63,12 @@ void updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_result_types.push_back(memrefType.clone(newElementType));
+        // update the extra_otypes
+        if (et.isa<FixedType>() and v.index() < extra_otypes.length()) {
+          extra_otypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < extra_otypes.length()) {
+          extra_otypes[v.index()] = 'u';
+        }
       } else {
         new_result_types.push_back(memrefType);
       }
@@ -58,7 +77,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
     }
   }
 
-  for (Type t : arg_types) {
+  for (auto v : llvm::enumerate(arg_types)) {
+    Type t = v.value();
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
       // If argument memref element type is fixed
@@ -67,6 +87,12 @@ void updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_arg_types.push_back(memrefType.clone(newElementType));
+        // update the extra_itypes
+        if (et.isa<FixedType>() and v.index() < extra_itypes.length()) {
+          extra_itypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < extra_itypes.length()) {
+          extra_itypes[v.index()] = 'u';
+        }
       } else {
         new_arg_types.push_back(memrefType);
       }
@@ -74,6 +100,9 @@ void updateFunctionSignature(FuncOp &funcOp) {
       new_arg_types.push_back(t);
     }
   }
+
+  funcOp->setAttr("extra_itypes", StringAttr::get(funcOp.getContext(), extra_itypes));
+  funcOp->setAttr("extra_otypes", StringAttr::get(funcOp.getContext(), extra_otypes));
 
   // Update FuncOp's block argument types
   for (Block &block : funcOp.getBlocks()) {
@@ -139,42 +168,57 @@ void updateReturnOp(FuncOp &funcOp) {
       if (MemRefType type = arg.getType().dyn_cast<MemRefType>()) {
         Type etype = type.getElementType();
         Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-        if (etype != newType and etype.isa<FixedType, UFixedType>()) {
-          if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-            allocOp->getResult(0).setType(newType);
-            for (auto &use : allocOp->getResult(0).getUses()) {
-              Value storeEle;
-              bool isStore= false;
-              if (auto storeOp = dyn_cast<memref::StoreOp>(use.getOwner())) {
-                storeEle = storeOp.getOperand(0);
-                isStore = true;
-              } else if (auto storeOp =
-                             dyn_cast<AffineStoreOp>(use.getOwner())) {
-                storeEle = storeOp.getOperand(0);
-                isStore = true;
-              }
-              if (isStore) {
-                // check storeEle's type and cast it if necessary
-                OpBuilder builder(use.getOwner());
-                Location loc = use.getOwner()->getLoc();
-                unsigned width;
-                if (etype.isa<FixedType>()) {
-                  width = etype.cast<FixedType>().getWidth();
-                } else {
-                  width = etype.cast<UFixedType>().getWidth();
-                }
-                Type oldType = builder.getIntegerType(width);
-                if (oldType != IntegerType::get(funcOp.getContext(), 64)) {
-                  // cast it
-                  Value casted =
-                      castInteger(builder, loc, storeEle, oldType,
-                                  IntegerType::get(funcOp.getContext(), 64),
-                                  etype.isa<FixedType>());
-                  use.getOwner()->setOperand(0, casted);
-                }
-              }
-            }
+        if (etype.isa<IntegerType>() && etype != newType) {
+        // if (etype != newType and etype.isa<FixedType, UFixedType>()) {
+          OpBuilder builder(op);
+          Location loc = op->getLoc();
+          // Get signedness hint information
+          std::string extra_otypes = "";
+          if (funcOp->hasAttr("extra_otypes")) {
+            extra_otypes =
+                funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
           }
+          bool is_unsigned = false;
+          if (i < extra_otypes.length()) {
+            is_unsigned = extra_otypes[i] == 'u';
+          }
+          Value castedMemRef = castIntMemRef(builder, loc, arg, 64, is_unsigned, false);
+          op->setOperand(i, castedMemRef);
+          // if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+          //   allocOp->getResult(0).setType(newType);
+          //   for (auto &use : allocOp->getResult(0).getUses()) {
+          //     Value storeEle;
+          //     bool isStore= false;
+          //     if (auto storeOp = dyn_cast<memref::StoreOp>(use.getOwner())) {
+          //       storeEle = storeOp.getOperand(0);
+          //       isStore = true;
+          //     } else if (auto storeOp =
+          //                    dyn_cast<AffineStoreOp>(use.getOwner())) {
+          //       storeEle = storeOp.getOperand(0);
+          //       isStore = true;
+          //     }
+          //     if (isStore) {
+          //       // check storeEle's type and cast it if necessary
+          //       OpBuilder builder(use.getOwner());
+          //       Location loc = use.getOwner()->getLoc();
+          //       unsigned width;
+          //       if (etype.isa<FixedType>()) {
+          //         width = etype.cast<FixedType>().getWidth();
+          //       } else {
+          //         width = etype.cast<UFixedType>().getWidth();
+          //       }
+          //       Type oldType = builder.getIntegerType(width);
+          //       if (oldType != IntegerType::get(funcOp.getContext(), 64)) {
+          //         // cast it
+          //         Value casted =
+          //             castInteger(builder, loc, storeEle, oldType,
+          //                         IntegerType::get(funcOp.getContext(), 64),
+          //                         etype.isa<FixedType>());
+          //         use.getOwner()->setOperand(0, casted);
+          //       }
+          //     }
+          //   }
+          // }
         }
       }
     }

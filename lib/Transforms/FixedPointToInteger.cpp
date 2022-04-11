@@ -254,7 +254,7 @@ void markFixedOperations(FuncOp &f) {
     Value res = op->getResult(0);
     size_t lwidth, lfrac, rwidth, rfrac, reswidth, resfrac;
     // The operands are either fixed-point or unsigned fixed-point
-    if (opr_l.getType().cast<FixedType>()) { // fixed
+    if (opr_l.getType().isa<FixedType>()) { // fixed
       FixedType ltype = opr_l.getType().cast<FixedType>();
       FixedType rtype = opr_r.getType().cast<FixedType>();
       FixedType restype = res.getType().cast<FixedType>();
@@ -264,7 +264,7 @@ void markFixedOperations(FuncOp &f) {
       rfrac = rtype.getFrac();
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
-    } else if (opr_l.getType().cast<UFixedType>()) { // ufixed
+    } else if (opr_l.getType().isa<UFixedType>()) { // ufixed
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
       UFixedType rtype = opr_r.getType().cast<UFixedType>();
       UFixedType restype = res.getType().cast<UFixedType>();
@@ -274,6 +274,12 @@ void markFixedOperations(FuncOp &f) {
       rfrac = rtype.getFrac();
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
+    }
+    // if op is MulFixedOp, double lwidth, rwidth, and reswidth
+    if (llvm::isa<MulFixedOp>(op)) {
+      lwidth *= 2;
+      rwidth *= 2;
+      reswidth *= 2;
     }
     // add width, frac info as attributes
     OpBuilder builder(f.getContext());
@@ -405,7 +411,7 @@ void lowerFixedMul(MulFixedOp &op) {
   // Therefore, we need to right shift the result for frac bit
   // Right shift needs to consider signed/unsigned
   Type opTy = op->getOperand(0).getType();
-  IntegerType intTy = IntegerType::get(op->getContext(), 32);
+  IntegerType intTy = IntegerType::get(op->getContext(), width);
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
@@ -576,17 +582,16 @@ void visitRegion(Region &region) {
 bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (FuncOp func : mod.getOps<FuncOp>()) {
-    // lowerFixedAdd(func);
     lowerPrintOp(func);
     markFixedOperations(func);
     updateFunctionSignature(func);
     updateAffineLoad(func);
-    updateReturnOp(func);
     updateAlloc(func);
     updateAffineLoad(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
+    updateReturnOp(func);
   }
 
   return true;

@@ -52,3 +52,53 @@ void HeteroCLDialect::initialize() {
 #include "hcl/Dialect/HeteroCLAttrs.cpp.inc"
       >();
 }
+
+//===----------------------------------------------------------------------===//
+// HeteroCL Types.
+//===----------------------------------------------------------------------===//
+namespace mlir {
+namespace hcl {
+namespace detail {
+struct StructTypeStorage : public TypeStorage {
+  StructTypeStorage(ArrayRef<Type> elementTypes) : elementTypes(elementTypes) {}
+
+  /// The element types of this struct type.
+  using KeyTy = llvm::ArrayRef<mlir::Type>;
+
+  /// A constructor for the type storage instance.
+  StructTypeStorage(llvm::ArrayRef<mlir::Type> elementTypes)
+      : elementTypes(elementTypes) {}
+
+  /// Comparison function
+  bool operator==(const KeyTy &key) const { return key == elementTypes; }
+
+  /// Hash function for the key type
+  static llvm::hash_code hashKey(const KeyTy &key) {
+    return llvm::hash_value(key);
+  }
+
+  static KeyTy getKey(llvm::ArrayRef<mlir::Type> elementTypes) {
+    return KeyTy(elementTypes);
+  }
+
+  /// Define a construction method for creating a new instance of this storage.
+  /// This method takes an instance of a storage allocator, and an instance of a
+  /// `KeyTy`. The given allocator must be used for *all* necessary dynamic
+  /// allocations used to create the type storage and its internal.
+  static StructTypeStorage *construct(mlir::TypeStorageAllocator &allocator,
+                                      const KeyTy &key) {
+    // Copy the elements from the provided `KeyTy` into the allocator.
+    llvm::ArrayRef<mlir::Type> elementTypes = allocator.copyInto(key);
+
+    // Allocate the storage instance and construct it.
+    return new (allocator.allocate<StructTypeStorage>())
+        StructTypeStorage(elementTypes);
+  }
+
+  /// The following field contains the element types of the struct.
+  llvm::ArrayRef<mlir::Type> elementTypes;
+};
+
+} // namespace detail
+} // namespace hcl
+} // namespace mlir

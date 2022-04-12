@@ -1100,20 +1100,34 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
             singleLoadAffineExpr.push_back(diff);
             // i > axis
             // TODO: better mapping machanism for high-dimensional tensors
+            bool reduction = false;
             for (unsigned int i = axis + 1; i < rank; ++i) {
-              singleLoadAffineExpr.push_back(map.getResult(i));
+              auto expr = map.getResult(i);
+              if (expr.isa<AffineBinaryOpExpr>()) { // another reduction axis
+                expr = builder.getAffineDimExpr(i - axis);
+                reduction = true;
+              }
+              singleLoadAffineExpr.push_back(expr);
             }
+            if (reduction)
+              loadRank = target.getType().dyn_cast<MemRefType>().getRank();
             auto affineMap =
                 AffineMap::get(loadRank /*rank*/, 0, singleLoadAffineExpr,
                                builder.getContext());
             auto operands = loadOp.getMapOperands();
             SmallVector<Value> memAffineIndices;
-            for (int i = 0; i < loadRank; ++i) {
-              if (!affineMap.isFunctionOfDim(i)) {
+            if (reduction) {
+              for (int i = 0; i < loadRank; ++i)
                 memAffineIndices.push_back(
-                    nonReductionLoops[0].getInductionVar());
-              } else {
-                memAffineIndices.push_back(operands[i]);
+                    nonReductionLoops[i].getInductionVar());
+            } else {
+              for (int i = 0; i < loadRank; ++i) {
+                if (!affineMap.isFunctionOfDim(i)) { // placeholder
+                  memAffineIndices.push_back(
+                      nonReductionLoops[0].getInductionVar());
+                } else {
+                  memAffineIndices.push_back(operands[i]);
+                }
               }
             }
             allLoadAffineMaps.push_back(affineMap);
@@ -1284,25 +1298,44 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   //   affine.store %3, %1[1] : memref<3xi32>
   //   %4 = affine.load %arg0[%arg1, %arg2] : memref<10x10xi32>
   //   affine.store %4, %1[2] : memref<3xi32>
-  loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
+  loc = nonReductionLoops[axis].getBody()->getOperations().begin()->getLoc();
+  builder = OpBuilder(
+      &(*(nonReductionLoops[axis].getBody()->getOperations().begin())));
+  AffineForOp shiftForOp;
+  if ((unsigned int)axis != nonReductionLoops.size() - 1) {
+    shiftForOp = builder.create<AffineForOp>(
+        loc, 0, target.getType().dyn_cast<MemRefType>().getShape()[axis + 1]);
+    builder = OpBuilder(&(*(shiftForOp.getBody()->getOperations().begin())));
+    loc = shiftForOp.getBody()->getOperations().begin()->getLoc();
+  }
   std::size_t numLoad = allLoadAffineMaps.size();
   for (std::size_t i = 0; i < numLoad; ++i) {
     AffineLoadOp load;
     if (i < numLoad - 1) { // load from buffer
+      if ((unsigned int)axis != nonReductionLoops.size() - 1) {
+        allLoadOperands[i + 1][allLoadOperands[i + 1].size() - 1] =
+            shiftForOp.getInductionVar();
+      }
       load = builder.create<AffineLoadOp>(loc, buf, allLoadAffineMaps[i + 1],
                                           allLoadOperands[i + 1]);
     } else { // load from memory
       SmallVector<Value> memAffineIndices;
       for (auto forOp : nonReductionLoops)
         memAffineIndices.push_back(forOp.getInductionVar());
+      if ((unsigned int)axis != nonReductionLoops.size() - 1) {
+        memAffineIndices[memAffineIndices.size() - 1] =
+            shiftForOp.getInductionVar();
+      }
       load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
     }
-    load->moveBefore(ifOp);
 
     // store the load result to buffer
-    auto store = builder.create<AffineStoreOp>(
-        loc, load, buf, allLoadAffineMaps[i], allLoadOperands[i]);
-    store->moveBefore(ifOp);
+    if ((unsigned int)axis != nonReductionLoops.size() - 1) {
+      allLoadOperands[i][allLoadOperands[i].size() - 1] =
+          shiftForOp.getInductionVar();
+    }
+    builder.create<AffineStoreOp>(loc, load, buf, allLoadAffineMaps[i],
+                                  allLoadOperands[i]);
   }
 
   // 14) Remove all the useless operations

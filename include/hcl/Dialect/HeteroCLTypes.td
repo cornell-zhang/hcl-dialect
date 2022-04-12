@@ -72,4 +72,6 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   }];
 }
 
+def StructType : DialectType<HeteroCL_Dialect, CPred<"$_self.isa<StructType>()">, "HeteroCL's struct type">;
+
 #endif // HCL_TYPES

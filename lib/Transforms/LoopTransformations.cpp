@@ -1301,20 +1301,22 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   loc = nonReductionLoops[axis].getBody()->getOperations().begin()->getLoc();
   builder = OpBuilder(
       &(*(nonReductionLoops[axis].getBody()->getOperations().begin())));
-  AffineForOp shiftForOp;
-  if ((unsigned int)axis != nonReductionLoops.size() - 1) {
-    shiftForOp = builder.create<AffineForOp>(
-        loc, 0, target.getType().dyn_cast<MemRefType>().getShape()[axis + 1]);
-    builder = OpBuilder(&(*(shiftForOp.getBody()->getOperations().begin())));
-    loc = shiftForOp.getBody()->getOperations().begin()->getLoc();
+  AffineLoopBand shiftForOps;
+  for (unsigned int i = axis + 1; i < nonReductionLoops.size(); ++i) {
+    shiftForOps.push_back(builder.create<AffineForOp>(
+        loc, 0, target.getType().dyn_cast<MemRefType>().getShape()[i]));
+    builder =
+        OpBuilder(&(*(shiftForOps.back().getBody()->getOperations().begin())));
+    loc = shiftForOps.back().getBody()->getOperations().begin()->getLoc();
   }
   std::size_t numLoad = allLoadAffineMaps.size();
   for (std::size_t i = 0; i < numLoad; ++i) {
     AffineLoadOp load;
     if (i < numLoad - 1) { // load from buffer
-      if ((unsigned int)axis != nonReductionLoops.size() - 1) {
-        allLoadOperands[i + 1][allLoadOperands[i + 1].size() - 1] =
-            shiftForOp.getInductionVar();
+      std::size_t size = allLoadOperands[i + 1].size();
+      for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
+        allLoadOperands[i + 1][j] =
+            shiftForOps[j - size + shiftForOps.size()].getInductionVar();
       }
       load = builder.create<AffineLoadOp>(loc, buf, allLoadAffineMaps[i + 1],
                                           allLoadOperands[i + 1]);
@@ -1322,17 +1324,19 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       SmallVector<Value> memAffineIndices;
       for (auto forOp : nonReductionLoops)
         memAffineIndices.push_back(forOp.getInductionVar());
-      if ((unsigned int)axis != nonReductionLoops.size() - 1) {
-        memAffineIndices[memAffineIndices.size() - 1] =
-            shiftForOp.getInductionVar();
+      std::size_t size = memAffineIndices.size();
+      for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
+        memAffineIndices[j] =
+            shiftForOps[j - size + shiftForOps.size()].getInductionVar();
       }
       load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
     }
 
     // store the load result to buffer
-    if ((unsigned int)axis != nonReductionLoops.size() - 1) {
-      allLoadOperands[i][allLoadOperands[i].size() - 1] =
-          shiftForOp.getInductionVar();
+    std::size_t size = allLoadOperands[i].size();
+    for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
+      allLoadOperands[i][j] =
+          shiftForOps[j - size + shiftForOps.size()].getInductionVar();
     }
     builder.create<AffineStoreOp>(loc, load, buf, allLoadAffineMaps[i],
                                   allLoadOperands[i]);

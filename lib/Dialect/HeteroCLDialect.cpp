@@ -47,6 +47,7 @@ void HeteroCLDialect::initialize() {
 #define GET_TYPEDEF_LIST
 #include "hcl/Dialect/HeteroCLTypes.cpp.inc"
       >();
+  addTypes<StructType>();
   addAttributes< // test/lib/Dialect/Test/TestAttributes.cpp
 #define GET_ATTRDEF_LIST
 #include "hcl/Dialect/HeteroCLAttrs.cpp.inc"

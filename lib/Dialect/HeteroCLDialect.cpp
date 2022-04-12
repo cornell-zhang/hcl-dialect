@@ -10,6 +10,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/ADT/StringExtras.h"
+
 #include "llvm/ADT/TypeSwitch.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
@@ -119,9 +120,9 @@ llvm::ArrayRef<mlir::Type> StructType::getElementTypes() {
   // 'getImpl' returns a pointer to the internal storage instance.
   return getImpl()->elementTypes;
 }
-/*
+
 /// Parse a struct type from the given string.
-mlir::Type HeteroCLDialect::parseType(mlir::DialectAsmParser &parser) const {
+mlir::Type StructType::parse(mlir::DialectAsmParser &parser) {
   // Parse a struct type in the following form:
   //   struct-type ::= `struct` `<` type (`,` type)* `>`
 
@@ -138,7 +139,7 @@ mlir::Type HeteroCLDialect::parseType(mlir::DialectAsmParser &parser) const {
   SmallVector<mlir::Type, 1> elementTypes;
   do {
     // Parse the current element type.
-    SMLoc typeLoc = parser.getCurrentLocation();
+    // SMLoc typeLoc = parser.getCurrentLocation();
     mlir::Type elementType;
     if (parser.parseType(elementType))
       return nullptr;
@@ -154,13 +155,9 @@ mlir::Type HeteroCLDialect::parseType(mlir::DialectAsmParser &parser) const {
   return StructType::get(elementTypes);
 }
 
-void HeteroCLDialect::printType(mlir::Type type,
-                           mlir::DialectAsmPrinter &printer) const {
-  StructType structType = type.cast<StructType>();
-
+void StructType::print(mlir::DialectAsmPrinter &printer) {
   // Print the struct type according to the parser format.
   printer << "struct<";
-  llvm::interleaveComma(structType.getElementTypes(), printer);
+  llvm::interleaveComma(this->getElementTypes(), printer);
   printer << '>';
 }
-*/

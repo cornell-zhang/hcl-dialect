@@ -76,4 +76,9 @@ def StructType : DialectType<HeteroCL_Dialect,
   CPred<"$_self.isa<StructType>()">,
   "HeteroCL's struct type">;
 
+// def Struct : HeteroCL_Type<"Struct"> {
+//   let summary = "struct type";
+//   let mnemonic = "Struct";
+// }
+
 #endif // HCL_TYPES

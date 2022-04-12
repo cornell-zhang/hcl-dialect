@@ -11,6 +11,7 @@
 #define HCLTYPES_H
 
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/DialectImplementation.h"
 
 #define GET_TYPEDEF_CLASSES
 #include "hcl/Dialect/HeteroCLTypes.h.inc"
@@ -39,6 +40,12 @@ public:
 
   /// Return the number of elements in this struct type.
   unsigned getNumElements() { return getElementTypes().size(); };
+
+  /// Parser
+  mlir::Type parse(mlir::DialectAsmParser &parser);
+
+  /// Printer
+  void print(mlir::DialectAsmPrinter &printer);
 };
 } // namespace hcl
 } // namespace mlir

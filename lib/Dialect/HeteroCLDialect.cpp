@@ -60,7 +60,6 @@ namespace mlir {
 namespace hcl {
 namespace detail {
 struct StructTypeStorage : public TypeStorage {
-  StructTypeStorage(ArrayRef<Type> elementTypes) : elementTypes(elementTypes) {}
 
   /// The element types of this struct type.
   using KeyTy = llvm::ArrayRef<mlir::Type>;

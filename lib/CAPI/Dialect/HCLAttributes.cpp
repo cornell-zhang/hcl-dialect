@@ -29,3 +29,13 @@ MlirAttribute mlirPartitionKindGet(MlirContext ctx, MlirAttribute kind) {
   PartitionKindEnum kindEnum = static_cast<PartitionKindEnum>(attr.getInt());
   return wrap(PartitionKindEnumAttr::get(unwrap(ctx), kindEnum));
 }
+
+bool mlirAttributeIsANDRangeDimKind(MlirAttribute attr) {
+  return unwrap(attr).isa<NDRangeDimKindEnumAttr>();
+}
+
+MlirAttribute mlirNDRangeDimKindGet(MlirContext ctx, MlirAttribute kind) {
+  IntegerAttr attr = unwrap(kind).cast<IntegerAttr>();
+  NDRangeDimKindEnum kindEnum = static_cast<NDRangeDimKindEnum>(attr.getInt());
+  return wrap(NDRangeDimKindEnumAttr::get(unwrap(ctx), kindEnum));
+}

@@ -1040,19 +1040,23 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     if (loadOp.getOperand(0) != target)
       return WalkResult::advance();
     auto loadMap = loadOp.getAffineMap();
-    AffineExpr expr = loadMap.getResult(axis);
     int numDims = loadMap.getNumDims();
     auto operands = loadOp.getMapOperands();
-    OpBuilder builder(loadOp);
     int rDim = -1;
-    for (int i = 0; i < numDims; i++)
-      if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
-        rDim = i;
-        break;
+    for (int j = 0; j < (int)loadMap.getNumResults(); ++j) {
+      AffineExpr expr = loadMap.getResult(j);
+      for (int i = 0; i < numDims; ++i) {
+        if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
+          dimBounds[i] = reductionVars[operands[i]];
+          if (j == axis) // target reuse axis
+            rDim = i;
+        }
       }
+    }
+    OpBuilder builder(loadOp);
+    AffineExpr expr = loadMap.getResult(axis);
     if (rDim != -1) {
       int ub = reductionVars[operands[rDim]];
-      dimBounds[rDim] = ub;
       for (int j = 0; j < ub; j++) {
         auto ubCstExpr = builder.getAffineConstantExpr(j);
         auto newExpr = expr.replace(builder.getAffineDimExpr(rDim), ubCstExpr);
@@ -1084,6 +1088,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 6) Obtain indices and strides in load instructions
   SmallVector<AffineMap> allLoadAffineMaps;
   SmallVector<SmallVector<Value>> allLoadOperands;
+  int preRDim = -1;
   result = rootForOp.walk([&](AffineLoadOp loadOp) {
     if (loadOp.getOperand(0) != target)
       return WalkResult::advance();
@@ -1094,13 +1099,13 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto diff = var - baseVar;
 
     // find reduction dimension
-    int rDim = -1;
-    for (auto item : dimBounds) {
-      if (diff.isFunctionOfDim(item.first)) {
-        rDim = item.first;
-        break;
-      }
-    }
+    auto getReductionDim = [&](AffineExpr expr) {
+      for (auto item : dimBounds)
+        if (expr.isFunctionOfDim(item.first))
+          return item.first;
+      return -1;
+    };
+    int rDim = getReductionDim(diff);
 
     // obtain load expressions
     OpBuilder builder(loadOp);
@@ -1120,6 +1125,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           // TODO: only suppose the expr is in the format of d0+d1
           if (expr.isa<AffineBinaryOpExpr>()) {
             // reduction axis before reuse axis
+            preRDim = getReductionDim(expr);
             singleLoadAffineExpr.push_back(expr);
             memAffineIndices.push_back(operands[operandIdx++]);
             memAffineIndices.push_back(operands[operandIdx++]);
@@ -1170,15 +1176,21 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 
   // 7) Create reuse buffer
   //    e.g., %1 = memref.alloc() : memref<3xi32>
-  int distance = (*(std::prev(allLoadAffineMaps.end())))
-                     .getResult(0)
+  // TODO: suppose only at most one reduction axis before reuse axis
+  int distance = allLoadAffineMaps.back()
+                     .getResult(preRDim == -1 ? 0 : 1)
                      .dyn_cast<AffineConstantExpr>()
                      .getValue();
   OpBuilder out_builder(rootForOp); // outside the stage
   mlir::Type elementType =
       target.getType().dyn_cast<MemRefType>().getElementType();
   SmallVector<int64_t> shape;
+  // i < axis
+  if (preRDim != -1)
+    shape.push_back(dimBounds[preRDim]);
+  // i = axis
   shape.push_back(distance + 1);
+  // i > axis
   for (unsigned int i = axis + 1; i < rank; ++i)
     shape.push_back(arrayType.getShape()[i]);
   auto buf = out_builder.create<memref::AllocOp>(
@@ -1188,7 +1200,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   reuseAtOp.getResult().replaceAllUsesWith(buf);
 
   // 9) Update loop bound
-  SmallVector<AffineExpr> memAffineIndices;
   // TODO: support non-constant bound
   nonReductionLoops[axis].setConstantUpperBound(
       target.getType().dyn_cast<MemRefType>().getShape()[axis]);
@@ -1211,7 +1222,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     }
     // update the store to output tensor
     OpBuilder rewriter(op);
-    memAffineIndices.clear();
+    SmallVector<AffineExpr> memAffineIndices;
     auto oldAffineMap = op.getAffineMap();
     for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e; ++i) {
       AffineExpr idx;
@@ -1250,7 +1261,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       return WalkResult::advance();
     }
     OpBuilder rewriter(op);
-    memAffineIndices.clear();
+    SmallVector<AffineExpr> memAffineIndices;
     SmallVector<Value> operands = op.getMapOperands();
     auto idx = op.getAffineMap().getResult(axis) - baseVar;
     if (idx.isa<AffineConstantExpr>()) {

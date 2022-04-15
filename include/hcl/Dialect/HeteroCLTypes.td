@@ -79,11 +79,10 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
 def Struct : HeteroCL_Type<"Struct"> {
   let summary = "struct type";
   let mnemonic = "struct";
-  let parameters = (ins "ArrayRef<Type>":$elementTypes);
+  let parameters = (ins ArrayRefParameter<"Type", "elementTypes">:$elementTypes);
   let printer = [{
     $_printer << "<";
-    // llvm::interleaveComma(getImpl()->elementTypes, $_printer);
-    llvm::outs() << getElementTypes();
+    llvm::interleaveComma(getImpl()->elementTypes, $_printer);
     $_printer << '>';
   }];
   let parser = [{

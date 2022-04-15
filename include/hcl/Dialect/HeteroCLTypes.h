@@ -16,38 +16,38 @@
 #define GET_TYPEDEF_CLASSES
 #include "hcl/Dialect/HeteroCLTypes.h.inc"
 
-namespace mlir {
-namespace hcl {
-namespace detail {
-struct StructTypeStorage;
-} // namespace detail
-} // namespace hcl
-} // namespace mlir
+// namespace mlir {
+// namespace hcl {
+// namespace detail {
+// struct StructTypeStorage;
+// } // namespace detail
+// } // namespace hcl
+// } // namespace mlir
 
-namespace mlir {
-namespace hcl {
-class StructType : public mlir::Type::TypeBase<StructType, mlir::Type,
-                                               detail::StructTypeStorage> {
-public:
-  using Base::Base;
+// namespace mlir {
+// namespace hcl {
+// class StructType : public mlir::Type::TypeBase<StructType, mlir::Type,
+//                                                detail::StructTypeStorage> {
+// public:
+//   using Base::Base;
 
-  // Create an instance of a `StructType` with the given element types.
-  // There must be at least one element type.
-  static StructType get(ArrayRef<mlir::Type> elementTypes);
+//   // Create an instance of a `StructType` with the given element types.
+//   // There must be at least one element type.
+//   static StructType get(ArrayRef<mlir::Type> elementTypes);
 
-  /// Return the element types of this struct type.
-  ArrayRef<mlir::Type> getElementTypes();
+//   /// Return the element types of this struct type.
+//   ArrayRef<mlir::Type> getElementTypes();
 
-  /// Return the number of elements in this struct type.
-  unsigned getNumElements() { return getElementTypes().size(); };
+//   /// Return the number of elements in this struct type.
+//   unsigned getNumElements() { return getElementTypes().size(); };
 
-  /// Parser
-  mlir::Type parse(mlir::DialectAsmParser &parser);
+//   /// Parser
+//   mlir::Type parse(mlir::DialectAsmParser &parser);
 
-  /// Printer
-  void print(mlir::DialectAsmPrinter &printer);
-};
-} // namespace hcl
-} // namespace mlir
+//   /// Printer
+//   void print(mlir::DialectAsmPrinter &printer);
+// };
+// } // namespace hcl
+// } // namespace mlir
 
 #endif // HCLTYPES_H

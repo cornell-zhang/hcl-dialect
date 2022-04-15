@@ -72,13 +72,36 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   }];
 }
 
-def StructType : DialectType<HeteroCL_Dialect, 
-  CPred<"$_self.isa<StructType>()">,
-  "HeteroCL's struct type">;
+// def StructType : DialectType<HeteroCL_Dialect, 
+//   CPred<"$_self.isa<StructType>()">,
+//   "HeteroCL's struct type">;
 
-// def Struct : HeteroCL_Type<"Struct"> {
-//   let summary = "struct type";
-//   let mnemonic = "Struct";
-// }
+def Struct : HeteroCL_Type<"Struct"> {
+  let summary = "struct type";
+  let mnemonic = "struct";
+  let parameters = (ins "ArrayRef<Type>":$elementTypes);
+  let printer = [{
+    $_printer << "<";
+    // llvm::interleaveComma(getImpl()->elementTypes, $_printer);
+    llvm::outs() << getElementTypes();
+    $_printer << '>';
+  }];
+  let parser = [{
+    if ($_parser.parseLess())
+      return Type();
+    SmallVector<mlir::Type, 1> elementTypes;
+    do {
+      mlir::Type elementType;
+      if ($_parser.parseType(elementType))
+        return nullptr;
+
+      elementTypes.push_back(elementType);
+    } while (succeeded($_parser.parseOptionalComma()));
+
+    if ($_parser.parseGreater())
+      return Type();
+    return get($_ctxt, elementTypes);
+  }];
+}
 
 #endif // HCL_TYPES

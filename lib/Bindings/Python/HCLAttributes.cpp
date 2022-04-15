@@ -68,4 +68,13 @@ void mlir::python::populateHCLAttributes(py::module &m) {
           },
           py::arg("cls"), py::arg("kind"), py::arg("context") = py::none(),
           "Gets an attribute wrapping a partition kind.");
+
+  mlir_attribute_subclass(m, "NDRangeDimKindEnum", mlirAttributeIsANDRangeDimKind)
+      .def_classmethod(
+          "get",
+          [](py::object cls, MlirAttribute kind, MlirContext ctx) {
+            return cls(mlirNDRangeDimKindGet(ctx, kind));
+          },
+          py::arg("cls"), py::arg("kind"), py::arg("context") = py::none(),
+          "Gets an attribute wrapping a NDRange dimension kind.");
 }

@@ -1028,36 +1028,40 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
 
   // 4) Obtain AffineMaps of load instructions
-  SmallVector<AffineMap, 6> loadMap;
+  // if i-th axis has reduction var before the reuse axis
+  //  reductionLoopBound[i] should be the dimension size
+  // if i-th axis has reduction var after the reuse axis
+  //  target.shape[i] should be the dimension size
   std::set<AffineExpr, ExprCompare> requestedVars;
   std::map<int, int> dimBounds; // dim expr->reduction bound
   // TODO: eliminate order in inputs
   reuseAtOp.emitWarning("Need to guarantee the loads have orders");
   rootForOp.walk([&](AffineLoadOp loadOp) {
-    if (loadOp.getOperand(0) == target) {
-      auto map = loadOp.getAffineMap();
-      loadMap.push_back(map);
-      AffineExpr expr = map.getResult(axis);
-      int numDims = map.getNumDims();
-      auto operands = loadOp.getMapOperands();
-      OpBuilder builder(loadOp);
-      bool flag = false;
-      for (int i = 0; i < numDims; i++) {
-        if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
-          int ub = reductionVars[operands[i]];
-          dimBounds[i] = ub;
-          for (int j = 0; j < ub; j++) {
-            auto ubCstExpr = builder.getAffineConstantExpr(j);
-            auto newExpr = expr.replace(builder.getAffineDimExpr(i), ubCstExpr);
-            requestedVars.insert(newExpr);
-          }
-          flag = true;
-          break;
-        }
+    if (loadOp.getOperand(0) != target)
+      return WalkResult::advance();
+    auto loadMap = loadOp.getAffineMap();
+    AffineExpr expr = loadMap.getResult(axis);
+    int numDims = loadMap.getNumDims();
+    auto operands = loadOp.getMapOperands();
+    OpBuilder builder(loadOp);
+    int rDim = -1;
+    for (int i = 0; i < numDims; i++)
+      if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
+        rDim = i;
+        break;
       }
-      if (!flag)
-        requestedVars.insert(expr);
+    if (rDim != -1) {
+      int ub = reductionVars[operands[rDim]];
+      dimBounds[rDim] = ub;
+      for (int j = 0; j < ub; j++) {
+        auto ubCstExpr = builder.getAffineConstantExpr(j);
+        auto newExpr = expr.replace(builder.getAffineDimExpr(rDim), ubCstExpr);
+        requestedVars.insert(newExpr);
+      }
+    } else {
+      requestedVars.insert(expr);
     }
+    return WalkResult::advance();
   });
 
   // 5) Try to find reuse pattern
@@ -1081,79 +1085,83 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   SmallVector<AffineMap> allLoadAffineMaps;
   SmallVector<SmallVector<Value>> allLoadOperands;
   result = rootForOp.walk([&](AffineLoadOp loadOp) {
-    if (loadOp.getOperand(0) == target) {
-      auto map = loadOp.getAffineMap();
-      auto var = map.getResult(axis);
-      auto diff = var - baseVar;
-      int numDims = map.getNumDims();
-      OpBuilder builder(loadOp);
-      bool flag = false;
-      SmallVector<AffineExpr> singleLoadAffineExpr;
-      int loadRank = loadOp.getMapOperands().size();
-      for (int i = 0; i < numDims; i++) {
-        if (diff.isFunctionOfDim(i) && dimBounds.count(i) > 0) {
-          int ub = dimBounds[i];
-          for (int j = 0; j < ub; j++) {
-            singleLoadAffineExpr.clear();
-            diff = builder.getAffineConstantExpr(j);
-            // i = axis
-            singleLoadAffineExpr.push_back(diff);
-            // i > axis
-            // TODO: better mapping machanism for high-dimensional tensors
-            bool reduction = false;
-            for (unsigned int i = axis + 1; i < rank; ++i) {
-              auto expr = map.getResult(i);
-              if (expr.isa<AffineBinaryOpExpr>()) { // another reduction axis
-                expr = builder.getAffineDimExpr(i - axis);
-                reduction = true;
-              }
-              singleLoadAffineExpr.push_back(expr);
-            }
-            if (reduction)
-              loadRank = target.getType().dyn_cast<MemRefType>().getRank();
-            auto affineMap =
-                AffineMap::get(loadRank /*rank*/, 0, singleLoadAffineExpr,
-                               builder.getContext());
-            auto operands = loadOp.getMapOperands();
-            SmallVector<Value> memAffineIndices;
-            if (reduction) {
-              for (int i = 0; i < loadRank; ++i)
-                memAffineIndices.push_back(
-                    nonReductionLoops[i].getInductionVar());
-            } else {
-              for (int i = 0; i < loadRank; ++i) {
-                if (!affineMap.isFunctionOfDim(i)) { // placeholder
-                  memAffineIndices.push_back(
-                      nonReductionLoops[0].getInductionVar());
-                } else {
-                  memAffineIndices.push_back(operands[i]);
-                }
-              }
-            }
-            allLoadAffineMaps.push_back(affineMap);
-            allLoadOperands.push_back(memAffineIndices);
-          }
-          flag = true;
-          break;
-        }
+    if (loadOp.getOperand(0) != target)
+      return WalkResult::advance();
+    auto loadMap = loadOp.getAffineMap();
+    // e.g. d0 d0+2, diff=2
+    //      d0 d0+d1, diff=d1
+    auto var = loadMap.getResult(axis);
+    auto diff = var - baseVar;
+
+    // find reduction dimension
+    int rDim = -1;
+    for (auto item : dimBounds) {
+      if (diff.isFunctionOfDim(item.first)) {
+        rDim = item.first;
+        break;
       }
-      if (!flag) {
-        // i = axis
-        if (diff.isa<AffineConstantExpr>()) {
-          singleLoadAffineExpr.push_back(diff);
-        } else {
-          reuseAtOp.emitError("Cannot support non-constant stride");
-          return WalkResult::interrupt();
+    }
+
+    // obtain load expressions
+    OpBuilder builder(loadOp);
+    if (rDim != -1) { // is reduction
+      int ub = dimBounds[rDim];
+      auto operands = loadOp.getMapOperands();
+      // expand the reduction axis
+      for (int j = 0; j < ub; j++) {
+        SmallVector<AffineExpr> singleLoadAffineExpr;
+        SmallVector<Value> memAffineIndices;
+        int loadRank = 0; // loadOp.getMapOperands().size();
+        int operandIdx = 0;
+        // TODO: better mapping machanism for high-dimensional tensors
+        // i < axis
+        for (int i = 0; i < axis; ++i) {
+          auto expr = loadMap.getResult(i);
+          // TODO: only suppose the expr is in the format of d0+d1
+          if (expr.isa<AffineBinaryOpExpr>()) {
+            // reduction axis before reuse axis
+            singleLoadAffineExpr.push_back(expr);
+            memAffineIndices.push_back(operands[operandIdx++]);
+            memAffineIndices.push_back(operands[operandIdx++]);
+            loadRank += 2;
+          }
         }
+        // i = axis
+        // TODO: suppose the expr is d0+d1
+        singleLoadAffineExpr.push_back(builder.getAffineConstantExpr(j));
+        operandIdx++;
         // i > axis
         for (unsigned int i = axis + 1; i < rank; ++i) {
-          singleLoadAffineExpr.push_back(map.getResult(i));
+          auto expr = loadMap.getResult(i);
+          singleLoadAffineExpr.push_back(builder.getAffineDimExpr(loadRank));
+          memAffineIndices.push_back(operands[operandIdx++]);
+          if (expr.isa<AffineBinaryOpExpr>()) // another reduction axis
+            operandIdx++;
+          loadRank += 1;
         }
         auto affineMap = AffineMap::get(
             loadRank /*rank*/, 0, singleLoadAffineExpr, builder.getContext());
         allLoadAffineMaps.push_back(affineMap);
-        allLoadOperands.push_back(loadOp.getMapOperands());
+        allLoadOperands.push_back(memAffineIndices);
       }
+    } else {
+      SmallVector<AffineExpr> singleLoadAffineExpr;
+      // i = axis
+      if (diff.isa<AffineConstantExpr>()) {
+        singleLoadAffineExpr.push_back(diff);
+      } else {
+        reuseAtOp.emitError("Cannot support non-constant stride");
+        return WalkResult::interrupt();
+      }
+      // i > axis
+      for (unsigned int i = axis + 1; i < rank; ++i) {
+        singleLoadAffineExpr.push_back(loadMap.getResult(i));
+      }
+      auto affineMap =
+          AffineMap::get(loadOp.getMapOperands().size() /*rank*/, 0,
+                         singleLoadAffineExpr, builder.getContext());
+      allLoadAffineMaps.push_back(affineMap);
+      allLoadOperands.push_back(loadOp.getMapOperands());
     }
     return WalkResult::advance();
   });

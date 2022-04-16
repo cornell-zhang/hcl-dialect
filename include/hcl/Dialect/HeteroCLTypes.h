@@ -11,6 +11,7 @@
 #define HCLTYPES_H
 
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/DialectImplementation.h"
 
 #define GET_TYPEDEF_CLASSES
 #include "hcl/Dialect/HeteroCLTypes.h.inc"

@@ -555,6 +555,41 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   return success();
 }
 
+LogicalResult runThreadBind(FuncOp &f, ThreadBindOp &threadBindOp) {
+  // 1) Get the schedule
+  auto target_dim = threadBindOp.dim();
+  const auto loop_name =
+      dyn_cast<CreateLoopHandleOp>(threadBindOp.loop().getDefiningOp())
+          .loop_name();
+  const auto stage_name =
+      dyn_cast<CreateStageHandleOp>(threadBindOp.stage().getDefiningOp())
+          .stage_name();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop and attach attribute
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{(int)target_dim};
+      setIntAttr(band, attr_arr, "thread_axis");
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  // handle exception
+  if (!result.wasInterrupted()) {
+    threadBindOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
+  }
+  return success();
+}
+
 // modified from lib/Transforms/Utils/LoopUtils.cpp
 LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
                             AffineForOp stageLoop) {
@@ -1833,7 +1868,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   ReshapeOp, InterKernelToOp>(op);
+                   ReshapeOp, ThreadBindOp, InterKernelToOp>(op);
 }
 
 template <class HCLOp>
@@ -1882,6 +1917,9 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
           return false;
       } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
         if (failed(runPipelining(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<ThreadBindOp>(op)) {
+        if (failed(runThreadBind(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
         if (failed(runParallel(f, new_op)))
@@ -1962,6 +2000,8 @@ bool applyLoopTransformation(ModuleOp &mod) {
           runSchedule<UnrollOp>(funcMap, new_op, &runUnrolling);
         } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
           runSchedule<PipelineOp>(funcMap, new_op, &runPipelining);
+        } else if (auto new_op = dyn_cast<ThreadBindOp>(op)) {
+          runSchedule<ThreadBindOp>(funcMap, new_op, &runThreadBind);
         } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
           runSchedule<ParallelOp>(funcMap, new_op, &runParallel);
         } else if (auto new_op = dyn_cast<FuseOp>(op)) {

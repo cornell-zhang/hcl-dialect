@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
@@ -26,7 +27,6 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
-#include "mlir/IR/BuiltinOps.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 
@@ -74,6 +74,10 @@ static llvm::cl::opt<bool> enableOpt("opt",
                                      llvm::cl::desc("Enable HCL schedules"),
                                      llvm::cl::init(false));
 
+static llvm::cl::opt<bool> lowerToLLVM("lower-to-llvm",
+                                       llvm::cl::desc("Lower to LLVM Dialect"),
+                                       llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -81,16 +85,24 @@ static llvm::cl::opt<bool>
 
 static llvm::cl::opt<bool> runJiT("jit", llvm::cl::desc("Run JiT compiler"),
                                   llvm::cl::init(false));
-  
-static llvm::cl::opt<bool> fixedPointToInteger("fixed-to-integer", 
-                      llvm::cl::desc("Lower fixed-point operations to integer"),
-                      llvm::cl::init(false));          
 
-static llvm::cl::opt<bool> anyWidthInteger("lower-anywidth-integer", 
-                      llvm::cl::desc("Lower anywidth integer to 64-bit integer"),
-                      llvm::cl::init(false));   
+static llvm::cl::opt<bool> fixedPointToInteger(
+    "fixed-to-integer",
+    llvm::cl::desc("Lower fixed-point operations to integer"),
+    llvm::cl::init(false));
 
-int loadMLIR(mlir::MLIRContext &context, mlir::OwningOpRef<mlir::ModuleOp> &module) {
+static llvm::cl::opt<bool>
+    anyWidthInteger("lower-anywidth-integer",
+                    llvm::cl::desc("Lower anywidth integer to 64-bit integer"),
+                    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> moveReturnToInput(
+    "return-to-input",
+    llvm::cl::desc("Move return values to input argument list"),
+    llvm::cl::init(false));
+
+int loadMLIR(mlir::MLIRContext &context,
+             mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile(inputFilename, &context);
   if (!module) {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
@@ -158,7 +170,7 @@ int main(int argc, char **argv) {
   mlir::PassManager pm(&context);
   // Operation specific passes
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
-  if (enableOpt || runJiT) {
+  if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
   }
 
@@ -168,6 +180,10 @@ int main(int argc, char **argv) {
 
   if (anyWidthInteger) {
     pm.addPass(mlir::hcl::createAnyWidthIntegerPass());
+  }
+
+  if (moveReturnToInput) {
+    pm.addPass(mlir::hcl::createMoveReturnToInputPass());
   }
 
   if (enableNormalize) {
@@ -188,7 +204,7 @@ int main(int argc, char **argv) {
     // pm.addPass(mlir::createCSEPass());
   }
 
-  if (runJiT) {
+  if (runJiT || lowerToLLVM) {
     pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
   }
 

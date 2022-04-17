@@ -309,6 +309,22 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
     }];
 }
 
+def HeteroCL_ReshapeOp : HeteroCL_Op<"reshape"> 
+{
+    let summary = "reshape";
+    let description = [{
+        hcl.reshape(target)
+
+        Reshape the tensor by modifying the memref
+    }];
+
+    let arguments = (ins AnyMemRef:$target);
+    let results = (outs AnyMemRef:$output);
+    let assemblyFormat = [{
+        $target `:` type($target) `to` type($output) attr-dict
+    }];
+}
+
 def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to"> 
 {
     let summary = "inter-kernel data placement";
@@ -489,5 +505,62 @@ def MaxBfloatOp : BfloatBinaryOp<"max_bfloat"> {
   let summary = "Bfloatingpoint maximum operation";
 }
 
+
+def GetIntSliceOp : HeteroCL_Op<"get_slice"> {
+    let summary = "get slice of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $hi `,` $lo `)` attr-dict `->` type($result)
+    }];
+}
+
+def SetIntSliceOp : HeteroCL_Op<"set_slice"> {
+    let summary = "set slice of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo, SignlessIntegerLike:$val);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $hi `,` $lo `,` $val `:` type($val) `)` attr-dict
+    }];
+}
+
+def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
+    let summary = "reverse bits of an integer";
+    let arguments = (ins SignlessIntegerLike:$num);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `)` attr-dict
+    }];
+}
+
+def PrintOp : HeteroCL_Op<"print"> {
+  let summary = "print operation";
+  let description = [{
+    The "print" builtin operation prints a given input memref, and produces
+    no results.
+  }];
+
+  // The print operation takes an input memref to print.
+  let arguments = (ins AnyMemRef:$input);
+  let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
+}
+
+def FixedToFloatOp : HeteroCL_Op<"fixed_to_float"> {
+  let summary = "fixed to float cast operation";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FloatLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
+  let summary = "float to fixed cast operation";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FloatLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
 
 #endif // HCL_OPS

@@ -1,4 +1,4 @@
-// RUN: hcl-opt -jit %s | FileCheck %s
+// RUN: hcl-opt --opt -jit %s | FileCheck %s
 
 module {
 

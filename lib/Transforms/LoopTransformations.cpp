@@ -1161,9 +1161,10 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         for (int i = 0; i < axis; ++i) {
           auto expr = loadMap.getResult(i);
           // TODO: only suppose the expr is in the format of d0+d1
-          if (expr.isa<AffineBinaryOpExpr>()) {
+          int d = getReductionDim(expr);
+          if (d != -1) {
             // reduction axis before reuse axis
-            preRDim = getReductionDim(expr);
+            preRDim = d;
             singleLoadAffineExpr.push_back(
                 builder.getAffineDimExpr(loadRank++));
             operandIdx++;

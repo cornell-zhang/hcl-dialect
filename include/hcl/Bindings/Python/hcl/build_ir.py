@@ -1653,24 +1653,63 @@ class SelectOp(ExprOp):
 
 class ReduceOp(ExprOp):
     # cannot build inplace!!!
-    def __init__(self, op, axis, dtype):
+    def __init__(self, op, axis, dtype, prefix, init_val, reduce_op):
         super().__init__(op, dtype=get_mlir_type(dtype))
         self.axis = axis
+        self.prefix = prefix
+        self.init_val = init_val
+        self.reduce_op = reduce_op
 
 
 class SumOp(ReduceOp):
     def __init__(self, op, axis, dtype):
-        super().__init__(op, axis, dtype)
+        super().__init__(
+            op,
+            axis,
+            dtype,
+            prefix="sum",
+            init_val=0,
+            reduce_op={
+                "float": arith.AddFOp,
+                "si": arith.AddIOp,
+                "ui": arith.AddIOp,
+                "fixed": hcl_d.AddFixedOp,
+            },
+        )
 
 
 class MinOp(ReduceOp):
     def __init__(self, op, axis, dtype):
-        super().__init__(op, axis, dtype)
+        super().__init__(
+            op,
+            axis,
+            dtype,
+            prefix="min",
+            init_val=0x3F3F3F3F,
+            reduce_op={
+                "float": arith.MinFOp,
+                "si": arith.MinSIOp,
+                "ui": arith.MinUIOp,
+                "fixed": hcl_d.MinFixedOp,
+            },
+        )
 
 
 class MaxOp(ReduceOp):
     def __init__(self, op, axis, dtype):
-        super().__init__(op, axis, dtype)
+        super().__init__(
+            op,
+            axis,
+            dtype,
+            prefix="max",
+            init_val=-0x3F3F3F3F,
+            reduce_op={
+                "float": arith.MaxFOp,
+                "si": arith.MaxSIOp,
+                "ui": arith.MaxUIOp,
+                "fixed": hcl_d.MaxFixedOp,
+            },
+        )
 
 
 class ASTVisitor:
@@ -1882,35 +1921,9 @@ class ASTVisitor:
             dtype = IntegerType.get_signless(dtype.width)
         memref_type = MemRefType.get((1,), dtype)
         rv = memref.AllocOp(memref_type, [], [], None, ip=GlobalInsertionPoint.get())
-        if isinstance(expr, SumOp):
-            prefix = "sum"
-            init_val = 0
-            reduce_op = {
-                "float": arith.AddFOp,
-                "si": arith.AddIOp,
-                "ui": arith.AddIOp,
-                "fixed": hcl_d.AddFixedOp,
-            }
-        elif isinstance(expr, MinOp):
-            prefix = "min"
-            init_val = 0x3F3F3F3F  # magic large number
-            reduce_op = {
-                "float": arith.MinFOp,
-                "si": arith.MinSIOp,
-                "ui": arith.MinUIOp,
-                "fixed": hcl_d.MinFixedOp,
-            }
-        elif isinstance(expr, MaxOp):
-            prefix = "max"
-            init_val = -0x3F3F3F3F
-            reduce_op = {
-                "float": arith.MaxFOp,
-                "si": arith.MaxSIOp,
-                "ui": arith.MaxUIOp,
-                "fixed": hcl_d.MaxFixedOp,
-            }
-        else:
-            raise RuntimeError("Should not in this branch")
+        prefix = expr.prefix
+        init_val = expr.init_val
+        reduce_op = expr.reduce_op
         rv.attributes["name"] = StringAttr.get("{}_rv".format(prefix))
         if is_unsigned_type(expr.dtype):
             rv.attributes["unsigned"] = UnitAttr.get()

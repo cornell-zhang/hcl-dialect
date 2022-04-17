@@ -43,6 +43,7 @@ public:
     if (op->hasAttr("format")) {
       format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
     }
+    bool hasUnsignedAttr = op->hasAttr("unsigned");
 
     // Get a symbol reference to the printf function, inserting it if necessary.
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
@@ -80,7 +81,7 @@ public:
     auto elementLoad =
         rewriter.create<memref::LoadOp>(loc, printOp.input(), loopIvs);
     // Cast element to f64
-    auto casted = castToF64(rewriter, elementLoad);
+    auto casted = castToF64(rewriter, elementLoad, hasUnsignedAttr);
     rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
                             ArrayRef<Value>({formatSpecifierCst, casted}));
 
@@ -92,13 +93,13 @@ public:
 private:
   /// To support printing MemRef with any element type, we cast
   /// Int, Float32 types to Float64.
-  static Value castToF64(ConversionPatternRewriter &rewriter,
-                         const Value &src) {
+  static Value castToF64(ConversionPatternRewriter &rewriter, const Value &src,
+                         bool hasUnsignedAttr) {
     Type t = src.getType();
     Type F64Type = rewriter.getF64Type();
     Value casted;
     if (t.isa<IntegerType>()) {
-      if (t.isUnsignedInteger()) {
+      if (t.isUnsignedInteger() or hasUnsignedAttr) {
         casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type, src);
       } else { // signed and signless integer
         casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type, src);
@@ -212,18 +213,17 @@ public:
     Value val = operands[2];
     Location loc = op->getLoc();
     // Cast val to the same with as input
-    Value val_casted =
-        rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
+    unsigned width = input.getType().getIntOrFloatBitWidth();
+    Value const_1 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, width);
     // Cast index to i32
-    Type i32 = rewriter.getI32Type();
+    Type itype = rewriter.getIntegerType(width);
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, index, i32);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, index, itype);
     Value bitmask =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val_casted, idx_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
-    unsigned width = bitmask.getType().getIntOrFloatBitWidth();
-    Value all_one_mask = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, (unsigned)std::pow(2, width), width);
+    Value all_one_mask =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, -1, width);
     Value inversed_mask =
         rewriter.create<mlir::arith::XOrIOp>(loc, all_one_mask, bitmask);
     // If val == 1, SetBit should be input OR bitmask (e.g. input || 000010000)
@@ -233,7 +233,7 @@ public:
     Value Val0Res =
         rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
     Value trueRes = rewriter.create<SelectOp>(loc, val, Val1Res, Val0Res);
-    op->getResult(0).replaceAllUsesWith(trueRes);
+    op->getOperand(0).replaceAllUsesWith(trueRes);
     rewriter.eraseOp(op);
     return success();
   }
@@ -250,9 +250,11 @@ public:
     Value input = operands[0];
     Value idx = operands[1];
     Location loc = op->getLoc();
-    Type i32 = rewriter.getI32Type();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Type itype = rewriter.getIntegerType(iwidth);
     Type i1 = rewriter.getI1Type();
-    Value idx_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, idx, i32);
+    Value idx_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, idx, itype);
     Value shifted =
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
     Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
@@ -262,6 +264,35 @@ public:
   }
 };
 
+/*
+class GetIntSliceOpLowering : public ConversionPattern {
+public:
+  explicit GetIntSliceOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::GetIntSliceOp::getOperationName(), 4, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    Value input = operands[0];
+    // Value hi = operands[1];
+    Value lo = operands[2];
+    // cast low and high index to int32 type
+    Type i32 = rewriter.getI32Type();
+    Location loc = op->getLoc();
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
+    // Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi,
+    // i32); Shift and truncate
+    Type resType = op->getResult(0).getType();
+    Value shifted =
+        rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
+    Value slice = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, resType);
+    op->getResult(0).replaceAllUsesWith(slice);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+*/
+
+// Another way to implement GetIntSliceOp with just shifting
 class GetIntSliceOpLowering : public ConversionPattern {
 public:
   explicit GetIntSliceOpLowering(MLIRContext *context)
@@ -273,16 +304,23 @@ public:
     Value hi = operands[1];
     Value lo = operands[2];
     // cast low and high index to int32 type
-    Type i32 = rewriter.getI32Type();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Type itype = rewriter.getIntegerType(iwidth);
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    // Shift and truncate
-    Type resType = op->getResult(0).getType();
-    Value shifted =
-        rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
-    Value slice = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, resType);
-    op->getResult(0).replaceAllUsesWith(slice);
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, itype);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, itype);
+    Value width = rewriter.create<mlir::arith::ConstantIntOp>(
+        loc, input.getType().getIntOrFloatBitWidth() - 1, iwidth);
+    Value lshift_width =
+        rewriter.create<mlir::arith::SubIOp>(loc, width, hi_casted);
+    // We do three shifts to extract the target bit slices
+    Value shift1 =
+        rewriter.create<mlir::arith::ShLIOp>(loc, input, lshift_width);
+    Value shift2 =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, shift1, lshift_width);
+    Value shift3 =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, shift2, lo_casted);
+    op->getResult(0).replaceAllUsesWith(shift3);
     rewriter.eraseOp(op);
     return success();
   }
@@ -303,38 +341,56 @@ public:
     Value hi = operands[1];
     Value lo = operands[2];
     Value val = operands[3];
-    // Cast hi, lo to int32, cast val to same dtype as input
-    Type i32 = rewriter.getI32Type();
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, i32);
-    Value val_casted =
+    // Cast hi, lo to int32, cast val to same dtype as input
+    // Note: val's width may be different than (hi-low+1), so
+    // we need to clear the peripheral bits.
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    Value width =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, iwidth);
+    Type int_type = rewriter.getIntegerType(iwidth);
+    Value lo_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, lo, int_type);
+    Value hi_casted =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, hi, int_type);
+    Value const1 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, int_type);
+    Value val_ext =
         rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
+    
     // Step 1: get higher slice - shift right, then shift left
+    Value hi_shift_width =
+        rewriter.create<mlir::arith::AddIOp>(loc, hi_casted, const1);
     Value hi_rshifted =
-        rewriter.create<mlir::arith::ShRUIOp>(loc, input, hi_casted);
+        rewriter.create<mlir::arith::ShRUIOp>(loc, input, hi_shift_width);
     Value hi_slice =
-        rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_shift_width);
 
     // Step 2: get lower slice - shift left, then shift right
-    Value width = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, input.getType().getIntOrFloatBitWidth(), 32);
+    // Note: left shifting `width` bits would result in unchanged result
+    // Therefore, we need to build a SelectOp:
+    // shifted = shift < width ? lshift : zero
     Value shift_width =
         rewriter.create<mlir::arith::SubIOp>(loc, width, lo_casted);
     Value lo_lshifted =
         rewriter.create<mlir::arith::ShLIOp>(loc, input, shift_width);
-    Value lo_slice =
+    Value lo_slice_possible =
         rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, shift_width);
+    Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, iwidth);
+    Value condition = rewriter.create<mlir::arith::CmpIOp>(
+        loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
+    Value lo_slice =
+        rewriter.create<SelectOp>(loc, condition, lo_slice_possible, zero);
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
-        rewriter.create<mlir::arith::ShLIOp>(loc, val, lo_casted);
+        rewriter.create<mlir::arith::ShLIOp>(loc, val_ext, lo_casted);
     Value peripheral_slices =
         rewriter.create<mlir::arith::OrIOp>(loc, hi_slice, lo_slice);
     Value res = rewriter.create<mlir::arith::OrIOp>(loc, peripheral_slices,
                                                     val_shifted);
 
-    op->getResult(0).replaceAllUsesWith(res);
+    op->getOperand(0).replaceAllUsesWith(res);
     rewriter.eraseOp(op);
     return success();
   }
@@ -395,6 +451,8 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
+  patterns.add<SetIntSliceOpLowering>(&context);
+  patterns.add<GetIntSliceOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

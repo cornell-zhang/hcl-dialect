@@ -24,12 +24,29 @@ def PartitionKindEnum: I32EnumAttr<"PartitionKindEnum",
     let symbolToStringFnName = "ConvertToPartitionString";
 }
 
+// NDRange dimension binding
+def BlockIdxX: I32EnumAttrCase<"BlockIdxX", 0>;
+def BlockIdxY: I32EnumAttrCase<"BlockIdxY", 1>;
+def BlockIdxZ: I32EnumAttrCase<"BlockIdxZ", 2>;
+def ThreadIdxX: I32EnumAttrCase<"ThreadIdxX", 3>;
+def ThreadIdxY: I32EnumAttrCase<"ThreadIdxY", 4>;
+def ThreadIdxZ: I32EnumAttrCase<"ThreadIdxZ", 5>;
+
+def NDRangeDimKindEnum: I32EnumAttr<"NDRangeDimKindEnum",
+        "A NDRange dimension binding enum",
+        [BlockIdxX,BlockIdxY,BlockIdxZ,ThreadIdxX,ThreadIdxY,ThreadIdxZ]> {
+    let cppNamespace = "mlir::hcl";
+    let stringToSymbolFnName = "ConvertToNDRangeDimEnum";
+    let symbolToStringFnName = "ConvertToNDRangeDimString";
+}
+
 def CPUDevice: I32EnumAttrCase<"CPUDevice", 0>;
 def FPGADevice: I32EnumAttrCase<"FPGADevice", 1>;
+def GPUDevice: I32EnumAttrCase<"GPUDevice", 2>;
 
 def DeviceEnum: I32EnumAttr<"DeviceEnum",
         "A device enum",
-        [CPUDevice, FPGADevice]> {
+        [CPUDevice, FPGADevice, GPUDevice]> {
     let cppNamespace = "mlir::hcl";
     let stringToSymbolFnName = "ConvertToDeviceEnum";
     let symbolToStringFnName = "ConvertToDeviceString";

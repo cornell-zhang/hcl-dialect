@@ -111,14 +111,27 @@ bool applyHostXcelSeparation(
       funcMap[stage_name]->moveBefore(host_top);
       // move array declaration from xcel to host
       auto stage_ret = *(std::prev(callMap[stage_name].arg_operand_end()));
+      bool same_arg_flag = false;
+      if (callMap[stage_name].getArgOperands().size() > 1) {
+        for (auto it = callMap[stage_name].arg_operand_begin(),
+                  e = std::prev(callMap[stage_name].arg_operand_end());
+             it != e; ++it) {
+          if ((*it).getDefiningOp() == stage_ret.getDefiningOp()) {
+            same_arg_flag = true;
+            break;
+          }
+        }
+      }
       if (!isAfterXcelCall) {
         // return value should have been allocated
-        stage_ret.getDefiningOp()->moveBefore(call_top);
+        if (!same_arg_flag)
+          stage_ret.getDefiningOp()->moveBefore(call_top);
         // move call function from xcel to host
         callMap[stage_name]->moveBefore(call_top);
       } else {
         // return value should have been allocated
-        stage_ret.getDefiningOp()->moveBefore(host_retOp);
+        if (!same_arg_flag)
+          stage_ret.getDefiningOp()->moveBefore(host_retOp);
         // move call function from xcel to host
         callMap[stage_name]->moveBefore(host_retOp);
       }

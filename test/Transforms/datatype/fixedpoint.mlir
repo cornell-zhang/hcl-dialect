@@ -1,6 +1,20 @@
 // RUN: hcl-opt %s --fixed-to-integer
 module {
 
+  func @issue_56(%arg0: memref<1000x!hcl.Fixed<8, 6>>) -> memref<1000x!hcl.Fixed<8, 6>> attributes {extra_itypes = "_", extra_otypes = "_", llvm.emit_c_interface, top} {
+    %0 = memref.alloc() {name = "compute_1"} : memref<1000x!hcl.Fixed<8, 6>>
+    affine.for %arg1 = 0 to 1000 {
+      %2 = affine.load %arg0[%arg1] {from = "compute_0"} : memref<1000x!hcl.Fixed<8, 6>>
+      affine.store %2, %0[%arg1] {to = "compute_1"} : memref<1000x!hcl.Fixed<8, 6>>
+    } {loop_name = "x", stage_name = "compute_1"}
+    %1 = memref.alloc() {name = "compute_2"} : memref<1000x!hcl.Fixed<8, 6>>
+    affine.for %arg1 = 0 to 1000 {
+      %2 = affine.load %0[%arg1] {from = "compute_1"} : memref<1000x!hcl.Fixed<8, 6>>
+      affine.store %2, %1[%arg1] {to = "compute_2"} : memref<1000x!hcl.Fixed<8, 6>>
+    } {loop_name = "x", stage_name = "compute_2"}
+    return %1 : memref<1000x!hcl.Fixed<8, 6>>
+  }
+
   func @func_call(%arg0: memref<10xi32>, %arg1: memref<10xi32>) attributes {extra_itypes = "ss", extra_otypes = ""} {
     %0 = hcl.create_loop_handle "loop_0" : !hcl.LoopHandle
     affine.for %arg2 = 0 to 10 {

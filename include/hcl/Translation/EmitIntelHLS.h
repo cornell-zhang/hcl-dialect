@@ -6,18 +6,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HCL_TRANSLATION_EMITHLSCPP_H
-#define HCL_TRANSLATION_EMITHLSCPP_H
+#ifndef HCL_TRANSLATION_EMITINTELHLS_H
+#define HCL_TRANSLATION_EMITINTELHLS_H
 
 #include "mlir/IR/BuiltinOps.h"
 
 namespace mlir {
 namespace hcl {
 
-LogicalResult emitHLSCpp(ModuleOp module, llvm::raw_ostream &os);
-void registerEmitHLSCppTranslation();
+LogicalResult emitIntelHLS(ModuleOp module, llvm::raw_ostream &os);
+void registerEmitIntelHLSTranslation();
 
 } // namespace hcl
 } // namespace mlir
 
-#endif // HCL_TRANSLATION_EMITHLSCPP_H
+#endif // HCL_TRANSLATION_EMITINTELHLS_H

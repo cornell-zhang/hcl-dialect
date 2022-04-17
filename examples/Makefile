@@ -5,7 +5,7 @@ TEST_DIR = ../test
 %: %.mlir
 	-mkdir $@
 	$(BUILD_DIR)/hcl-opt -opt $(FLAG) $< > $<.opt
-	$(BUILD_DIR)/hcl-translate -emit-hlscpp $<.opt > $@.cpp
+	$(BUILD_DIR)/hcl-translate -emit-vivado-hls $<.opt > $@.cpp
 	mv $<.opt $@/
 	mv $@.cpp $@/
 	cp run_base.tcl $@/

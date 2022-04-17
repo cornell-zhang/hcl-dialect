@@ -29,7 +29,7 @@ with Context() as ctx:
         raise RuntimeError("Loop transformation failed")
 
     buf = io.StringIO()
-    res = hcl_d.emit_hlscpp(mod, buf)
+    res = hcl_d.emit_vhls(mod, buf)
     if res:
         buf.seek(0)
         hls_code = buf.read()

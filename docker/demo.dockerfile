@@ -9,12 +9,12 @@ WORKDIR /root/
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
     bash ~/miniconda.sh -b -p $HOME/miniconda && \
     eval "$(~/miniconda/bin/conda shell.bash hook)" && \
-    conda create --name hcl-dev python=3.8 -y && \
+    conda create --name hcl-dev python=3.7 -y && \
     conda activate hcl-dev
 
 RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
     cd llvm-project && \
-    git checkout tags/llvmorg-14.0.0-rc1 && \
+    git checkout tags/llvmorg-14.0.0 && \
     python3 -m pip install --upgrade pip && \
     python3 -m pip install -r mlir/python/requirements.txt && \
     mkdir build && cd build && \
@@ -23,7 +23,6 @@ RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
         -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
         -DLLVM_INSTALL_UTILS=ON -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
         -DPython3_EXECUTABLE=`which python3` && \
-    mkdir tools/mlir/python/dialects && \
     make -j`nproc`
 ENV PYTHONPATH /root/llvm-project/build/tools/mlir/python_packages/mlir_core
 

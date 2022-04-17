@@ -21,7 +21,10 @@ Attribute hcl::getLoopDirective(Operation *op, std::string name) {
 }
 
 StringRef hcl::getLoopName(AffineForOp &forOp) {
-  return forOp->getAttr("loop_name").cast<StringAttr>().getValue();
+  if (forOp->hasAttr("loop_name"))
+    return forOp->getAttr("loop_name").cast<StringAttr>().getValue();
+  else
+    return "";
 }
 
 void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
@@ -104,25 +107,23 @@ LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
   return failure();
 }
 
-static unsigned getChildLoopNum(Operation *op);
+void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
+                       AffineForOp &retForOp, int &retDepth) {
+  if (getLoopName(forOp) == loop_name) {
+    retForOp = forOp;
+    retDepth = depth;
+    return;
+  }
+  for (auto nextForOp : forOp.getOps<AffineForOp>())
+    recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+}
 
 int hcl::getLoop(AffineForOp &forOp, StringRef loop_name) {
   // return the axis id
-  auto currentLoop = forOp;
+  AffineForOp currentLoop = forOp;
   int cnt = -1;
-  while (true) {
-    cnt++;
-    if (getLoopName(currentLoop) == loop_name) {
-      forOp = currentLoop;
-      return cnt;
-    }
-
-    if (getChildLoopNum(currentLoop) == 1)
-      currentLoop = *currentLoop.getOps<AffineForOp>().begin();
-    else
-      break;
-  }
-  return -1;
+  recursiveFindLoop(currentLoop, 0, loop_name, forOp, cnt);
+  return cnt;
 }
 
 bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
@@ -717,13 +718,14 @@ Value hcl::castInteger(OpBuilder builder, Location loc, Value input,
  * from oldMemRef to newMemRef.
  */
 Value hcl::castIntMemRef(OpBuilder &builder, Location loc,
-                         const Value &oldMemRef, size_t newWidth,
-                         bool unsign, bool replace,
-                         const Value &dstMemRef) {
+                         const Value &oldMemRef, size_t newWidth, bool unsign,
+                         bool replace, const Value &dstMemRef) {
   // If newWidth == oldWidth, no need to cast.
-  if (newWidth == oldMemRef.getType().cast<MemRefType>().getElementType()
-                       .cast<IntegerType>()
-                       .getWidth()) {
+  if (newWidth == oldMemRef.getType()
+                      .cast<MemRefType>()
+                      .getElementType()
+                      .cast<IntegerType>()
+                      .getWidth()) {
     return oldMemRef;
   }
   // first, alloc new memref

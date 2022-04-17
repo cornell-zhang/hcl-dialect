@@ -10,6 +10,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/ADT/StringExtras.h"
+
 #include "llvm/ADT/TypeSwitch.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"

@@ -26,6 +26,15 @@ class HCLFlags(object):
     def disable_build_inplace(self):
         self.BUILD_INPLACE = False
 
+    def enable_extract_function(self):
+        self.EXTRACT_FUNCTION = True
+
+    def disable_extract_function(self):
+        self.EXTRACT_FUNCTION = False
+
+    def is_extract_function(self):
+        return self.EXTRACT_FUNCTION
+
     def is_build_inplace(self):
         return self.BUILD_INPLACE
 
@@ -38,7 +47,9 @@ enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 is_build_inplace = flags.is_build_inplace
 reset_build_inplace = flags.reset
-EXTRACT_FUNCTION = flags.EXTRACT_FUNCTION
+enable_extract_function = flags.enable_extract_function
+disable_extract_function = flags.disable_extract_function
+is_extract_function = flags.is_extract_function
 
 
 def is_floating_point_type(dtype):
@@ -166,6 +177,8 @@ def print_mlir_type(dtype):
                 return "unsigned int"
             elif dtype.width == 64:
                 return "unsigned long int"
+            elif dtype.width == 1:
+                return "bool"
             else:
                 return "ap_uint<{}>".format(dtype.width)
     elif is_fixed_type(dtype):
@@ -224,21 +237,21 @@ def get_type_rank(dtype):
     if is_integer_type(dtype):
         base = 0
         width = dtype.width
-        if width > 64:
-            raise RuntimeError("Cannot support integer width larger than 64")
+        if width > 2048:
+            raise RuntimeError("Cannot support integer width larger than 2048")
         base += width
         return base
     elif is_index_type(dtype):  # width 32
-        base = 65
+        base = 2049
         return base
     elif is_fixed_type(dtype):
-        base = 100
+        base = 3000
         width = dtype.width
         frac = dtype.frac
         base += width
         return base
     elif is_floating_point_type(dtype):
-        base = 1000
+        base = 10000
         if isinstance(dtype, F16Type):
             base += 1
         elif isinstance(dtype, F32Type):
@@ -275,7 +288,7 @@ def cast_types(lhs, rhs):
     elif is_fixed_type(ltype):
         # TODO: UFixed type
         if is_integer_type(rtype):
-            res_type = hcl_d.FixedType.get(rtype.width, ltype.frac)
+            res_type = hcl_d.FixedType.get(rtype.width + ltype.frac, ltype.frac)
         else:
             raise RuntimeError("Type conversion not implemented")
     else:
@@ -1255,7 +1268,9 @@ class CastOp(ExprOp):
             elif res_type.width == self.val.dtype.width:
                 op = None
             else:
-                if not is_unsigned_type(res_type):
+                if not is_unsigned_type(res_type) and not isinstance(
+                    self.val, (GetBitOp, GetSliceOp)
+                ):
                     op = arith.ExtSIOp
                 else:
                     op = arith.ExtUIOp
@@ -1324,8 +1339,12 @@ class GetBitOp(ExprOp):
             self.build()
 
     def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
         self.built_op = self.op(
-            self.dtype,
+            dtype,
             self.num.result,
             self.index.result,
             ip=GlobalInsertionPoint.get(),
@@ -1400,8 +1419,12 @@ class GetSliceOp(ExprOp):
             self.build()
 
     def build(self):
+        if is_unsigned_type(self.dtype):
+            dtype = IntegerType.get_signless(self.dtype.width)
+        else:
+            dtype = self.dtype
         self.built_op = self.op(
-            self.dtype,
+            dtype,
             self.num.result,
             self.hi.result,
             self.lo.result,
@@ -1938,6 +1961,7 @@ class ASTVisitor:
                 axis.lower_bound,
                 axis.upper_bound,
                 step=1,
+                reduction=True,
                 name=axis.name,
                 ip=body_ip,
             )
@@ -2057,9 +2081,7 @@ def make_affine_for(
         ubMapAttr,
         name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
         stage=("" if stage == "" else StringAttr.get(stage)),
-        reduction=(
-            IntegerAttr.get(IntegerType.get_signless(32), 1) if reduction else None
-        ),
+        reduction=(UnitAttr.get() if reduction else None),
         ip=ip,
         loc=loc,
     )

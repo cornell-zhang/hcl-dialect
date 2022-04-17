@@ -8,6 +8,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -29,7 +30,7 @@ namespace hcl {
  * to 64-bit int/uint, so we update the input/output arguments
  * to 64-bit signless integer type. When the input memref
  */
-void updateFunctionSignature(FuncOp &funcOp) {
+FunctionType updateFunctionSignature(FuncOp &funcOp) {
   FunctionType functionType = funcOp.getType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
@@ -40,7 +41,20 @@ void updateFunctionSignature(FuncOp &funcOp) {
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;
 
-  for (Type t : result_types) {
+  // Set the extra type hint based on the input/output memref type
+  std::string extra_itypes = "";
+  if (funcOp->hasAttr("extra_itypes")) {
+    extra_itypes =
+        funcOp->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  }
+  std::string extra_otypes = "";
+  if (funcOp->hasAttr("extra_otypes")) {
+    extra_otypes =
+        funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  }
+
+  for (auto v : llvm::enumerate(result_types)) {
+    Type t = v.value();
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
       // If result memref element type is fixed
@@ -49,6 +63,12 @@ void updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_result_types.push_back(memrefType.clone(newElementType));
+        // update the extra_otypes
+        if (et.isa<FixedType>() and v.index() < extra_otypes.length()) {
+          extra_otypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < extra_otypes.length()) {
+          extra_otypes[v.index()] = 'u';
+        }
       } else {
         new_result_types.push_back(memrefType);
       }
@@ -57,7 +77,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
     }
   }
 
-  for (Type t : arg_types) {
+  for (auto v : llvm::enumerate(arg_types)) {
+    Type t = v.value();
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
       // If argument memref element type is fixed
@@ -66,6 +87,12 @@ void updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_arg_types.push_back(memrefType.clone(newElementType));
+        // update the extra_itypes
+        if (et.isa<FixedType>() and v.index() < extra_itypes.length()) {
+          extra_itypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < extra_itypes.length()) {
+          extra_itypes[v.index()] = 'u';
+        }
       } else {
         new_arg_types.push_back(memrefType);
       }
@@ -73,6 +100,11 @@ void updateFunctionSignature(FuncOp &funcOp) {
       new_arg_types.push_back(t);
     }
   }
+
+  funcOp->setAttr("extra_itypes",
+                  StringAttr::get(funcOp.getContext(), extra_itypes));
+  funcOp->setAttr("extra_otypes",
+                  StringAttr::get(funcOp.getContext(), extra_otypes));
 
   // Update FuncOp's block argument types
   for (Block &block : funcOp.getBlocks()) {
@@ -93,7 +125,8 @@ void updateFunctionSignature(FuncOp &funcOp) {
   // Update function signature
   FunctionType newFuncType =
       FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
-  funcOp.setType(newFuncType);
+  // funcOp.setType(newFuncType);
+  return newFuncType;
 }
 
 /* Update AffineLoad's result type
@@ -131,6 +164,10 @@ void updateReturnOp(FuncOp &funcOp) {
       returnOps.push_back(op);
     }
   });
+  // get the return type of the function
+  FunctionType funcType = funcOp.getType();
+  SmallVector<Type, 4> result_types = llvm::to_vector<4>(funcType.getResults());
+
   // If return op is not int64, we need to add a cast node
   for (auto op : returnOps) {
     for (unsigned i = 0; i < op->getNumOperands(); i++) {
@@ -138,10 +175,65 @@ void updateReturnOp(FuncOp &funcOp) {
       if (MemRefType type = arg.getType().dyn_cast<MemRefType>()) {
         Type etype = type.getElementType();
         Type newType = type.clone(IntegerType::get(funcOp.getContext(), 64));
-        if (etype != newType and etype.isa<FixedType, UFixedType>()) {
-          if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-            allocOp->getResult(0).setType(newType);
+        if (result_types[i]
+                .cast<MemRefType>()
+                .getElementType()
+                .isa<FixedType, UFixedType>() &&
+            etype != newType) {
+          // if (etype != newType and etype.isa<FixedType, UFixedType>()) {
+          OpBuilder builder(op);
+          Location loc = op->getLoc();
+          // Get signedness hint information
+          std::string extra_otypes = "";
+          if (funcOp->hasAttr("extra_otypes")) {
+            extra_otypes = funcOp->getAttr("extra_otypes")
+                               .cast<StringAttr>()
+                               .getValue()
+                               .str();
           }
+          bool is_unsigned = false;
+          if (i < extra_otypes.length()) {
+            is_unsigned = extra_otypes[i] == 'u';
+          }
+          Value castedMemRef =
+              castIntMemRef(builder, loc, arg, 64, is_unsigned, false);
+          op->setOperand(i, castedMemRef);
+          // if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp()))
+          // {
+          //   allocOp->getResult(0).setType(newType);
+          //   for (auto &use : allocOp->getResult(0).getUses()) {
+          //     Value storeEle;
+          //     bool isStore= false;
+          //     if (auto storeOp = dyn_cast<memref::StoreOp>(use.getOwner())) {
+          //       storeEle = storeOp.getOperand(0);
+          //       isStore = true;
+          //     } else if (auto storeOp =
+          //                    dyn_cast<AffineStoreOp>(use.getOwner())) {
+          //       storeEle = storeOp.getOperand(0);
+          //       isStore = true;
+          //     }
+          //     if (isStore) {
+          //       // check storeEle's type and cast it if necessary
+          //       OpBuilder builder(use.getOwner());
+          //       Location loc = use.getOwner()->getLoc();
+          //       unsigned width;
+          //       if (etype.isa<FixedType>()) {
+          //         width = etype.cast<FixedType>().getWidth();
+          //       } else {
+          //         width = etype.cast<UFixedType>().getWidth();
+          //       }
+          //       Type oldType = builder.getIntegerType(width);
+          //       if (oldType != IntegerType::get(funcOp.getContext(), 64)) {
+          //         // cast it
+          //         Value casted =
+          //             castInteger(builder, loc, storeEle, oldType,
+          //                         IntegerType::get(funcOp.getContext(), 64),
+          //                         etype.isa<FixedType>());
+          //         use.getOwner()->setOperand(0, casted);
+          //       }
+          //     }
+          //   }
+          // }
         }
       }
     }
@@ -221,7 +313,7 @@ void markFixedOperations(FuncOp &f) {
     Value res = op->getResult(0);
     size_t lwidth, lfrac, rwidth, rfrac, reswidth, resfrac;
     // The operands are either fixed-point or unsigned fixed-point
-    if (opr_l.getType().cast<FixedType>()) { // fixed
+    if (opr_l.getType().isa<FixedType>()) { // fixed
       FixedType ltype = opr_l.getType().cast<FixedType>();
       FixedType rtype = opr_r.getType().cast<FixedType>();
       FixedType restype = res.getType().cast<FixedType>();
@@ -231,7 +323,7 @@ void markFixedOperations(FuncOp &f) {
       rfrac = rtype.getFrac();
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
-    } else if (opr_l.getType().cast<UFixedType>()) { // ufixed
+    } else if (opr_l.getType().isa<UFixedType>()) { // ufixed
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
       UFixedType rtype = opr_r.getType().cast<UFixedType>();
       UFixedType restype = res.getType().cast<UFixedType>();
@@ -241,6 +333,12 @@ void markFixedOperations(FuncOp &f) {
       rfrac = rtype.getFrac();
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
+    }
+    // if op is MulFixedOp, double lwidth, rwidth, and reswidth
+    if (llvm::isa<MulFixedOp>(op)) {
+      lwidth *= 2;
+      rwidth *= 2;
+      reswidth *= 2;
     }
     // add width, frac info as attributes
     OpBuilder builder(f.getContext());
@@ -315,9 +413,11 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
   if (v.getType().cast<IntegerType>().getWidth() < target_width) {
     // extend bits
     result = builder.create<arith::ExtSIOp>(loc, newType, v);
-  } else {
+  } else if (v.getType().cast<IntegerType>().getWidth() > target_width) {
     // truncate bits
     result = builder.create<arith::TruncIOp>(loc, newType, v);
+  } else {
+    result = v;
   }
   return result;
 }
@@ -372,7 +472,7 @@ void lowerFixedMul(MulFixedOp &op) {
   // Therefore, we need to right shift the result for frac bit
   // Right shift needs to consider signed/unsigned
   Type opTy = op->getOperand(0).getType();
-  IntegerType intTy = IntegerType::get(op->getContext(), 32);
+  IntegerType intTy = IntegerType::get(op->getContext(), width);
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
@@ -543,16 +643,17 @@ void visitRegion(Region &region) {
 bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (FuncOp func : mod.getOps<FuncOp>()) {
-    // lowerFixedAdd(func);
     lowerPrintOp(func);
     markFixedOperations(func);
-    updateFunctionSignature(func);
+    FunctionType newFuncType = updateFunctionSignature(func);
     updateAffineLoad(func);
-    updateReturnOp(func);
     updateAlloc(func);
+    updateAffineLoad(func);
     for (Operation &op : func.getOps()) {
       visitOperation(op);
     }
+    updateReturnOp(func);
+    func.setType(newFuncType);
   }
 
   return true;

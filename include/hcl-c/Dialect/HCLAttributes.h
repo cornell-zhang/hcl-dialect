@@ -19,6 +19,14 @@ extern "C" {
 // MLIR_CAPI_EXPORTED bool mlirAttributeIsAIntegerSet(MlirAttribute attr);
 MLIR_CAPI_EXPORTED MlirAttribute mlirIntegerSetAttrGet(MlirIntegerSet set);
 
+MLIR_CAPI_EXPORTED bool mlirAttributeIsAPartitionKind(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute mlirPartitionKindGet(MlirContext ctx,
+                                                      MlirAttribute kind);
+
+MLIR_CAPI_EXPORTED bool mlirAttributeIsANDRangeDimKind(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute mlirNDRangeDimKindGet(MlirContext ctx,
+                                                       MlirAttribute kind);
+
 #ifdef __cplusplus
 }
 #endif

@@ -689,3 +689,86 @@ std::string hcl::getSliceStr(const mlir::ComputationSliceState &sliceUnion) {
   }
   return os.str();
 }
+
+Value hcl::castInteger(OpBuilder builder, Location loc, Value input,
+                       Type srcType, Type tgtType, bool is_signed) {
+  int oldWidth = srcType.cast<IntegerType>().getWidth();
+  int newWidth = tgtType.cast<IntegerType>().getWidth();
+  Value casted;
+  if (newWidth < oldWidth) {
+    // trunc
+    casted = builder.create<arith::TruncIOp>(loc, tgtType, input);
+  } else if (newWidth > oldWidth) {
+    // extend
+    if (is_signed) {
+      casted = builder.create<arith::ExtSIOp>(loc, tgtType, input);
+    } else {
+      casted = builder.create<arith::ExtUIOp>(loc, tgtType, input);
+    }
+  } else {
+    casted = input;
+  }
+  return casted;
+}
+
+/* CastIntMemRef
+ * Allocate a new Int MemRef of target width and build a
+ * AffineForOp loop nest to load, cast, store the elements
+ * from oldMemRef to newMemRef.
+ */
+Value hcl::castIntMemRef(OpBuilder &builder, Location loc,
+                         const Value &oldMemRef, size_t newWidth,
+                         bool unsign, bool replace,
+                         const Value &dstMemRef) {
+  // If newWidth == oldWidth, no need to cast.
+  if (newWidth == oldMemRef.getType().cast<MemRefType>().getElementType()
+                       .cast<IntegerType>()
+                       .getWidth()) {
+    return oldMemRef;
+  }
+  // first, alloc new memref
+  MemRefType oldMemRefType = oldMemRef.getType().cast<MemRefType>();
+  Type newElementType = builder.getIntegerType(newWidth);
+  MemRefType newMemRefType =
+      oldMemRefType.clone(newElementType).cast<MemRefType>();
+  Value newMemRef;
+  if (!dstMemRef) {
+    newMemRef = builder.create<memref::AllocOp>(loc, newMemRefType);
+  }
+  // replace all uses
+  if (replace)
+    oldMemRef.replaceAllUsesWith(newMemRef);
+  // build loop nest
+  SmallVector<int64_t, 4> lbs(oldMemRefType.getRank(), 0);
+  SmallVector<int64_t, 4> steps(oldMemRefType.getRank(), 1);
+  size_t oldWidth =
+      oldMemRefType.getElementType().cast<IntegerType>().getWidth();
+  buildAffineLoopNest(
+      builder, loc, lbs, oldMemRefType.getShape(), steps,
+      [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+        Value v = nestedBuilder.create<AffineLoadOp>(loc, oldMemRef, ivs);
+        Value casted;
+        if (newWidth < oldWidth) {
+          // trunc
+          casted =
+              nestedBuilder.create<arith::TruncIOp>(loc, newElementType, v);
+        } else if (newWidth > oldWidth) {
+          // extend
+          if (unsign) {
+            casted =
+                nestedBuilder.create<arith::ExtUIOp>(loc, newElementType, v);
+          } else {
+            casted =
+                nestedBuilder.create<arith::ExtSIOp>(loc, newElementType, v);
+          }
+        } else {
+          casted = v; // no cast happened
+        }
+        if (dstMemRef) {
+          nestedBuilder.create<AffineStoreOp>(loc, casted, dstMemRef, ivs);
+        } else {
+          nestedBuilder.create<AffineStoreOp>(loc, casted, newMemRef, ivs);
+        }
+      });
+  return newMemRef;
+}

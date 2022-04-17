@@ -235,6 +235,30 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
     }];
 }
 
+def HeteroCL_ThreadBindOp : HeteroCL_Op<"bind">
+{
+    let summary = "bind";
+    let description = [{
+        hcl.bind(var, dim=1)
+
+        Bind the iteration to a specific NDRange dimension.
+
+        Parameters
+        * var (IterVar) - The iteration to be mapped.
+        * dim (Expr) - The NDRange dimension to be binded to the iteration.
+    }];
+
+    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, NDRangeDimKindEnum:$dim);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $stage `,` $loop `,` $dim `)` attr-dict
+    }];
+    let builders = [
+        OpBuilder<(ins "hcl::LoopHandleType":$loop,
+                   CArg<"uint64_t", "1">:$dim)>
+    ];
+}
+
 def HeteroCL_PartitionOp : HeteroCL_Op<"partition"> 
 {
     let summary = "partition";

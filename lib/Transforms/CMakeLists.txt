@@ -3,7 +3,9 @@ add_mlir_library(MLIRHCLPasses
     HostXcelSeparation.cpp
     FixedPointToInteger.cpp
     AnyWidthInteger.cpp
+    FloatingPointToInteger.cpp
     MoveReturnToInput.cpp
+
     Passes.cpp
 
     ADDITIONAL_HEADER_DIRS

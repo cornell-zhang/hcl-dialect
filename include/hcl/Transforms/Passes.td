@@ -27,6 +27,11 @@ def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
   let constructor = "mlir::hcl::createAnyWidthIntegerPass()";
 }
 
+def FloatingPointToInteger : Pass<"bfloat-integer", "ModuleOp"> {
+  let summary = "Transform anywidth-floating point input to 64-bit";
+  let constructor = "mlir::hcl::createFloatingPointToIntegerPass()";
+}
+
 def MoveReturnToInput : Pass<"return-to-input", "ModuleOp"> {
   let summary = "Move return values to input argument list";
   let constructor = "mlir::hcl::createMoveReturnToInputPass()";

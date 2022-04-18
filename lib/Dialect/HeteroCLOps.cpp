@@ -43,6 +43,18 @@ static void buildCmpFixedOp(OpBuilder &build, OperationState &result,
                       build.getI64IntegerAttr(static_cast<int64_t>(predicate)));
 }
 
+//===----------------------------------------------------------------------===//
+// CmpBfloatOp
+//===----------------------------------------------------------------------===//
+
+static void buildCmpBfloatOp(OpBuilder &build, OperationState &result,
+                        CmpBfloatPredicate predicate, Value lhs, Value rhs) {
+  result.addOperands({lhs, rhs});
+  result.types.push_back(getI1SameShape(lhs.getType()));
+  result.addAttribute(CmpBfloatOp::getPredicateAttrName(),
+                      build.getI64IntegerAttr(static_cast<int64_t>(predicate)));
+}
+
 } // namespace hcl
 } // namespace mlir
 

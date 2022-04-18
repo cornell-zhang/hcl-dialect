@@ -81,4 +81,23 @@ def FooAttr : HeteroCL_Attr<"FooAttr"> {
   }];
 }
 
+def CMP_BFLOAT_P_EQ  : I64EnumAttrCase<"eq", 0>;
+def CMP_BFLOAT_P_NE  : I64EnumAttrCase<"ne", 1>;
+def CMP_BFLOAT_P_SLT : I64EnumAttrCase<"slt", 2>;
+def CMP_BFLOAT_P_SLE : I64EnumAttrCase<"sle", 3>;
+def CMP_BFLOAT_P_SGT : I64EnumAttrCase<"sgt", 4>;
+def CMP_BFLOAT_P_SGE : I64EnumAttrCase<"sge", 5>;
+def CMP_BFLOAT_P_ULT : I64EnumAttrCase<"ult", 6>;
+def CMP_BFLOAT_P_ULE : I64EnumAttrCase<"ule", 7>;
+def CMP_BFLOAT_P_UGT : I64EnumAttrCase<"ugt", 8>;
+def CMP_BFLOAT_P_UGE : I64EnumAttrCase<"uge", 9>;
+
+def CmpBfloatPredicateAttr : I64EnumAttr<
+    "CmpBfloatPredicate", "",
+    [CMP_BFLOAT_P_EQ, CMP_BFLOAT_P_NE, CMP_BFLOAT_P_SLT, CMP_BFLOAT_P_SLE, CMP_BFLOAT_P_SGT,
+     CMP_BFLOAT_P_SGE, CMP_BFLOAT_P_ULT, CMP_BFLOAT_P_ULE, CMP_BFLOAT_P_UGT, CMP_BFLOAT_P_UGE]> {
+  let cppNamespace = "mlir::hcl";
+}
+
+
 #endif // HCL_ATTRS

@@ -612,7 +612,9 @@ class ConstantOp(ExprOp):
     def build(self):
         if isinstance(self.val, (List, np.ndarray)):
             if is_integer_type(self.dtype):
-                if self.dtype.width <= 8:
+                if self.dtype.width == 1:
+                    np_dtype = np.bool
+                elif self.dtype.width <= 8:
                     np_dtype = np.int8
                 elif self.dtype.width <= 16:
                     np_dtype = np.int16
@@ -638,11 +640,17 @@ class ConstantOp(ExprOp):
             else:  # Fixed point
                 raise RuntimeError("Not supported by numpy")
             self.val = np.array(self.val, dtype=np_dtype)
-            tensor_type = RankedTensorType.get(self.val.shape, self.dtype)
-            attr = DenseElementsAttr.get(self.val, type=self.dtype)
+            if is_unsigned_type(self.dtype):
+                dtype = IntegerType.get_signless(self.dtype.width)
+            else:
+                dtype = self.dtype
+            tensor_type = RankedTensorType.get(self.val.shape, dtype)
+            attr = DenseElementsAttr.get(self.val, type=dtype)
             const_tensor = arith.ConstantOp(
                 tensor_type, attr, ip=GlobalInsertionPoint.get()
             )
+            if is_unsigned_type(self.dtype):
+                const_tensor.attributes["unsigned"] = UnitAttr.get()
             tensor_wrapper = TensorOp(
                 self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
             )

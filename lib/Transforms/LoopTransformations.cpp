@@ -1381,6 +1381,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     ifThenBody.splice(ifThenBody.begin(), innerMostBody,
                       std::next(innerMostBody.begin()),
                       std::prev(innerMostBody.end()));
+    ifOp = outerIfOp;
   }
 
   // 13) shift buffer elements & load from memory to buffer

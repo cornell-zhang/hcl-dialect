@@ -520,4 +520,42 @@ def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   }];
 }
 
+def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
+    let summary = "struct construct";
+    let description = [{
+        The "struct_construct" builtin operation constructs a struct from
+        a list of values.
+    }];
+    let arguments = (ins Variadic<AnyType>:$input);
+    let results = (outs Struct:$output);
+
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `to` type($output)
+    }];
+}
+
+def StructAccessOp : HeteroCL_Op<"struct_access", [NoSideEffect]> {
+    let summary = "struct access";
+    let description = [{
+        The "struct_access" builtin operation accesses a struct member.
+    }];
+    let arguments = (ins Struct:$input, I64Attr:$index);
+    let results = (outs AnyType:$output);
+
+    let assemblyFormat = [{
+        $input `[` $index `]` attr-dict `:` type($input) `to` type($output)
+    }];
+
+    let builders = [
+        OpBuilder<(ins "Value":$input, "size_t":$index)>
+    ];
+
+    // TODO(Niansong): why doesn't this work?
+    // let verifier = [{ return ::verify(*this); }];
+    // let verifier = [{ return success(); }];
+
+    // Set the folder bit so that we can fold constant accesses.
+    // let hasFolder = 1;
+}
+
 #endif // HCL_OPS

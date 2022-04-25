@@ -1293,6 +1293,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // * load should be changed to %buf[0,1,2]
   // * buffer shifting will be done later
   reuseLoop.walk([&](AffineLoadOp op) {
+    if (op.getOperand(0) != target)
+      return WalkResult::advance();
     // skip reduction variable store
     auto arrayType = op.getOperand(0).getType().dyn_cast<MemRefType>();
     if (arrayType.getRank() == 1 && arrayType.getShape()[0] == 1) {

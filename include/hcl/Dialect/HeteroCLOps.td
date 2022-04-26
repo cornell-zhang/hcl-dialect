@@ -530,20 +530,37 @@ def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
     let results = (outs Struct:$output);
 
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `to` type($output)
+        `(` $input `)` attr-dict `:` type($input) `->` type($output)
     }];
 }
 
-def StructAccessOp : HeteroCL_Op<"struct_access", [NoSideEffect]> {
-    let summary = "struct access";
+def StructSetOp : HeteroCL_Op<"struct_set", [NoSideEffect]> {
+    let summary = "struct set";
     let description = [{
-        The "struct_access" builtin operation accesses a struct member.
+        The "struct_set" operation sets a field from a struct.
+    }];
+    let arguments = (ins Struct:$input, I64Attr:$index, AnyType:$value);
+    let results = (outs Struct:$output);
+
+    let assemblyFormat = [{
+        $input `[` $index `]` `,` $value attr-dict `:` type($input) `,` type($value) `->` type($output)
+    }];
+
+    let builders = [
+        OpBuilder<(ins "Value":$input, "size_t":$index)>
+    ];
+}
+
+def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
+    let summary = "struct get";
+    let description = [{
+        The "struct_get" operation gets a field from a struct.
     }];
     let arguments = (ins Struct:$input, I64Attr:$index);
     let results = (outs AnyType:$output);
 
     let assemblyFormat = [{
-        $input `[` $index `]` attr-dict `:` type($input) `to` type($output)
+        $input `[` $index `]` attr-dict `:` type($input) `->` type($output)
     }];
 
     let builders = [

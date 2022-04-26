@@ -628,6 +628,12 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
     loop_name = op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
     os << "l_";
+    if (op->hasAttr("stage_name")) {
+      std::string stage_name =
+          op->getAttr("stage_name").cast<StringAttr>().getValue().str();
+      std::replace(stage_name.begin(), stage_name.end(), '.', '_');
+      os << stage_name << "_";
+    }
     os << addName(iterVar, false, loop_name);
     os << ": ";
   }

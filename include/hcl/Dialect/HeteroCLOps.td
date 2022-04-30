@@ -534,22 +534,6 @@ def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
     }];
 }
 
-def StructSetOp : HeteroCL_Op<"struct_set", [NoSideEffect]> {
-    let summary = "struct set";
-    let description = [{
-        The "struct_set" operation sets a field from a struct.
-    }];
-    let arguments = (ins Struct:$input, I64Attr:$index, AnyType:$value);
-    let results = (outs Struct:$output);
-
-    let assemblyFormat = [{
-        $input `[` $index `]` `,` $value attr-dict `:` type($input) `,` type($value) `->` type($output)
-    }];
-
-    let builders = [
-        OpBuilder<(ins "Value":$input, "size_t":$index)>
-    ];
-}
 
 def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
     let summary = "struct get";
@@ -567,12 +551,6 @@ def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
         OpBuilder<(ins "Value":$input, "size_t":$index)>
     ];
 
-    // TODO(Niansong): why doesn't this work?
-    // let verifier = [{ return ::verify(*this); }];
-    // let verifier = [{ return success(); }];
-
-    // Set the folder bit so that we can fold constant accesses.
-    // let hasFolder = 1;
 }
 
 #endif // HCL_OPS

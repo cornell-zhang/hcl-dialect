@@ -23,8 +23,34 @@ using namespace hcl;
 
 namespace mlir {
 namespace hcl {
+
+  void lowerStructType(FuncOp &func) {
+    SmallVector<Operation *, 10> structGetOps;
+    func.walk([&](Operation *op) {
+      if (auto structGetOp = dyn_cast<StructGetOp>(op)) {
+        structGetOps.push_back(structGetOp);
+      }
+    });
+
+    for (auto op : structGetOps) {
+      auto structGetOp = dyn_cast<StructGetOp>(op);
+      Value struct_value = structGetOp->getOperand(0);
+      Value struct_field = structGetOp->getResult(0);
+      auto index = structGetOp.index();
+      Operation* defOp = struct_value.getDefiningOp();
+      Value replacement = defOp->getOperand(index);
+      struct_field.replaceAllUsesWith(replacement);
+      op->erase();
+    }
+
+  }
+
+
   /// Pass entry point
   bool applyLowerCompositeType(ModuleOp &mod) {
+    for (FuncOp func : mod.getOps<FuncOp>()) {
+      lowerStructType(func);
+    }
     return true;
   }
 } // namespace hcl

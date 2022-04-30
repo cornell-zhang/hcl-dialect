@@ -32,4 +32,9 @@ def MoveReturnToInput : Pass<"return-to-input", "ModuleOp"> {
   let constructor = "mlir::hcl::createMoveReturnToInputPass()";
 }
 
+def LowerCompositeType : Pass<"lower-composite-type", "ModuleOp"> {
+  let summary = "Lower composite types";
+  let constructor = "mlir::hcl::createLowerCompositeTypePass()";
+}
+
 #endif // HCL_MLIR_PASSES

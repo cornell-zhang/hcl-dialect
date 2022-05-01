@@ -31,6 +31,7 @@ namespace hcl {
         structConstructOps.push_back(structConstructOp);
       }
     });
+    std::reverse(structConstructOps.begin(), structConstructOps.end());
     for (auto op : structConstructOps) {
       auto structValue = op->getResult(0);
       if (structValue.use_empty()) {

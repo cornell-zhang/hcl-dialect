@@ -73,10 +73,10 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
   mlir_type_subclass(m, "StructType", hclMlirTypeIsAStructType)
       .def_classmethod(
           "get",
-          [](py::object cls, MlirContext ctx,
-             const std::vector<MlirType> &members) {
+          [](py::object cls, const std::vector<MlirType> &members,
+             MlirContext ctx) {
             return cls(hclMlirStructTypeGet(ctx, members.size(), members.data()));
           },
           "Get an instance of StructType in given context.", py::arg("cls"),
-          py::arg("context"), py::arg("members"));
+          py::arg("members"), py::arg("context") = py::none());
 }

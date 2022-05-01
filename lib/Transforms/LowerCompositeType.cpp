@@ -24,6 +24,21 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
+  void deadStructConstructElimination(FuncOp &func) {
+    SmallVector<Operation *, 8> structConstructOps;
+    func.walk([&](Operation *op) {
+      if (auto structConstructOp = dyn_cast<StructConstructOp>(op)) {
+        structConstructOps.push_back(structConstructOp);
+      }
+    });
+    for (auto op : structConstructOps) {
+      auto structValue = op->getResult(0);
+      if (structValue.use_empty()) {
+        op->erase();
+      }
+    }
+  }
+
   void lowerStructType(FuncOp &func) {
     SmallVector<Operation *, 10> structGetOps;
     func.walk([&](Operation *op) {
@@ -42,6 +57,9 @@ namespace hcl {
       struct_field.replaceAllUsesWith(replacement);
       op->erase();
     }
+
+    // Run DCE after all struct get is folded
+    deadStructConstructElimination(func);
 
   }
 

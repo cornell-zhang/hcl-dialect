@@ -40,6 +40,7 @@ namespace hcl {
   }
 
   void lowerStructType(FuncOp &func) {
+
     SmallVector<Operation *, 10> structGetOps;
     func.walk([&](Operation *op) {
       if (auto structGetOp = dyn_cast<StructGetOp>(op)) {

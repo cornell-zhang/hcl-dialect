@@ -70,4 +70,13 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
       .def_property_readonly(
           "frac", [](MlirType type) { return hclMlirUFixedTypeGetFrac(type); },
           "Returns the fraction of the fixed point type");
+  mlir_type_subclass(m, "StructType", hclMlirTypeIsAStructType)
+      .def_classmethod(
+          "get",
+          [](py::object cls, MlirContext ctx,
+             const std::vector<MlirType> &members) {
+            return cls(hclMlirStructTypeGet(ctx, members.size(), members.data()));
+          },
+          "Get an instance of StructType in given context.", py::arg("cls"),
+          py::arg("context"), py::arg("members"));
 }

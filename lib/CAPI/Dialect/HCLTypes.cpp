@@ -58,3 +58,14 @@ unsigned hclMlirUFixedTypeGetWidth(MlirType type) {
 unsigned hclMlirUFixedTypeGetFrac(MlirType type) {
   return unwrap(type).cast<hcl::UFixedType>().getFrac();
 }
+
+bool hclMlirTypeIsAStructType(MlirType type) {
+  return unwrap(type).isa<hcl::StructType>();
+}
+
+MlirType hclMlirStructTypeGet(MlirContext ctx, intptr_t numElements,
+                                            MlirType const *elements) {
+  SmallVector<Type, 4> types;
+  ArrayRef<Type> typeRef = unwrapList(numElements, elements, types);
+  return wrap(hcl::StructType::get(unwrap(ctx), types));
+}

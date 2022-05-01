@@ -18,4 +18,15 @@ module {
     %6 = arith.addi %4, %5 : i32
     return
   }
+
+  func @nested_struct() -> () {
+    %1 = arith.constant 0 : i32
+    %2 = arith.constant 1 : i32
+    %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
+    %4 = hcl.struct_construct(%3, %2) : !hcl.struct<i32, i32>, i32 -> !hcl.struct<!hcl.struct<i32, i32>, i32>
+    %5 = hcl.struct_get %4[0] : !hcl.struct<!hcl.struct<i32, i32>, i32> -> !hcl.struct<i32, i32>
+    %6 = hcl.struct_get %5[0] : !hcl.struct<i32, i32> -> i32
+    %7 = arith.addi %6, %2 : i32
+    return
+  }
 } 

@@ -1,4 +1,4 @@
-// RUN: hcl-opt --lower-composite %s
+// RUN: hcl-opt --lower-composite --lower-to-llvm %s
 module {
   // func @top (%arg0 : !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i3>) -> () {
   //   %0 = hcl.struct_get %arg0[0] : !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i3> -> !hcl.struct<i3, memref<10xf32>>

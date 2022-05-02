@@ -72,7 +72,7 @@ def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   }];
 }
 
-def Struct : HeteroCL_Type<"Struct"> {
+def Struct : HeteroCL_Type<"Struct", [MemRefElementTypeInterface]> {
   let summary = "struct type";
   let mnemonic = "struct";
   let parameters = (ins ArrayRefParameter<"Type", "elementTypes">:$elementTypes);

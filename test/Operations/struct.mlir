@@ -29,4 +29,12 @@ module {
     %7 = arith.addi %6, %2 : i32
     return
   }
+
+  func @struct_memref() -> () {
+    %1 = arith.constant 0 : i32
+    %2 = arith.constant 1 : i32
+    %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
+    // %4 = memref.alloc() : memref<2x2x!hcl.struct<i32, i32>>
+    return
+  }
 } 

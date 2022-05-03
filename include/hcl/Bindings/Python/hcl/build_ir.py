@@ -75,6 +75,9 @@ def is_fixed_type(dtype):
 def is_index_type(dtype):
     return isinstance(dtype, IndexType)
 
+def is_struct_type(dtype):
+    return isinstance(dtype, hcl_d.StructType)
+
 
 def is_hcl_mlir_type(dtype):
     return (
@@ -88,6 +91,7 @@ def get_mlir_type(dtype):
         or is_floating_point_type(dtype)
         or is_fixed_type(dtype)
         or is_index_type(dtype)
+        or is_struct_type(dtype)
     ):
         return dtype
     elif isinstance(dtype, str):
@@ -133,6 +137,8 @@ def get_concrete_type(dtype):
         return hcl_d.FixedType(dtype)
     elif hcl_d.UFixedType.isinstance(dtype):
         return hcl_d.UFixedType(dtype)
+    elif hcl_d.StructType.isinstance(dtype):
+        return hcl_d.StructType(dtype)
     else:
         raise RuntimeError("Unrecognized data type")
 
@@ -188,6 +194,9 @@ def print_mlir_type(dtype):
             return "ap_ufixed<{}, {}>".format(dtype.width, dtype.frac)
         else:
             raise RuntimeError("Not supported data type")
+    elif is_struct_type(dtype):
+        # TODO(Niansong): support struct type printing
+        pass
     else:
         raise RuntimeError("Not supported data type")
 
@@ -1658,6 +1667,35 @@ class SelectOp(ExprOp):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
+class StructConstructOp(ExprOp):
+    def __init__(self, fields):
+        super().__init__(hcl_d.StructConstructOp)
+        self.fields = [f.result for f in fields]
+        self.dtypes = [f.type for f in self.fields]
+        if flags.BUILD_INPLACE:
+            self.build()
+    def build(self):
+        self.built_op = self.op(
+            hcl_d.StructType.get(self.dtypes),
+            self.fields,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
+    
+class StructGetOp(ExprOp):
+    def __init__(self, struct, index):
+        super().__init__(hcl_d.StructGetOp)
+        self.struct = struct
+        self.index = index
+        if flags.BUILD_INPLACE:
+            self.build()
+    def build(self):
+        self.built_op = self.op(
+            self.struct.result,
+            self.index.result,
+            ip=GlobalInsertionPoint.get(),
+        )
+        return self.built_op
 
 class ReduceOp(ExprOp):
     # cannot build inplace!!!
@@ -1758,6 +1796,9 @@ class ASTVisitor:
             return self.visit_reduce_op(expr)
         elif isinstance(expr, ConstantOp):
             return self.visit_constant_op(expr)
+        elif isinstance(expr, tuple):
+            # tuple expr corresponds to a struct construction
+            return self.visit_struct_op(expr)
         else:  # IterVar
             return expr.built_op  # BlockArgument
 
@@ -1831,6 +1872,11 @@ class ASTVisitor:
             self.visit(expr.false_val)
             self.visit(expr.true_val)
             self.visit(expr.cond)
+
+    def visit_struct_op(self, expr):
+        fields = [self.visit(e) for e in expr]
+        op = StructConstructOp(fields)
+        return op.build()
 
     def visit_load_op(self, expr):
         if self.mode == "remove":

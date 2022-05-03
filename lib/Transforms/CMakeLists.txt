@@ -4,6 +4,7 @@ add_mlir_library(MLIRHCLPasses
     FixedPointToInteger.cpp
     AnyWidthInteger.cpp
     MoveReturnToInput.cpp
+    LowerCompositeType.cpp
     Passes.cpp
 
     ADDITIONAL_HEADER_DIRS

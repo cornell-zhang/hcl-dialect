@@ -520,4 +520,37 @@ def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   }];
 }
 
+def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
+    let summary = "struct construct";
+    let description = [{
+        The "struct_construct" builtin operation constructs a struct from
+        a list of values.
+    }];
+    let arguments = (ins Variadic<AnyType>:$input);
+    let results = (outs Struct:$output);
+
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `->` type($output)
+    }];
+}
+
+
+def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
+    let summary = "struct get";
+    let description = [{
+        The "struct_get" operation gets a field from a struct.
+    }];
+    let arguments = (ins Struct:$input, I64Attr:$index);
+    let results = (outs AnyType:$output);
+
+    let assemblyFormat = [{
+        $input `[` $index `]` attr-dict `:` type($input) `->` type($output)
+    }];
+
+    let builders = [
+        OpBuilder<(ins "Value":$input, "size_t":$index)>
+    ];
+
+}
+
 #endif // HCL_OPS

@@ -30,6 +30,10 @@ MLIR_CAPI_EXPORTED MlirType hclMlirUFixedTypeGet(MlirContext ctx, size_t width, 
 MLIR_CAPI_EXPORTED unsigned hclMlirUFixedTypeGetWidth(MlirType type);
 MLIR_CAPI_EXPORTED unsigned hclMlirUFixedTypeGetFrac(MlirType type);
 
+MLIR_CAPI_EXPORTED bool hclMlirTypeIsAStructType(MlirType type);
+MLIR_CAPI_EXPORTED MlirType hclMlirStructTypeGet(MlirContext ctx, intptr_t numElements,
+                                            MlirType const *elements);
+
 #ifdef __cplusplus
 }
 #endif

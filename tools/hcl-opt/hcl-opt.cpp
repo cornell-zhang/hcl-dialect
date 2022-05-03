@@ -78,6 +78,10 @@ static llvm::cl::opt<bool> lowerToLLVM("lower-to-llvm",
                                        llvm::cl::desc("Lower to LLVM Dialect"),
                                        llvm::cl::init(false));
 
+static llvm::cl::opt<bool> lowerComposite("lower-composite",
+                                       llvm::cl::desc("Lower composite types"),
+                                       llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -172,6 +176,10 @@ int main(int argc, char **argv) {
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
   if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
+  }
+
+  if (lowerComposite) {
+    pm.addPass(mlir::hcl::createLowerCompositeTypePass());
   }
 
   if (fixedPointToInteger) {

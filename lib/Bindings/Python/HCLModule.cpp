@@ -146,6 +146,11 @@ static bool moveReturnToInput(MlirModule &mlir_mod) {
   return applyMoveReturnToInput(mod);
 }
 
+static bool lowerCompositeType(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLowerCompositeType(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -187,4 +192,7 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
   hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
   hcl_m.def("move_return_to_input", &moveReturnToInput);
+
+  // Lowering APIs.
+  hcl_m.def("lower_composite_type", &lowerCompositeType);
 }

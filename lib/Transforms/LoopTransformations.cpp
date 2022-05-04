@@ -1033,7 +1033,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     f.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
-  llvm::errs() << "loopAxis: " << loopAxis << "\n";
 
   // 3) Find (non-)reduction loops
   AffineLoopBand nonReductionLoops;
@@ -1290,16 +1289,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto oldAffineMap = op.getAffineMap();
     for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e; ++i) {
       AffineExpr idx;
-      if ((int)i == axis)
+      if ((int)i == loopAxis)
         // the iteration space now is related to the input tensor
         idx = oldAffineMap.getResult(i) - distance;
       else
         idx = oldAffineMap.getResult(i);
       memAffineIndices.push_back(idx);
     }
-    auto affineMap = AffineMap::get(
-        target.getType().dyn_cast<MemRefType>().getRank() /*rank*/, 0,
-        memAffineIndices, rewriter.getContext());
+    auto affineMap = AffineMap::get(arrayType.getRank() /*rank*/, 0,
+                                    memAffineIndices, rewriter.getContext());
     rewriter.create<AffineStoreOp>(
         op->getLoc(), op.getOperand(0) /*valueToStore*/,
         op.getOperand(1) /*memref*/, affineMap, op.indices());
@@ -1589,9 +1587,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 15) Merge loops with the same bound
-  if (previousShiftLoops.size() != 0) {
-    // only support one shift loop now
-    assert(previousShiftLoops.size() == 1);
+  if (previousShiftLoops.size() == 1) {
+    // TODO: only support one shift loop now
     AffineForOp firstLoop = previousShiftLoops[0];
     AffineForOp secondLoop = nonReductionLoops[loopAxis];
     if (firstLoop.getConstantUpperBound() ==

@@ -78,5 +78,16 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
             return cls(hclMlirStructTypeGet(ctx, members.size(), members.data()));
           },
           "Get an instance of StructType in given context.", py::arg("cls"),
-          py::arg("members"), py::arg("context") = py::none());
+          py::arg("members"), py::arg("context") = py::none())
+      .def_property_readonly(
+        "field_types",
+        [](MlirType type) {
+          py::list types;
+          unsigned num_fields = hclMlirStructTypeGetNumFields(type);
+          for (size_t i = 0; i < num_fields; i++){
+            types.append(hclMlirStructGetEleType(type, i));
+          }
+          return types;
+        },
+        "Get a field type of a struct type by index.");
 }

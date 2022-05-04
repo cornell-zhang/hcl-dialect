@@ -67,5 +67,13 @@ MlirType hclMlirStructTypeGet(MlirContext ctx, intptr_t numElements,
                                             MlirType const *elements) {
   SmallVector<Type, 4> types;
   ArrayRef<Type> typeRef = unwrapList(numElements, elements, types);
-  return wrap(hcl::StructType::get(unwrap(ctx), types));
+  return wrap(hcl::StructType::get(unwrap(ctx), typeRef));
+}
+
+MlirType hclMlirStructGetEleType(MlirType type, size_t pos) {
+  return wrap(unwrap(type).cast<hcl::StructType>().getElementTypes()[pos]);
+}
+
+unsigned hclMlirStructTypeGetNumFields(MlirType type) {
+  return unwrap(type).cast<hcl::StructType>().getElementTypes().size();
 }

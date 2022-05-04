@@ -1479,36 +1479,50 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         SmallVector<Value> memAffineIndices;
         auto operands = originalLoadOp.getMapOperands();
         auto loadMap = originalLoadOp.getAffineMap();
-        int idx = 0;
+        int operandIdx = 0;
         int loadRank = 0;
-        for (unsigned int i = 0; i < rank; ++i) {
+        for (int i = 0; i < (int)rank; ++i) {
           auto expr = loadMap.getResult(i);
-          if ((int)i == axis) {
+          if (i < axis) {
+            if (i == preRDimAxis) {
+              if (expr.isa<AffineBinaryOpExpr>()) {
+                auto dim0 = builder.getAffineDimExpr(loadRank++);
+                auto dim1 = builder.getAffineDimExpr(loadRank++);
+                loadAffineExpr.push_back(dim0 + dim1);
+                memAffineIndices.push_back(
+                    nonReductionLoops[i].getInductionVar());
+                memAffineIndices.push_back(
+                    reductionForOps.back().getInductionVar());
+                operandIdx++;
+                operandIdx++;
+              } else { // single reduction
+                loadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
+                memAffineIndices.push_back(
+                    reductionForOps.back().getInductionVar());
+                operandIdx++;
+              }
+            } else {
+              loadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
+              memAffineIndices.push_back(operands[operandIdx++]);
+            }
+          } else if (i == axis) {
             loadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
-            memAffineIndices.push_back(operands[idx++]);
+            memAffineIndices.push_back(operands[operandIdx++]);
             if (expr.isa<AffineBinaryOpExpr>())
-              idx++;
+              operandIdx++;
           } else {
             if (expr.isa<AffineBinaryOpExpr>()) {
-              memAffineIndices.push_back(operands[idx++]);
-              memAffineIndices.push_back(
-                  reductionForOps.back().getInductionVar());
-              idx++;
-              auto dim0 = builder.getAffineDimExpr(loadRank++);
-              auto dim1 = builder.getAffineDimExpr(loadRank++);
-              loadAffineExpr.push_back(dim0 + dim1);
-            } else if ((int)i == preRDimAxis && preRDim != -1) {
               loadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
-              if (loadMap.getResult(i).isa<AffineBinaryOpExpr>())
-                idx++;
-              memAffineIndices.push_back(
-                  reductionForOps.back().getInductionVar());
-              idx++;
+              operandIdx++;
+              memAffineIndices.push_back(shiftForOps.back().getInductionVar());
+              operandIdx++;
             } else { // constant or dim
-              loadAffineExpr.push_back(expr);
-              if (expr.isa<AffineDimExpr>())
-                memAffineIndices.push_back(operands[idx++]);
-              loadRank++;
+              if (expr.isa<AffineDimExpr>()) {
+                loadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
+                memAffineIndices.push_back(operands[operandIdx++]);
+              } else {
+                assert(1 == 0 && "not supported");
+              }
             }
           }
         }

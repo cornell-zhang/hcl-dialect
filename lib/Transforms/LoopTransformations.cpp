@@ -1028,11 +1028,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 
   // 2.2) Find the requested loop and get the axis id
   AffineForOp reuseLoop = rootForOp;
-  int axis = getLoop(reuseLoop, loop_name);
-  if (axis == -1) {
+  int loopAxis = getLoop(reuseLoop, loop_name);
+  if (loopAxis == -1) {
     f.emitError("Cannot find Loop ") << loop_name.str();
     return failure();
   }
+  llvm::errs() << "loopAxis: " << loopAxis << "\n";
 
   // 3) Find (non-)reduction loops
   AffineLoopBand nonReductionLoops;
@@ -1071,6 +1072,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   //  target.shape[i] should be the dimension size
   std::set<AffineExpr, ExprCompare> requestedVars;
   std::map<int, int> dimBounds; // dim expr->reduction bound
+  int axis = -1;
+  int distance = -1;
   // TODO: eliminate order in inputs
   reuseAtOp.emitWarning("Need to guarantee the loads have orders");
   reuseLoop.walk([&](AffineLoadOp loadOp) {
@@ -1080,8 +1083,24 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     int numDims = loadMap.getNumDims();
     auto operands = loadOp.getMapOperands();
     int rDim = -1;
+    int operandIdx = 0;
     for (int j = 0; j < (int)loadMap.getNumResults(); ++j) {
       AffineExpr expr = loadMap.getResult(j);
+      if (axis == -1) {
+        if (expr.isa<AffineDimExpr>()) {
+          if (operands[operandIdx++] ==
+              nonReductionLoops[loopAxis].getInductionVar()) {
+            axis = j;
+          }
+        } else if (expr.isa<AffineBinaryOpExpr>()) {
+          if (operands[operandIdx++] ==
+              nonReductionLoops[loopAxis].getInductionVar())
+            axis = j;
+          if (operands[operandIdx++] ==
+              nonReductionLoops[loopAxis].getInductionVar())
+            axis = j;
+        }
+      }
       for (int i = 0; i < numDims; ++i) {
         if (expr.isFunctionOfDim(i) && reductionVars.count(operands[i]) > 0) {
           dimBounds[i] = reductionVars[operands[i]];
@@ -1094,6 +1113,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     AffineExpr expr = loadMap.getResult(axis);
     if (rDim != -1) {
       int ub = reductionVars[operands[rDim]];
+      distance = ub - 1;
       for (int j = 0; j < ub; j++) {
         auto ubCstExpr = builder.getAffineConstantExpr(j);
         auto newExpr = expr.replace(builder.getAffineDimExpr(rDim), ubCstExpr);
@@ -1101,9 +1121,13 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       }
     } else {
       requestedVars.insert(expr);
+      auto var = expr - *(requestedVars.begin());
+      distance = std::max(distance,
+                          (int)(var.dyn_cast<AffineConstantExpr>().getValue()));
     }
     return WalkResult::advance();
   });
+  assert(distance != -1);
 
   // 5) Try to find reuse pattern
   //    TODO: support more reuse patterns
@@ -1118,7 +1142,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
   if (!canReuse) {
     reuseAtOp.emitError("Cannot find reuse pattern on axis ")
-        << std::to_string(axis) << ". Only support stride 1 reuse pattern now";
+        << std::to_string(loopAxis)
+        << ". Only support stride 1 reuse pattern now";
     return failure();
   }
 
@@ -1220,13 +1245,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 7) Create reuse buffer
   //    e.g., %1 = memref.alloc() : memref<3xi32>
   // TODO: suppose only at most one reduction axis before reuse axis
-  int distance = allLoadAffineMaps.back()
-                     .getResult(preRDim == -1 ? 0 : 1)
-                     .dyn_cast<AffineConstantExpr>()
-                     .getValue();
-  OpBuilder out_builder(rootForOp); // outside the stage
-  mlir::Type elementType =
-      target.getType().dyn_cast<MemRefType>().getElementType();
   SmallVector<int64_t> shape;
   // i < axis
   if (preRDim != -1)
@@ -1236,15 +1254,18 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // i > axis
   for (unsigned int i = axis + 1; i < rank; ++i)
     shape.push_back(arrayType.getShape()[i]);
+  OpBuilder out_builder(rootForOp); // outside the stage
   auto buf = out_builder.create<memref::AllocOp>(
-      rootForOp.getLoc(), MemRefType::get(shape, elementType));
+      rootForOp.getLoc(),
+      MemRefType::get(
+          shape, target.getType().dyn_cast<MemRefType>().getElementType()));
 
   // 8) link the result SSA with the buffer
   reuseAtOp.getResult().replaceAllUsesWith(buf);
 
   // 9) Update loop bound
   // TODO: support non-constant bound
-  nonReductionLoops[axis].setConstantUpperBound(
+  nonReductionLoops[loopAxis].setConstantUpperBound(
       target.getType().dyn_cast<MemRefType>().getShape()[axis]);
 
   // 10) Update store index, since some load/store will be created later, this
@@ -1385,7 +1406,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
     SmallVector<Value, 4> setOperands{
-        nonReductionLoops[axis].getInductionVar()};
+        nonReductionLoops[loopAxis].getInductionVar()};
     ifOp = builder.create<AffineIfOp>(loc, ifCondSet, setOperands,
                                       /*withElseRegion=*/false);
     auto &innerMostBody = innerMostForOp.getBody()->getOperations();
@@ -1405,7 +1426,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
     SmallVector<Value, 4> setOperands{
-        nonReductionLoops[axis].getInductionVar()};
+        nonReductionLoops[loopAxis].getInductionVar()};
     ifOp = builder.create<AffineIfOp>(loc, ifCondSet, setOperands,
                                       /*withElseRegion=*/false);
     auto &innerMostBody = outerIfOp.getThenBlock()->getOperations();
@@ -1428,12 +1449,16 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   OpBuilder builder(ifOp);
   Location loc = ifOp.getLoc();
   if (!llvm::isa<AffineIfOp>(ifOp.getThenBlock()->getOperations().front())) {
-    loc = nonReductionLoops[axis].getBody()->getOperations().begin()->getLoc();
+    loc = nonReductionLoops[loopAxis]
+              .getBody()
+              ->getOperations()
+              .begin()
+              ->getLoc();
     builder = OpBuilder(
-        &(*(nonReductionLoops[axis].getBody()->getOperations().begin())));
+        &(*(nonReductionLoops[loopAxis].getBody()->getOperations().begin())));
   } else {
     ifOp = llvm::cast<AffineIfOp>(
-        nonReductionLoops[axis].getBody()->getOperations().front());
+        nonReductionLoops[loopAxis].getBody()->getOperations().front());
     loc = ifOp.getThenBlock()->getOperations().begin()->getLoc();
     builder = OpBuilder(&(*(ifOp.getThenBlock()->getOperations().begin())));
   }
@@ -1447,7 +1472,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     loc = reductionForOps.back().getBody()->getOperations().begin()->getLoc();
   }
   AffineLoopBand shiftForOps;
-  for (unsigned int i = axis + 1; i < nonReductionLoops.size(); ++i) {
+  for (unsigned int i = loopAxis + 1; i < nonReductionLoops.size(); ++i) {
     auto ub = target.getType().dyn_cast<MemRefType>().getShape()[i];
     if (nonReductionLoops[i].hasConstantUpperBound() &&
         nonReductionLoops[i].getConstantUpperBound() == ub) {
@@ -1460,19 +1485,22 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         OpBuilder(&(*(shiftForOps.back().getBody()->getOperations().begin())));
     loc = shiftForOps.back().getBody()->getOperations().begin()->getLoc();
   }
+
   std::size_t numLoad = allLoadAffineMaps.size();
-  for (std::size_t i = 0; i < numLoad; ++i) {
+  for (std::size_t loadCnt = 0; loadCnt < numLoad; ++loadCnt) {
     AffineLoadOp load;
-    if (i < numLoad - 1) { // load from buffer
-      if (reductionForOps.size() > 0 && allLoadOperands[i + 1].size() > 0)
-        allLoadOperands[i + 1][0] = reductionForOps.back().getInductionVar();
-      std::size_t size = allLoadOperands[i + 1].size();
+    if (loadCnt < numLoad - 1) { // load from buffer
+      if (reductionForOps.size() > 0 && allLoadOperands[loadCnt + 1].size() > 0)
+        allLoadOperands[loadCnt + 1][0] =
+            reductionForOps.back().getInductionVar();
+      std::size_t size = allLoadOperands[loadCnt + 1].size();
       for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
-        allLoadOperands[i + 1][j] =
+        allLoadOperands[loadCnt + 1][j] =
             shiftForOps[j - size + shiftForOps.size()].getInductionVar();
       }
-      load = builder.create<AffineLoadOp>(loc, buf, allLoadAffineMaps[i + 1],
-                                          allLoadOperands[i + 1]);
+      load =
+          builder.create<AffineLoadOp>(loc, buf, allLoadAffineMaps[loadCnt + 1],
+                                       allLoadOperands[loadCnt + 1]);
     } else { // load from memory
       if (reductionForOps.size() > 0) {
         SmallVector<AffineExpr> loadAffineExpr;
@@ -1544,15 +1572,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     }
 
     // store the load result to buffer
-    if (reductionForOps.size() > 0 && allLoadOperands[i].size() > 0)
-      allLoadOperands[i][0] = reductionForOps.back().getInductionVar();
-    std::size_t size = allLoadOperands[i].size();
+    if (reductionForOps.size() > 0 && allLoadOperands[loadCnt].size() > 0)
+      allLoadOperands[loadCnt][0] = reductionForOps.back().getInductionVar();
+    std::size_t size = allLoadOperands[loadCnt].size();
     for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
-      allLoadOperands[i][j] =
+      allLoadOperands[loadCnt][j] =
           shiftForOps[j - size + shiftForOps.size()].getInductionVar();
     }
-    builder.create<AffineStoreOp>(loc, load, buf, allLoadAffineMaps[i],
-                                  allLoadOperands[i]);
+    builder.create<AffineStoreOp>(loc, load, buf, allLoadAffineMaps[loadCnt],
+                                  allLoadOperands[loadCnt]);
   }
 
   // 14) Remove all the useless operations
@@ -1565,7 +1593,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     // only support one shift loop now
     assert(previousShiftLoops.size() == 1);
     AffineForOp firstLoop = previousShiftLoops[0];
-    AffineForOp secondLoop = nonReductionLoops[axis];
+    AffineForOp secondLoop = nonReductionLoops[loopAxis];
     if (firstLoop.getConstantUpperBound() ==
         secondLoop.getConstantUpperBound()) {
       auto &firstBody = firstLoop.getBody()->getOperations();

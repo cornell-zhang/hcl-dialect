@@ -1463,15 +1463,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     loc = ifOp.getThenBlock()->getOperations().begin()->getLoc();
     builder = OpBuilder(&(*(ifOp.getThenBlock()->getOperations().begin())));
   }
-  AffineLoopBand reductionForOps;
-  for (unsigned int i = 0; i < preRDim.size(); ++i) {
-    reductionForOps.push_back(
-        builder.create<AffineForOp>(loc, 0, dimBounds[preRDim[i]]));
-    reductionForOps.back()->setAttr("spatial", builder.getUnitAttr());
-    builder = OpBuilder(
-        &(*(reductionForOps.back().getBody()->getOperations().begin())));
-    loc = reductionForOps.back().getBody()->getOperations().begin()->getLoc();
-  }
   AffineLoopBand shiftForOps;
   for (unsigned int i = loopAxis + 1; i < nonReductionLoops.size(); ++i) {
     auto ub = target.getType().dyn_cast<MemRefType>().getShape()[i];
@@ -1485,6 +1476,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     builder =
         OpBuilder(&(*(shiftForOps.back().getBody()->getOperations().begin())));
     loc = shiftForOps.back().getBody()->getOperations().begin()->getLoc();
+  }
+  AffineLoopBand reductionForOps;
+  for (unsigned int i = 0; i < preRDim.size(); ++i) {
+    reductionForOps.push_back(
+        builder.create<AffineForOp>(loc, 0, dimBounds[preRDim[i]]));
+    reductionForOps.back()->setAttr("spatial", builder.getUnitAttr());
+    builder = OpBuilder(
+        &(*(reductionForOps.back().getBody()->getOperations().begin())));
+    loc = reductionForOps.back().getBody()->getOperations().begin()->getLoc();
   }
 
   std::size_t numLoad = allLoadAffineMaps.size();
@@ -1596,9 +1596,9 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 15) Merge loops with the same bound
-  if (previousShiftLoops.size() == 1) {
+  if (previousShiftLoops.size() > 0) {
     // TODO: only support one shift loop now
-    AffineForOp firstLoop = previousShiftLoops[0];
+    AffineForOp firstLoop = previousShiftLoops.back();
     AffineForOp secondLoop = nonReductionLoops[loopAxis];
     if (firstLoop.getConstantUpperBound() ==
         secondLoop.getConstantUpperBound()) {

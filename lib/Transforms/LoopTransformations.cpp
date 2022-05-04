@@ -1036,11 +1036,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
 
   // 3) Find (non-)reduction loops
   AffineLoopBand nonReductionLoops;
+  AffineLoopBand previousShiftLoops;
   // InductionVar -> Loop upper bound
   DenseMap<Value, int> reductionVars;
   WalkResult result = rootForOp.walk([&](AffineForOp forOp) {
     if (!forOp->hasAttr("reduction") && !forOp->hasAttr("non-reduction")) {
       nonReductionLoops.push_back(forOp);
+    } else if (forOp->hasAttr("non-reduction")) {
+      previousShiftLoops.push_back(forOp);
     } else {
       if (forOp.getStep() != 1 || !forOp.hasConstantLowerBound() ||
           forOp.getConstantLowerBound() != 0 ||
@@ -1417,12 +1420,17 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
   AffineLoopBand shiftForOps;
   for (unsigned int i = axis + 1; i < nonReductionLoops.size(); ++i) {
-    shiftForOps.push_back(builder.create<AffineForOp>(
-        loc, 0, target.getType().dyn_cast<MemRefType>().getShape()[i]));
+    auto ub = target.getType().dyn_cast<MemRefType>().getShape()[i];
+    if (nonReductionLoops[i].hasConstantUpperBound() &&
+        nonReductionLoops[i].getConstantUpperBound() == ub) {
+      shiftForOps.push_back(nonReductionLoops[i]);
+    } else {
+      shiftForOps.push_back(builder.create<AffineForOp>(loc, 0, ub));
+      shiftForOps.back()->setAttr("non-reduction", builder.getUnitAttr());
+    }
     builder =
         OpBuilder(&(*(shiftForOps.back().getBody()->getOperations().begin())));
     loc = shiftForOps.back().getBody()->getOperations().begin()->getLoc();
-    shiftForOps[i - axis - 1]->setAttr("non-reduction", builder.getUnitAttr());
   }
   std::size_t numLoad = allLoadAffineMaps.size();
   for (std::size_t i = 0; i < numLoad; ++i) {
@@ -1503,6 +1511,25 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 14) Remove all the useless operations
   for (Operation *op : opToRemove) {
     op->erase();
+  }
+
+  // 15) Merge loops with the same bound
+  if (previousShiftLoops.size() != 0) {
+    // only support one shift loop now
+    assert(previousShiftLoops.size() == 1);
+    AffineForOp firstLoop = previousShiftLoops[0];
+    AffineForOp secondLoop = nonReductionLoops[axis];
+    if (firstLoop.getConstantUpperBound() ==
+        secondLoop.getConstantUpperBound()) {
+      auto &firstBody = firstLoop.getBody()->getOperations();
+      auto &secondBody = secondLoop.getBody()->getOperations();
+      // do not need affine.yield op, so that's why using std::prev
+      secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+                        std::prev(firstBody.end()));
+      firstLoop.getInductionVar().replaceAllUsesWith(
+          secondLoop.getInductionVar());
+      firstLoop.erase();
+    }
   }
 
   return success();

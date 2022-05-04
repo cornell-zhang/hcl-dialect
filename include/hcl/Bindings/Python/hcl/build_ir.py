@@ -571,6 +571,25 @@ class ExprOp(object):
         """
         raise RuntimeError("Not implemented")
 
+    def __getattr__(self, key):
+        """Access a field from a struct value.
+
+        Parameters
+        ----------
+        name : str
+            The field name
+        
+        Returns
+        -------
+        expr : Expr
+            The field expression    
+        """
+        key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
+        if key not in key_list:
+            raise RuntimeError("No such field: " + key)
+        key_idx = key_list.index(key)
+        return StructGetOp(self, key_idx)
+
 
 #################################################
 #
@@ -799,6 +818,7 @@ class TensorOp(ExprOp):
         super().__init__(op)
         self.shape = shape
         self.dtype = dtype
+        self.hcl_dtype = dtype
         self.name = name
 
     def build(self):
@@ -1690,9 +1710,11 @@ class StructGetOp(ExprOp):
         if flags.BUILD_INPLACE:
             self.build()
     def build(self):
+        field_types = self.struct.dtype.field_types
         self.built_op = self.op(
+            field_types[self.index],
             self.struct.result,
-            self.index.result,
+            IntegerAttr.get(IntegerType.get_signless(64), self.index),
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
@@ -1799,6 +1821,8 @@ class ASTVisitor:
         elif isinstance(expr, tuple):
             # tuple expr corresponds to a struct construction
             return self.visit_struct_op(expr)
+        elif isinstance(expr, StructGetOp):
+            return self.visit_struct_get_op(expr)
         else:  # IterVar
             return expr.built_op  # BlockArgument
 
@@ -1877,6 +1901,10 @@ class ASTVisitor:
         fields = [self.visit(e) for e in expr]
         op = StructConstructOp(fields)
         return op.build()
+
+    def visit_struct_get_op(self, expr):
+        self.visit(expr.struct)
+        return expr.build()
 
     def visit_load_op(self, expr):
         if self.mode == "remove":

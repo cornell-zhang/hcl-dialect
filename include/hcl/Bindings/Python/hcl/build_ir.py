@@ -71,6 +71,11 @@ def is_signed_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (hcl_d.FixedType, hcl_d.UFixedType))
 
+def is_signed_fixed_type(dtype):
+    return isinstance(dtype, hcl_d.FixedType)
+
+def is_unsigned_fixed_type(dtype):
+    return isinstance(dtype, hcl_d.UFixedType)
 
 def is_index_type(dtype):
     return isinstance(dtype, IndexType)
@@ -140,7 +145,7 @@ def get_concrete_type(dtype):
     elif hcl_d.StructType.isinstance(dtype):
         return hcl_d.StructType(dtype)
     else:
-        raise RuntimeError("Unrecognized data type")
+        raise RuntimeError("Unrecognized data type: {}".format(dtype))
 
 
 def get_bitwidth(dtype):
@@ -193,12 +198,36 @@ def print_mlir_type(dtype):
         elif isinstance(dtype, hcl_d.UFixedType):
             return "ap_ufixed<{}, {}>".format(dtype.width, dtype.frac)
         else:
-            raise RuntimeError("Not supported data type")
+            raise RuntimeError("Not supported data type: {}".format(dtype))
     elif is_struct_type(dtype):
-        # TODO(Niansong): support struct type printing
-        pass
+        raise RuntimeError("stuct type printing to be implemented")
     else:
-        raise RuntimeError("Not supported data type")
+        raise RuntimeError("Not supported data type: {}".format(dtype))
+
+
+def mlir_type_to_str(dtype):
+    if is_signed_type(dtype):
+        return "int{}".format(get_bitwidth(dtype))
+    elif is_unsigned_type(dtype):
+        return "uint{}".format(get_bitwidth(dtype))
+    elif is_floating_point_type(dtype):
+        return "float{}".format(get_bitwidth(dtype))
+    elif is_signed_fixed_type(dtype):
+        if dtype.frac == 0:
+            return "int{}".format(dtype.width)
+        return "fixed{}_{}".format(dtype.width, dtype.frac)
+    elif is_unsigned_fixed_type(dtype):
+        if dtype.frac == 0:
+            return "uint{}".format(dtype.width)
+        return "ufixed{}_{}".format(dtype.width, dtype.frac)
+    elif is_struct_type(dtype):
+        type_str =  "Struct("
+        for ft in dtype.field_types:
+            type_str += mlir_type_to_str(ft) + ", "
+        type_str = type_str[:-2] + ")"
+        return type_str
+    else:
+        raise RuntimeError("Unrecognized data type: {}".format(dtype))
 
 
 class HCLMLIRInsertionPoint(object):
@@ -1691,12 +1720,13 @@ class StructConstructOp(ExprOp):
     def __init__(self, fields):
         super().__init__(hcl_d.StructConstructOp)
         self.fields = [f.result for f in fields]
-        self.dtypes = [f.type for f in self.fields]
+        self.field_types = [f.type for f in self.fields]
+        self.dtype = hcl_d.StructType.get(self.field_types)
         if flags.BUILD_INPLACE:
             self.build()
     def build(self):
         self.built_op = self.op(
-            hcl_d.StructType.get(self.dtypes),
+            self.dtype,
             self.fields,
             ip=GlobalInsertionPoint.get(),
         )
@@ -1711,8 +1741,10 @@ class StructGetOp(ExprOp):
             self.build()
     def build(self):
         field_types = self.struct.dtype.field_types
+        self.type = field_types[self.index] # mlir type
+        self.dtype = mlir_type_to_str(get_concrete_type(self.type)) # dtype str
         self.built_op = self.op(
-            field_types[self.index],
+            self.type,
             self.struct.result,
             IntegerAttr.get(IntegerType.get_signless(64), self.index),
             ip=GlobalInsertionPoint.get(),

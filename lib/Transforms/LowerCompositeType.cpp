@@ -88,6 +88,25 @@ void lowerStructType(FuncOp &func) {
         field_memrefs.push_back(field_memref);
       }
 
+      // Step2: add store to each field memref
+      for (auto &use : struct_memref.getUses()) {
+        if (auto storeOp = dyn_cast<AffineStoreOp>(use.getOwner())) {
+          // Find a storeOp to the struct memref, we add
+          // store to each field memref here.
+          OpBuilder builder(storeOp);
+          for (const auto &field_memref_en : llvm::enumerate(field_memrefs)) {
+            auto field_memref = field_memref_en.value();
+            auto field_index = field_memref_en.index();
+            // Find the struct_construct op
+            auto struct_construct_op = dyn_cast<StructConstructOp>(
+                storeOp.getOperand(0).getDefiningOp());
+            builder.create<AffineStoreOp>(
+                loc, struct_construct_op.getOperand(field_index), field_memref, storeOp.indices());
+          }
+          break;
+        }
+      }
+
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
       // defOp is a struct construction op
       Value replacement = defOp->getOperand(index);

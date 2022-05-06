@@ -43,6 +43,22 @@ void deadStructConstructElimination(FuncOp &func) {
   }
 }
 
+void deadMemRefAllocElimination(FuncOp &func) {
+  SmallVector<Operation *, 8> memRefAllocOps;
+  func.walk([&](Operation *op) {
+    if (auto memRefAllocOp = dyn_cast<memref::AllocOp>(op)) {
+      memRefAllocOps.push_back(memRefAllocOp);
+    }
+  });
+  std::reverse(memRefAllocOps.begin(), memRefAllocOps.end());
+  for (auto op : memRefAllocOps) {
+    auto v = op->getResult(0);
+    if (v.use_empty()) {
+      op->erase();
+    }
+  }
+}
+
 void lowerStructType(FuncOp &func) {
 
   SmallVector<Operation *, 10> structGetOps;
@@ -52,7 +68,7 @@ void lowerStructType(FuncOp &func) {
     }
   });
 
-  std::map<Value*, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
+  std::map<Value *, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
 
   for (auto op : structGetOps) {
     // Collect info from structGetOp
@@ -123,7 +139,7 @@ void lowerStructType(FuncOp &func) {
                 storeOp.indices());
           }
           // erase the storeOp that stores to the struct memref
-          if (erase_struct_construct){
+          if (erase_struct_construct) {
             storeOp.erase();
           }
           break;
@@ -137,6 +153,10 @@ void lowerStructType(FuncOp &func) {
       struct_field.replaceAllUsesWith(loaded_field);
       op->erase();
 
+      if (erase_struct_construct) {
+        defOp->erase();
+      }
+
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
       // Case 2: defOp is a struct construction op
       Value replacement = defOp->getOperand(index);
@@ -149,13 +169,13 @@ void lowerStructType(FuncOp &func) {
 
   // Run DCE after all struct get is folded
   deadStructConstructElimination(func);
+  deadMemRefAllocElimination(func);
 }
 
 /// Pass entry point
 bool applyLowerCompositeType(ModuleOp &mod) {
   for (FuncOp func : mod.getOps<FuncOp>()) {
     lowerStructType(func);
-    llvm::outs() << func << "\n";
   }
   return true;
 }

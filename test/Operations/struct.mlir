@@ -1,15 +1,7 @@
-// RUN: hcl-opt --lower-composite --lower-to-llvm %s
+// RUN: hcl-opt --lower-composite --fixed-to-integer --lower-to-llvm %s
 module {
-  // func @top (%arg0 : !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i3>) -> () {
-  //   %0 = hcl.struct_get %arg0[0] : !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i3> -> !hcl.struct<i3, memref<10xf32>>
-  //   %zero = arith.constant 0 : i32
-  //   %1 = hcl.struct_construct (%0, %zero) : !hcl.struct<i3, memref<10xf32>>, i32 -> !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i32>
-  //   // %one = arith.constant 1 : i32
-  //   // %2 = hcl.struct_set %arg0[1], %one : !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i3>, i32 -> !hcl.struct<!hcl.struct<i3, memref<10xf32>>, i32>
-  //   return
-  // }
 
-  func @top () -> () {
+  func @basic () -> () {
     %1 = arith.constant 0 : i32
     %2 = arith.constant 1 : i32
     %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
@@ -34,7 +26,26 @@ module {
     %1 = arith.constant 0 : i32
     %2 = arith.constant 1 : i32
     %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
-    // %4 = memref.alloc() : memref<2x2x!hcl.struct<i32, i32>>
+    %4 = memref.alloc() : memref<2x2x!hcl.struct<i32, i32>>
     return
   }
-} 
+
+
+  func @top(%arg0: memref<100xi8>, %arg1: memref<100x!hcl.Fixed<13, 11>>, %arg2: memref<100xf32>) attributes {extra_itypes = "s__", extra_otypes = ""} {
+    %0 = memref.alloc() {name = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
+    affine.for %arg3 = 0 to 100 {
+      %2 = affine.load %arg0[%arg3] {from = "compute_0"} : memref<100xi8>
+      %3 = affine.load %arg1[%arg3] {from = "compute_1"} : memref<100x!hcl.Fixed<13, 11>>
+      %4 = affine.load %arg2[%arg3] {from = "compute_2"} : memref<100xf32>
+      %5 = hcl.struct_construct(%2, %3, %4) : i8, !hcl.Fixed<13, 11>, f32 -> <i8, !hcl.Fixed<13, 11>, f32>
+      affine.store %5, %0[%arg3] {to = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
+    } {loop_name = "x", stage_name = "compute_3"}
+    %1 = memref.alloc() {name = "compute_4"} : memref<100xi8>
+    affine.for %arg3 = 0 to 100 {
+      %2 = affine.load %0[%arg3] {from = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
+      %3 = hcl.struct_get %2[0] : <i8, !hcl.Fixed<13, 11>, f32> -> i8
+      affine.store %3, %1[%arg3] {to = "compute_4"} : memref<100xi8>
+    } {loop_name = "x", stage_name = "compute_4"}
+    return
+  }
+}

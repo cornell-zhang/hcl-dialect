@@ -360,6 +360,7 @@ void updateAlloc(FuncOp &f) {
       allocOps.push_back(op);
     }
   });
+  // llvm::outs() << "length of allocOps: " << allocOps.size() << "\n";
 
   for (auto op : allocOps) {
     auto allocOp = dyn_cast<memref::AllocOp>(op);
@@ -373,7 +374,7 @@ void updateAlloc(FuncOp &f) {
     } else {
       // Not a fixed-point alloc operation
       // Return without changing anything
-      return;
+      continue;
     }
     Type newType = IntegerType::get(f.getContext(), width);
     Type newMemRefType = memRefType.clone(newType);
@@ -655,6 +656,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateReturnOp(func);
     func.setType(newFuncType);
   }
+
 
   return true;
 }

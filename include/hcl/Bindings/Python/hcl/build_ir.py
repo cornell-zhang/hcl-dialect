@@ -1737,14 +1737,20 @@ class StructGetOp(ExprOp):
         super().__init__(hcl_d.StructGetOp)
         self.struct = struct
         self.index = index
+        field_types = self.struct.dtype.field_types
+        self.dtype = get_concrete_type(field_types[self.index]) # mlir type
         if flags.BUILD_INPLACE:
             self.build()
     def build(self):
-        field_types = self.struct.dtype.field_types
-        self.type = field_types[self.index] # mlir type
-        self.dtype = mlir_type_to_str(get_concrete_type(self.type)) # dtype str
+        # Note(Niansong): 
+        # this was used to test dtype from HalideIR, 
+        # e.g. assert struct_value.field.dtype = "int8"
+        # but this is no longer compatible with mlir.
+        # self.dtype has to be a concrete MLIR type, for 
+        # the field value to be consumed by another operation.
+        # self.dtype = mlir_type_to_str(get_concrete_type(self.type)) # dtype str
         self.built_op = self.op(
-            self.type,
+            self.dtype,
             self.struct.result,
             IntegerAttr.get(IntegerType.get_signless(64), self.index),
             ip=GlobalInsertionPoint.get(),

@@ -52,12 +52,19 @@ void lowerStructType(FuncOp &func) {
     }
   });
 
+  std::map<Value*, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
+
   for (auto op : structGetOps) {
     // Collect info from structGetOp
     auto structGetOp = dyn_cast<StructGetOp>(op);
     Value struct_value = structGetOp->getOperand(0);
     Value struct_field = structGetOp->getResult(0);
+    Location loc = op->getLoc();
     auto index = structGetOp.index();
+
+    // This flag indicates whether we can erase
+    // struct construct and relevant ops.
+    bool erase_struct_construct = false;
 
     // The defOp can be either a StructConstructOp or
     // a load from a memref.
@@ -65,7 +72,7 @@ void lowerStructType(FuncOp &func) {
     // Construct: we are operating on a struct value
     Operation *defOp = struct_value.getDefiningOp();
     if (auto affine_load = dyn_cast<AffineLoadOp>(defOp)) {
-      // defOp is loadOp from memref
+      // Case 1: defOp is loadOp from memref
       // Note: the idea to lower struct from memref is to
       // first create a memref for each struct field, and then
       // add store operation to those memrefs right after the
@@ -74,18 +81,29 @@ void lowerStructType(FuncOp &func) {
 
       // Step1: create memref for each field
       Value struct_memref = affine_load.memref();
-      OpBuilder builder(struct_memref.getDefiningOp());
-      StructType struct_type = struct_value.getType().cast<StructType>();
-      Location loc = op->getLoc();
+      // Try to find field_memrefs associated with this struct_memref
       SmallVector<Value, 4> field_memrefs;
-      for (Type field_type : struct_type.getElementTypes()) {
-        MemRefType newMemRefType = struct_memref.getType()
-                                       .cast<MemRefType>()
-                                       .clone(field_type)
-                                       .cast<MemRefType>();
-        Value field_memref =
-            builder.create<memref::AllocOp>(loc, newMemRefType);
-        field_memrefs.push_back(field_memref);
+      auto it = structMemRef2fieldMemRefs.find(&struct_memref);
+      if (it == structMemRef2fieldMemRefs.end()) {
+        // Create a memref for each field
+        OpBuilder builder(struct_memref.getDefiningOp());
+        StructType struct_type = struct_value.getType().cast<StructType>();
+
+        for (Type field_type : struct_type.getElementTypes()) {
+          MemRefType newMemRefType = struct_memref.getType()
+                                         .cast<MemRefType>()
+                                         .clone(field_type)
+                                         .cast<MemRefType>();
+          Value field_memref =
+              builder.create<memref::AllocOp>(loc, newMemRefType);
+          field_memrefs.push_back(field_memref);
+        }
+        structMemRef2fieldMemRefs.insert(
+            std::make_pair(&struct_memref, field_memrefs));
+        erase_struct_construct = true;
+      } else {
+        field_memrefs.append(it->second);
+        erase_struct_construct = false;
       }
 
       // Step2: add store to each field memref
@@ -101,14 +119,26 @@ void lowerStructType(FuncOp &func) {
             auto struct_construct_op = dyn_cast<StructConstructOp>(
                 storeOp.getOperand(0).getDefiningOp());
             builder.create<AffineStoreOp>(
-                loc, struct_construct_op.getOperand(field_index), field_memref, storeOp.indices());
+                loc, struct_construct_op.getOperand(field_index), field_memref,
+                storeOp.indices());
+          }
+          // erase the storeOp that stores to the struct memref
+          if (erase_struct_construct){
+            storeOp.erase();
           }
           break;
         }
       }
 
+      // Step3: replace structGetOp with load from field memrefs
+      OpBuilder load_builder(op);
+      Value loaded_field = load_builder.create<AffineLoadOp>(
+          loc, field_memrefs[index], affine_load.indices());
+      struct_field.replaceAllUsesWith(loaded_field);
+      op->erase();
+
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
-      // defOp is a struct construction op
+      // Case 2: defOp is a struct construction op
       Value replacement = defOp->getOperand(index);
       struct_field.replaceAllUsesWith(replacement);
       op->erase();

@@ -74,7 +74,7 @@ void lowerStructType(FuncOp &func) {
 
       // Step1: create memref for each field
       Value struct_memref = affine_load.memref();
-      OpBuilder builder(affine_load);
+      OpBuilder builder(struct_memref.getDefiningOp());
       StructType struct_type = struct_value.getType().cast<StructType>();
       Location loc = op->getLoc();
       SmallVector<Value, 4> field_memrefs;

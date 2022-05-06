@@ -153,9 +153,8 @@ void lowerStructType(FuncOp &func) {
       struct_field.replaceAllUsesWith(loaded_field);
       op->erase();
 
-      if (erase_struct_construct) {
-        defOp->erase();
-      }
+      // erase the loadOp from struct_memref
+      defOp->erase();
 
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
       // Case 2: defOp is a struct construction op

@@ -68,7 +68,7 @@ void lowerStructType(FuncOp &func) {
     }
   });
 
-  std::map<Value *, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
+  std::map<llvm::hash_code, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
 
   for (auto op : structGetOps) {
     // Collect info from structGetOp
@@ -99,7 +99,7 @@ void lowerStructType(FuncOp &func) {
       Value struct_memref = affine_load.memref();
       // Try to find field_memrefs associated with this struct_memref
       SmallVector<Value, 4> field_memrefs;
-      auto it = structMemRef2fieldMemRefs.find(&struct_memref);
+      auto it = structMemRef2fieldMemRefs.find(hash_value(struct_memref));
       if (it == structMemRef2fieldMemRefs.end()) {
         // Create a memref for each field
         OpBuilder builder(struct_memref.getDefiningOp());
@@ -115,7 +115,7 @@ void lowerStructType(FuncOp &func) {
           field_memrefs.push_back(field_memref);
         }
         structMemRef2fieldMemRefs.insert(
-            std::make_pair(&struct_memref, field_memrefs));
+            std::make_pair(hash_value(struct_memref), field_memrefs));
         erase_struct_construct = true;
       } else {
         field_memrefs.append(it->second);

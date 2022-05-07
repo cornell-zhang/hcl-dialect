@@ -662,7 +662,7 @@ class ReduceVar(IterVar):
 
 
 class ConstantOp(ExprOp):
-    def __init__(self, dtype, val, name):
+    def __init__(self, dtype, val, name="const_tensor"):
         super().__init__(arith.ConstantOp)
         self.val = val
         self.name = name

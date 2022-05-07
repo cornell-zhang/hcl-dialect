@@ -160,7 +160,7 @@ export HCL_HOME=$(pwd)
 export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 
 # run tests
-python3 tests/mlir/test_gemm.py
+python3 tests/mlir/hcl-mlir/test_gemm.py
 ```
 
 We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/cornell-zhang/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.

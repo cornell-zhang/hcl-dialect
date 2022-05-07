@@ -240,6 +240,9 @@ class HCLMLIRInsertionPoint(object):
     def get(self):
         return self.ip_stack[-1]
 
+    def get_global(self):
+        return self.ip_stack[0]
+
     def save(self, ip):
         if not isinstance(ip, InsertionPoint):
             ip = InsertionPoint(ip)
@@ -659,9 +662,10 @@ class ReduceVar(IterVar):
 
 
 class ConstantOp(ExprOp):
-    def __init__(self, dtype, val):
+    def __init__(self, dtype, val, name):
         super().__init__(arith.ConstantOp)
         self.val = val
+        self.name = name
         self.dtype = get_mlir_type(dtype)
         if flags.BUILD_INPLACE:
             self.build()
@@ -701,10 +705,19 @@ class ConstantOp(ExprOp):
                 dtype = IntegerType.get_signless(self.dtype.width)
             else:
                 dtype = self.dtype
-            tensor_type = RankedTensorType.get(self.val.shape, dtype)
-            attr = DenseElementsAttr.get(self.val, type=dtype)
-            const_tensor = arith.ConstantOp(
-                tensor_type, attr, ip=GlobalInsertionPoint.get()
+            value_attr = DenseElementsAttr.get(self.val, type=dtype)
+            sym_name = StringAttr.get(self.name)
+            sym_visibility = StringAttr.get("private")
+            memref_type = MemRefType.get(self.val.shape, dtype)
+            type_attr = TypeAttr.get(memref_type)
+            const_tensor = memref.GlobalOp(
+                sym_name, 
+                sym_visibility, 
+                type_attr, 
+                value_attr, 
+                constant=True, 
+                alignment=None,
+                ip=GlobalInsertionPoint.get_global()
             )
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
@@ -713,11 +726,23 @@ class ConstantOp(ExprOp):
             )
             tensor_wrapper.build()
             self.tensor = tensor_wrapper
-            store = memref.TensorStoreOp(
-                const_tensor.result,
-                tensor_wrapper.result,
-                ip=GlobalInsertionPoint.get(),
+            store = memref.GetGlobalOp(
+                memref_type,
+                FlatSymbolRefAttr.get(self.name),
+                ip = GlobalInsertionPoint.get(),
             )
+            # Note: why we have an update_op here?
+            # memref.GetGlobalOp is not subscriptale
+            # meaning that we can't do something like
+            # const_tensor[x] on it, so that we need to 
+            # create a tensor wrapper to do that.
+            # Since tensor_wrapper only allows allocOp or 
+            # block arg as implementation, we just build
+            # and AllocOp and then set the tensor's build_op
+            # as memref.GetGlobalOp. 
+            # This way we end up with an extra memref.AllocOp
+            # in the IR, but it's easy to remove with DCE.
+            self.tensor.update_op(store)
             self.built_op = store
             return self.built_op
         else:

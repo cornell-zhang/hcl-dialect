@@ -640,11 +640,22 @@ class ExprOp(object):
         expr : Expr
             The field expression
         """
-        key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
-        if key not in key_list:
+        # bypass the attribute lookup to avoid infinite recursion
+        if key in self.__dict__.keys():
+            return self.__dict__[key]
+        elif key == "result":
+            if self.built_op is None:
+                self.build()
+            return self.result
+        elif isinstance(self, LoadOp):
+            # access a field from a struct tensor
+            key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
+            if key not in key_list:
+                raise RuntimeError("No such field: " + key)
+            key_idx = key_list.index(key)
+            return StructGetOp(self, key_idx)
+        else:
             raise RuntimeError("No such field: " + key)
-        key_idx = key_list.index(key)
-        return StructGetOp(self, key_idx)
 
 
 #################################################

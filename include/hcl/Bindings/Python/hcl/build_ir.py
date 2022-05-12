@@ -1363,12 +1363,12 @@ class CastOp(ExprOp):
             elif res_type.width == self.val.dtype.width:
                 op = None
             else:
-                if not is_unsigned_type(res_type) and not isinstance(
-                    self.val, (GetBitOp, GetSliceOp)
-                ):
-                    op = arith.ExtSIOp
-                else:
+                if isinstance(self.val, (GetBitOp, GetSliceOp)):
                     op = arith.ExtUIOp
+                elif is_unsigned_type(self.val.dtype):
+                    op = arith.ExtUIOp
+                else:
+                    op = arith.ExtSIOp
         elif is_floating_point_type(res_type) and is_floating_point_type(
             self.val.dtype
         ):
@@ -2162,6 +2162,8 @@ class ASTVisitor:
         else:
             raise RuntimeError("Unsupported type")
         data_type = get_concrete_type(data.result.type)
+        if "unsigned" in data.attributes:
+            data_type = IntegerType.get_unsigned(data_type.width)
         if dtype != data_type:
             print(
                 "Warning: Reduction variable should have the same type with the data. Got {0} and {1}. Do type casting from {1} to {0}".format(

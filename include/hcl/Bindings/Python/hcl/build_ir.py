@@ -498,9 +498,19 @@ class ExprOp(object):
         return self.generic_op(CmpOp, self, other, arg="le")
 
     def __eq__(self, other):
+        # In MLIR's auto-generated python code, there are cases where
+        # `Expr == None` is used to check if the expression is None.
+        # so we add this short circuit here.
+        if other is None:
+            return False
         return self.generic_op(CmpOp, self, other, arg="eq")
 
     def __ne__(self, other):
+        # In MLIR's auto-generated python code, there are cases where
+        # `Expr != None` is used to check if the expression is None.
+        # so we add this short circuit here.
+        if other is None:
+            return True
         return self.generic_op(CmpOp, self, other, arg="ne")
 
     def __gt__(self, other):
@@ -2225,6 +2235,12 @@ def make_affine_for(
         lbCst = AffineConstantExpr.get(lb)
         lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
         lb_expr = None
+    elif isinstance(lb, LoadOp):
+        if not isinstance(lb.dtype, IndexType):
+            lb = CastOp(lb, IndexType.get())
+        lb_expr = lb.result
+        d0 = AffineDimExpr.get(0)
+        lbMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
     else:
         d0 = AffineDimExpr.get(0)
         lbMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
@@ -2236,6 +2252,12 @@ def make_affine_for(
         ubCst = AffineConstantExpr.get(ub)
         ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
         ub_expr = None
+    elif isinstance(ub, LoadOp):
+        if not isinstance(ub.dtype, IndexType):
+            ub = CastOp(ub, IndexType.get())
+        ub_expr = ub.result
+        d0 = AffineDimExpr.get(0)
+        ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
     else:
         d0 = AffineDimExpr.get(0)
         ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])

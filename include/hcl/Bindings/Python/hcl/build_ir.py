@@ -421,10 +421,20 @@ class ExprOp(object):
         expr = OpClass(lhs, rhs)
         return expr
 
+    @staticmethod
+    def generic_scalar_tensor_access(scalar):
+        # check scalar shape
+        if scalar.shape != (1,):
+            raise RuntimeError("Scalar should be 1D: got {} instead".format(scalar.shape))
+        return scalar[0]
+
     def __add__(self, other):
         return self.generic_op(AddOp, self, other)
 
     def __radd__(self, other):
+        # if other is an hcl.scalar
+        if hasattr(other, 'op') and isinstance(other.op, TensorOp):
+            other = self.generic_scalar_tensor_access(other)
         return self.generic_op(AddOp, other, self)
 
     def __sub__(self, other):
@@ -983,7 +993,6 @@ class TensorOp(ExprOp):
             return StoreOp(expr, self, new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
-
 
 #################################################
 #

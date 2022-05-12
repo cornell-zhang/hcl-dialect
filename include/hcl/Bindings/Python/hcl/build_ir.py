@@ -71,14 +71,18 @@ def is_signed_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (hcl_d.FixedType, hcl_d.UFixedType))
 
+
 def is_signed_fixed_type(dtype):
     return isinstance(dtype, hcl_d.FixedType)
+
 
 def is_unsigned_fixed_type(dtype):
     return isinstance(dtype, hcl_d.UFixedType)
 
+
 def is_index_type(dtype):
     return isinstance(dtype, IndexType)
+
 
 def is_struct_type(dtype):
     return isinstance(dtype, hcl_d.StructType)
@@ -221,7 +225,7 @@ def mlir_type_to_str(dtype):
             return "uint{}".format(dtype.width)
         return "ufixed{}_{}".format(dtype.width, dtype.frac)
     elif is_struct_type(dtype):
-        type_str =  "Struct("
+        type_str = "Struct("
         for ft in dtype.field_types:
             type_str += mlir_type_to_str(ft) + ", "
         type_str = type_str[:-2] + ")"
@@ -610,11 +614,11 @@ class ExprOp(object):
         ----------
         name : str
             The field name
-        
+
         Returns
         -------
         expr : Expr
-            The field expression    
+            The field expression
         """
         key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
         if key not in key_list:
@@ -711,13 +715,13 @@ class ConstantOp(ExprOp):
             memref_type = MemRefType.get(self.val.shape, dtype)
             type_attr = TypeAttr.get(memref_type)
             const_tensor = memref.GlobalOp(
-                sym_name, 
-                sym_visibility, 
-                type_attr, 
-                value_attr, 
-                constant=True, 
+                sym_name,
+                sym_visibility,
+                type_attr,
+                value_attr,
+                constant=True,
                 alignment=None,
-                ip=GlobalInsertionPoint.get_global()
+                ip=GlobalInsertionPoint.get_global(),
             )
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
@@ -729,17 +733,17 @@ class ConstantOp(ExprOp):
             store = memref.GetGlobalOp(
                 memref_type,
                 FlatSymbolRefAttr.get(self.name),
-                ip = GlobalInsertionPoint.get(),
+                ip=GlobalInsertionPoint.get(),
             )
             # Note: why we have an update_op here?
             # memref.GetGlobalOp is not subscriptale
             # meaning that we can't do something like
-            # const_tensor[x] on it, so that we need to 
+            # const_tensor[x] on it, so that we need to
             # create a tensor wrapper to do that.
-            # Since tensor_wrapper only allows allocOp or 
+            # Since tensor_wrapper only allows allocOp or
             # block arg as implementation, we just build
             # and AllocOp and then set the tensor's build_op
-            # as memref.GetGlobalOp. 
+            # as memref.GetGlobalOp.
             # This way we end up with an extra memref.AllocOp
             # in the IR, but it's easy to remove with DCE.
             self.tensor.update_op(store)
@@ -1741,6 +1745,7 @@ class SelectOp(ExprOp):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
+
 class StructConstructOp(ExprOp):
     def __init__(self, fields):
         super().__init__(hcl_d.StructConstructOp)
@@ -1749,6 +1754,7 @@ class StructConstructOp(ExprOp):
         self.dtype = hcl_d.StructType.get(self.field_types)
         if flags.BUILD_INPLACE:
             self.build()
+
     def build(self):
         self.built_op = self.op(
             self.dtype,
@@ -1756,22 +1762,24 @@ class StructConstructOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
-    
+
+
 class StructGetOp(ExprOp):
     def __init__(self, struct, index):
         super().__init__(hcl_d.StructGetOp)
         self.struct = struct
         self.index = index
         field_types = self.struct.dtype.field_types
-        self.dtype = get_concrete_type(field_types[self.index]) # mlir type
+        self.dtype = get_concrete_type(field_types[self.index])  # mlir type
         if flags.BUILD_INPLACE:
             self.build()
+
     def build(self):
-        # Note(Niansong): 
-        # this was used to test dtype from HalideIR, 
+        # Note(Niansong):
+        # this was used to test dtype from HalideIR,
         # e.g. assert struct_value.field.dtype = "int8"
         # but this is no longer compatible with mlir.
-        # self.dtype has to be a concrete MLIR type, for 
+        # self.dtype has to be a concrete MLIR type, for
         # the field value to be consumed by another operation.
         # self.dtype = mlir_type_to_str(get_concrete_type(self.type)) # dtype str
         self.built_op = self.op(
@@ -1781,6 +1789,7 @@ class StructGetOp(ExprOp):
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
+
 
 class ReduceOp(ExprOp):
     # cannot build inplace!!!
@@ -2152,13 +2161,14 @@ class ASTVisitor:
             reduce_op = reduce_op["fixed"]
         else:
             raise RuntimeError("Unsupported type")
-        if dtype != data.result.type:
+        data_type = get_concrete_type(data.result.type)
+        if dtype != data_type:
             print(
-                "Warning: Reduction variable should have the same type with the data. Got {} and {}. Do type casting...".format(
-                    dtype, data.result.type
+                "Warning: Reduction variable should have the same type with the data. Got {0} and {1}. Do type casting from {1} to {0}".format(
+                    dtype, data_type
                 )
             )
-            placeholder = LoadOp(expr, [])
+            placeholder = ExprOp(None, dtype=data_type)
             placeholder.built_op = data
             data = CastOp(placeholder, dtype)
             data.build()

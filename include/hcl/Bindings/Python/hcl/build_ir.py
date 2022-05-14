@@ -1872,6 +1872,7 @@ class ASTVisitor:
         self.mode = mode
         self.load = []
         self.store = []
+        self.scf_cnt = 0
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -1906,7 +1907,14 @@ class ASTVisitor:
         elif isinstance(expr, StructGetOp):
             return self.visit_struct_get_op(expr)
         else:  # IterVar
-            return expr.built_op  # BlockArgument
+            return self.visit_block_arg(expr)
+
+    def visit_block_arg(self, expr):
+        if self.mode == "profile":
+            if isinstance(expr.op.owner.owner, scf.ForOp):
+                self.scf_cnt += 1
+        else:
+            return expr.built_op
 
     def visit_affine_expr(self, expr):
         """Build affine expression.
@@ -1916,6 +1924,8 @@ class ASTVisitor:
         if not isinstance(expr, (IterVar, ConstantOp, CastOp, BinaryOp)):
             raise RuntimeError("Not an affine index!")
         if isinstance(expr, IterVar):
+            if isinstance(expr.op.owner.owner, scf.ForOp):
+                raise RuntimeError("Outer loop is not affine!")
             if expr.op not in self.iv:
                 self.iv.append(expr.op)  # BlockArgument
                 return AffineExpr.get_dim(len(self.iv) - 1)
@@ -2223,60 +2233,68 @@ class ASTVisitor:
 def make_affine_for(
     lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
 ):
+    # TODO: need to test if lb, ub, step are all affine
     # Construct step
     if not isinstance(step, int):
         raise RuntimeError("Not supported")
     if step < 0:  # need to also change induction variable
         lb, ub = ub + 1, lb + 1  # swap
         step = -step
-    step = IntegerAttr.get(IntegerType.get_signless(32), step)
     # Construct lower bound
+    const_flag = True
     if isinstance(lb, int):
         lbCst = AffineConstantExpr.get(lb)
         lbMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[lbCst])
+        lbMapAttr = AffineMapAttr.get(lbMap)
         lb_expr = None
-    elif isinstance(lb, LoadOp):
-        if not isinstance(lb.dtype, IndexType):
-            lb = CastOp(lb, IndexType.get())
-        lb_expr = lb.result
-        d0 = AffineDimExpr.get(0)
-        lbMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
     else:
-        d0 = AffineDimExpr.get(0)
-        lbMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
-        lb_expr = lb.op
-    lbMapAttr = AffineMapAttr.get(lbMap)
+        const_flag = False
 
     # Construct upper bound
     if isinstance(ub, int):
         ubCst = AffineConstantExpr.get(ub)
         ubMap = AffineMap.get(dim_count=0, symbol_count=0, exprs=[ubCst])
+        ubMapAttr = AffineMapAttr.get(ubMap)
         ub_expr = None
-    elif isinstance(ub, LoadOp):
-        if not isinstance(ub.dtype, IndexType):
-            ub = CastOp(ub, IndexType.get())
-        ub_expr = ub.result
-        d0 = AffineDimExpr.get(0)
-        ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
     else:
-        d0 = AffineDimExpr.get(0)
-        ubMap = AffineMap.get(dim_count=1, symbol_count=0, exprs=[d0])
-        ub_expr = ub.op
-    ubMapAttr = AffineMapAttr.get(ubMap)
+        const_flag = False
 
-    # Create AffineForOp
-    forOp = affine.AffineForOp(
-        lb_expr,
-        ub_expr,
-        step,
-        lbMapAttr,
-        ubMapAttr,
-        name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
-        stage=("" if stage == "" else StringAttr.get(stage)),
-        reduction=(UnitAttr.get() if reduction else None),
-        ip=ip,
-        loc=loc,
-    )
+    if const_flag:
+        step = IntegerAttr.get(IntegerType.get_signless(32), step)
+        # Create AffineForOp
+        forOp = affine.AffineForOp(
+            lb_expr,
+            ub_expr,
+            step,
+            lbMapAttr,
+            ubMapAttr,
+            name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
+            stage=("" if stage == "" else StringAttr.get(stage)),
+            reduction=(UnitAttr.get() if reduction else None),
+            ip=ip,
+            loc=loc,
+        )
+    else:
+        lb_expr = CastOp(lb, IndexType.get())
+        lb_expr.build()
+        lb_expr = lb_expr.result
+        ub_expr = CastOp(ub, IndexType.get())
+        ub_expr.build()
+        ub_expr = ub_expr.result
+        step = CastOp(step, IndexType.get())
+        step.build()
+        step = step.result
+        forOp = scf.ForOp(
+            lb_expr,
+            ub_expr,
+            step,
+            name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
+            stage=("" if stage == "" else StringAttr.get(stage)),
+            reduction=(UnitAttr.get() if reduction else None),
+            ip=ip,
+            loc=loc,
+        )
+        print(forOp)
 
     return forOp
 
@@ -2287,7 +2305,7 @@ def make_if(cond, ip=None):
         raise RuntimeError("`if` operation condition should be CmpOp")
     visitor = ASTVisitor(mode="profile")
     visitor.visit(cond)
-    if len(visitor.load) != 0 or len(visitor.store) != 0:
+    if visitor.scf_cnt > 0 or len(visitor.load) != 0 or len(visitor.store) != 0:
         if cond.built_op is not None:
             remover = ASTVisitor(mode="remove")
             remover.visit(cond)

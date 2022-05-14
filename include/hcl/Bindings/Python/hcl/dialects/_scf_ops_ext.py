@@ -17,8 +17,11 @@ class ForOp:
                lower_bound,
                upper_bound,
                step,
+               reduction=None,
                iter_args: Optional[Union[Operation, OpView,
                                          Sequence[Value]]] = None,
+               name="",
+               stage="",
                *,
                loc=None,
                ip=None):
@@ -34,6 +37,13 @@ class ForOp:
       iter_args = []
     iter_args = _get_op_results_or_values(iter_args)
 
+    attributes = {}
+    attributes["loop_name"] = name
+    if stage != "":
+      attributes["stage_name"] = stage
+    if reduction:
+      attributes["reduction"] = reduction
+
     results = [arg.type for arg in iter_args]
     super().__init__(
         self.build_generic(
@@ -43,6 +53,7 @@ class ForOp:
                 _get_op_result_or_value(o)
                 for o in [lower_bound, upper_bound, step]
             ] + list(iter_args),
+            attributes=attributes,
             loc=loc,
             ip=ip))
     self.regions[0].blocks.append(IndexType.get(), *results)

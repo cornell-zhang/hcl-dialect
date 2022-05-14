@@ -19,7 +19,7 @@ with Context() as ctx, Location.unknown() as loc:
 
         @builtin.FuncOp.from_py_func(memref_type)
         def kernel(A):
-            for_i = hcl_mlir.make_affine_for(0, 1024, name="i")
+            for_i = hcl_mlir.make_for(0, 1024, name="i")
             hcl_mlir.GlobalInsertionPoint.save(InsertionPoint(for_i.body))
             var = IterVar(for_i.induction_variable)
             var.dtype = idx_type

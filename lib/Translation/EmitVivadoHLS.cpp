@@ -684,7 +684,10 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
 
   // Emit increase step.
   emitValue(iterVar, 0, false, loop_name);
-  os << " += " << op.getStep() << ") {";
+  if (op.getStep() == 1)
+    os << "++) {";
+  else
+    os << " += " << op.getStep() << ") {";
   emitInfoAndNewLine(op);
 
   addIndent();

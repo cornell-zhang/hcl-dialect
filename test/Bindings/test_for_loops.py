@@ -19,11 +19,11 @@ with Context() as ctx, Location.unknown() as loc:
 
         @builtin.FuncOp.from_py_func(memref_type, memref_type, memref_type)
         def gemm(A, B, C):
-            for_i = hcl_mlir.make_affine_for(0, 1024, name="i")
+            for_i = hcl_mlir.make_for(0, 1024, name="i")
             with InsertionPoint(for_i.body):
-                for_j = hcl_mlir.make_affine_for(0, 1024, name="j")
+                for_j = hcl_mlir.make_for(0, 1024, name="j")
                 with InsertionPoint(for_j.body):
-                    for_k = hcl_mlir.make_affine_for(0, 1024, name="k")
+                    for_k = hcl_mlir.make_for(0, 1024, name="k")
                     with InsertionPoint(for_k.body):
                         a = memref.LoadOp(A, [for_i.induction_variable, for_k.induction_variable])
                         b = memref.LoadOp(B, [for_k.induction_variable, for_j.induction_variable])
@@ -35,11 +35,11 @@ with Context() as ctx, Location.unknown() as loc:
                     affine.AffineYieldOp([])
                 affine.AffineYieldOp([])
 
-            for_i = hcl_mlir.make_affine_for(0, 1024, name="i")
+            for_i = hcl_mlir.make_for(0, 1024, name="i")
             with InsertionPoint(for_i.body):
-                for_j = hcl_mlir.make_affine_for(0, 1024, name="j")
+                for_j = hcl_mlir.make_for(0, 1024, name="j")
                 with InsertionPoint(for_j.body):
-                    for_k = hcl_mlir.make_affine_for(0, 1024, name="k")
+                    for_k = hcl_mlir.make_for(0, 1024, name="k")
                     with InsertionPoint(for_k.body):
                         # make if
                         d0 = AffineDimExpr.get(0)

@@ -17,12 +17,13 @@ class ForOp:
                lower_bound,
                upper_bound,
                step,
-               reduction=None,
                iter_args: Optional[Union[Operation, OpView,
                                          Sequence[Value]]] = None,
+               
+               *,
+               reduction=None,
                name="",
                stage="",
-               *,
                loc=None,
                ip=None):
     """Creates an SCF `for` operation.
@@ -38,7 +39,8 @@ class ForOp:
     iter_args = _get_op_results_or_values(iter_args)
 
     attributes = {}
-    attributes["loop_name"] = name
+    if name != "":
+      attributes["loop_name"] = name
     if stage != "":
       attributes["stage_name"] = stage
     if reduction:

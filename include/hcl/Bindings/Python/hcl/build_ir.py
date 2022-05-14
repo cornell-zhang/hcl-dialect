@@ -2144,7 +2144,7 @@ class ASTVisitor:
             new_axes = expr.axis
         body_ip = GlobalInsertionPoint.get()
         for axis in new_axes:
-            reduction_loop = make_affine_for(
+            reduction_loop = make_for(
                 axis.lower_bound,
                 axis.upper_bound,
                 step=1,
@@ -2230,7 +2230,7 @@ class ASTVisitor:
         return value
 
 
-def make_affine_for(
+def make_for(
     lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
 ):
     # TODO: need to test if lb, ub, step are all affine

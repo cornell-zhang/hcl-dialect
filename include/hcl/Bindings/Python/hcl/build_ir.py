@@ -380,6 +380,10 @@ class ExprOp(object):
 
     @staticmethod
     def generic_op(OpClass, lhs, rhs, arg=None):
+        if (hasattr(lhs, 'v') and lhs.v is not None)\
+            or (hasattr(rhs, 'v') and rhs.v is not None):
+            raise RuntimeError("Cannot use hcl.scalar to construct expression, " +
+                               "use hcl.scalar.v instead")
         # turn py builtin op to hcl op
         lhs = get_hcl_op(lhs)
         rhs = get_hcl_op(rhs)
@@ -655,7 +659,10 @@ class ExprOp(object):
             key_idx = key_list.index(key)
             return StructGetOp(self, key_idx)
         else:
-            raise RuntimeError("No such field: " + key)
+            # We don't throw an error here
+            # because the user may be trying to test if
+            # an attribute exists with hasattr().
+            return
 
 
 #################################################

@@ -24,7 +24,6 @@ RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
         -DLLVM_INSTALL_UTILS=ON -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
         -DPython3_EXECUTABLE=`which python3` && \
     make -j`nproc`
-ENV PYTHONPATH /root/llvm-project/build/tools/mlir/python_packages/mlir_core
 
 # build HeteroCL dialect
 # use your own token value: https://www.shanebart.com/clone-repo-using-token/ 

@@ -36,7 +36,6 @@ jobs:
                 -DPython3_EXECUTABLE=`which python3` && \
               make -j4;
             fi;
-            export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
             cd ../..
       - save_cache:
           key: llvm-14.0.0

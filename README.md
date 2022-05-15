@@ -69,7 +69,7 @@ git checkout tags/llvmorg-14.0.0
 ### Build HeteroCL Dialect
 This setup assumes that you have built LLVM and MLIR in `$LLVM_BUILD_DIR`. Please firstly clone our repository.
 ```sh
-git clone https://github.com/cornell-zhang/hcl-dialect-prototype.git
+git clone --recursive https://github.com/cornell-zhang/hcl-dialect-prototype.git
 cd hcl-dialect-prototype
 mkdir build && cd build
 ```
@@ -133,7 +133,7 @@ Make sure you have correctly built the above HCL-MLIR dialect, and follow the in
 
 ```sh
 # clone the HeteroCL repo and switch to the hcl-mlir branch
-git clone https://github.com/cornell-zhang/heterocl.git heterocl-mlir
+git clone --recursive https://github.com/cornell-zhang/heterocl.git heterocl-mlir
 cd heterocl-mlir
 git checkout hcl-mlir
 

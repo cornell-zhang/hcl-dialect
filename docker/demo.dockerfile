@@ -30,7 +30,7 @@ RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
 RUN cd /root/ && export TOKEN="Username:PersonalToken" && \
     export BUILD_DIR=/root/llvm-project/build && \
     export PREFIX=/root/llvm-project/build && \
-    git clone https://$TOKEN@github.com/cornell-zhang/hcl-dialect-prototype.git && \
+    git clone --recursive https://$TOKEN@github.com/cornell-zhang/hcl-dialect-prototype.git && \
     cd hcl-dialect-prototype && mkdir build && cd build && \
     cmake -G "Unix Makefiles" .. \
         -DMLIR_DIR=$PREFIX/lib/cmake/mlir \

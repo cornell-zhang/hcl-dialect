@@ -58,9 +58,6 @@ git checkout tags/llvmorg-14.0.0
       -DPython3_EXECUTABLE=`which python3`
    make -j8
 
-   # Export the generated MLIR Python library
-   export PYTHONPATH=$(pwd)/tools/mlir/python_packages/mlir_core:${PYTHONPATH}
-
    # Export the LLVM build directory
    export LLVM_BUILD_DIR=$(pwd)
 
@@ -130,12 +127,6 @@ cmake --build . --target check-hcl
 ./bin/hcl-opt -opt -jit ../test/Translation/mm.mlir
 ```
 
-Or you can use our provided script to directly generate C++ Vivado HLS code from MLIR.
-
-```sh
-cd ../examples
-make ../test/Transforms/compute/tiling
-```
 
 ## Integrate with upstream HeteroCL frontend
 Make sure you have correctly built the above HCL-MLIR dialect, and follow the instruction below.
@@ -146,31 +137,24 @@ git clone https://github.com/cornell-zhang/heterocl.git heterocl-mlir
 cd heterocl-mlir
 git checkout hcl-mlir
 
-# set up LLVM and cmake paths in Makefile.config
-# You can reuse the built LLVM 14 above, just set
-# LLVM_CONFIG = $BUILD_DIR/bin/llvm-config
-# ...
-
-# build frontend (for TVM IR)
-# notice: no need to build if you use HCL-MLIR as IR
-make -j8
-
-# export library
+# export the library
 export HCL_HOME=$(pwd)
 export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 
-# run tests
-python3 tests/mlir/hcl-mlir/test_gemm.py
+# run tests in the HeteroCL repo
+python3 heterocl-mlir/tests/mlir/hcl-mlir/test_gemm.py
 ```
 
 We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/cornell-zhang/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.
 
 ```sh
 # run original TVM flow (v1)
-HCLIR=tvm python3 tests/mlir/test_gemm.py
+# you should configure the LLVM environment inside the HeteroCL repo
+# but we strongly recommend not to do so since there may have some compatibility issues
+HCLIR=tvm python3 heterocl-mlir/tests/mlir/test_gemm.py
 
 # run HCL-MLIR flow (v2)
-HCLIR=mlir python3 tests/mlir/test_gemm.py
+HCLIR=mlir python3 heterocl-mlir/tests/mlir/test_gemm.py
 ```
 
 Notice the integration is still in an early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.

@@ -1108,6 +1108,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         }
       }
     }
+    assert(axis != -1);
     OpBuilder builder(loadOp);
     AffineExpr expr = loadMap.getResult(axis);
     if (rDim != -1) {
@@ -1246,7 +1247,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       }
       auto affineMap = AffineMap::get(loadRank, 0, singleLoadAffineExpr,
                                       builder.getContext());
-      affineMap.dump();
       allLoadAffineMaps.push_back(affineMap);
       allLoadOperands.push_back(memAffineIndices);
     }
@@ -1342,20 +1342,30 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     SmallVector<Value> memAffineIndices;
     SmallVector<Value> operands = op.getMapOperands();
     auto loadMap = op.getAffineMap();
-    int loadRank = operands.size();
 
     // obtain load expressions
     AffineLoadOp newLoad;
     if (rDim == -1) { // reuse the found rDim value
       auto diff = loadMap.getResult(axis) - baseVar;
       loadAffineExpr.push_back(diff);
+      int loadRank = 0;
+      int operandIdx = 0;
+      operandIdx++;
+      SmallVector<AffineExpr> dims{rewriter.getAffineDimExpr(0)};
+      for (unsigned int i = axis + 1; i < rank; ++i) {
+        dims.push_back(rewriter.getAffineDimExpr(loadRank++));
+      }
       // i > axis
-      for (unsigned int i = axis + 1; i < rank; ++i)
-        loadAffineExpr.push_back(loadMap.getResult(i));
+      for (unsigned int i = axis + 1; i < rank; ++i) {
+        auto expr = loadMap.getResult(i);
+        auto new_expr = expr.replaceDims(dims);
+        loadAffineExpr.push_back(new_expr);
+        memAffineIndices.push_back(operands[operandIdx++]);
+      }
       auto affineMap = AffineMap::get(loadRank /*rank*/, 0, loadAffineExpr,
                                       rewriter.getContext());
-      newLoad =
-          rewriter.create<AffineLoadOp>(op->getLoc(), buf, affineMap, operands);
+      newLoad = rewriter.create<AffineLoadOp>(op->getLoc(), buf, affineMap,
+                                              memAffineIndices);
     } else { // reduction
       int loadRank = 0;
       int operandIdx = 0;

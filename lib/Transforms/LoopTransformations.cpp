@@ -1235,15 +1235,20 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         reuseAtOp.emitError("Cannot support non-constant stride");
         return WalkResult::interrupt();
       }
+      int loadRank = 0;
+      int operandIdx = 0;
+      SmallVector<Value> memAffineIndices;
+      auto operands = loadOp.getMapOperands();
       // i > axis
       for (unsigned int i = axis + 1; i < rank; ++i) {
-        singleLoadAffineExpr.push_back(loadMap.getResult(i));
+        singleLoadAffineExpr.push_back(builder.getAffineDimExpr(loadRank++));
+        memAffineIndices.push_back(operands[operandIdx++]);
       }
-      auto affineMap =
-          AffineMap::get(loadOp.getMapOperands().size() /*rank*/, 0,
-                         singleLoadAffineExpr, builder.getContext());
+      auto affineMap = AffineMap::get(loadRank, 0, singleLoadAffineExpr,
+                                      builder.getContext());
+      affineMap.dump();
       allLoadAffineMaps.push_back(affineMap);
-      allLoadOperands.push_back(loadOp.getMapOperands());
+      allLoadOperands.push_back(memAffineIndices);
     }
     return WalkResult::advance();
   });

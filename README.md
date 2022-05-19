@@ -120,6 +120,7 @@ cmake --build . --target check-hcl
 ./bin/hcl-translate -emit-vivado-hls
 
 # generate OpenSCoP
+# An hcl.openscop file will be generated in the build folder
 ./bin/hcl-opt -opt ../test/Transforms/memory/buffer_add.mlir | \
 ./bin/hcl-translate --extract-scop-stmt
 

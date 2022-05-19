@@ -1040,22 +1040,20 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // InductionVar -> Loop upper bound
   DenseMap<Value, int> reductionVars;
   WalkResult result = rootForOp.walk([&](AffineForOp forOp) {
+    if (forOp.getStep() != 1 || !forOp.hasConstantLowerBound() ||
+        forOp.getConstantLowerBound() != 0 || !forOp.hasConstantUpperBound()) {
+      reuseAtOp.emitError("Loop ")
+          << getLoopName(forOp).str()
+          << " must have (1) constant bounds (2) constant step (3) zero "
+             "lower bound";
+      return WalkResult::interrupt();
+    }
     if (!forOp->hasAttr("reduction") && !forOp->hasAttr("spatial")) {
       nonReductionLoops.push_back(forOp);
     } else if (forOp->hasAttr("spatial")) {
       previousShiftLoops.push_back(forOp);
     } else {
-      if (forOp.getStep() != 1 || !forOp.hasConstantLowerBound() ||
-          forOp.getConstantLowerBound() != 0 ||
-          !forOp.hasConstantUpperBound()) {
-        reuseAtOp.emitError("Reduction loop ")
-            << getLoopName(forOp).str()
-            << " must have (1) constant bounds (2) constant step (3) zero "
-               "lower bound";
-        return WalkResult::interrupt();
-      }
-      int64_t ub = forOp.getConstantUpperBound();
-      reductionVars[forOp.getInductionVar()] = ub;
+      reductionVars[forOp.getInductionVar()] = forOp.getConstantUpperBound();
     }
     return WalkResult::advance();
   });
@@ -1063,6 +1061,75 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return failure();
   std::reverse(nonReductionLoops.begin(), nonReductionLoops.end());
   AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
+
+  // 4) Get span of each dimension
+  //    e.g. d0, d0+1, d0+2, span is 2
+  //         d0+d1, d1\in[0,2], span is 2
+  SmallVector<SmallVector<AffineExpr>> originalLoadExprs;
+  for (int i = 0; i < (int)rank; ++i) {
+    SmallVector<AffineExpr> tmp;
+    originalLoadExprs.push_back(tmp);
+  }
+  int cntLoad = 0;
+  DenseMap<AffineExpr, Value> dim2iv; // dim -> induction var
+  reuseLoop.walk([&](AffineLoadOp loadOp) {
+    if (loadOp.getOperand(0) != target)
+      return WalkResult::advance();
+    cntLoad++;
+    for (int i = 0; i < (int)rank; ++i)
+      originalLoadExprs[i].push_back(loadOp.getAffineMap().getResult(i));
+    OpBuilder builder(loadOp);
+    for (auto operandItem : llvm::enumerate(loadOp.getMapOperands())) {
+      dim2iv[builder.getAffineDimExpr(operandItem.index())] =
+          operandItem.value();
+    }
+    return WalkResult::advance();
+  });
+  SmallVector<int> spans;
+  for (int i = 0; i < (int)rank; ++i) {
+    int span = 0;
+    // TODO: require strict load order
+    AffineExpr baseExpr = originalLoadExprs[i][0];
+    if (baseExpr.isa<AffineDimExpr>()) {
+      for (int j = 0; j < cntLoad; ++j) {
+        auto diff = originalLoadExprs[i][j] - baseExpr;
+        if (diff.isa<AffineConstantExpr>()) {
+          span = std::max(span,
+                          (int)diff.cast<AffineConstantExpr>().getValue() + 1);
+        } else {
+          assert(1 == 0 && "Load order is not strict");
+        }
+      }
+    } else if (baseExpr.isa<AffineConstantExpr>()) {
+      for (int j = 0; j < cntLoad; ++j) {
+        auto diff = originalLoadExprs[i][j] - baseExpr;
+        if (diff.isa<AffineConstantExpr>()) {
+          span = std::max(span,
+                          (int)diff.cast<AffineConstantExpr>().getValue() + 1);
+        } else {
+          assert(1 == 0 && "Load order is not strict");
+        }
+      }
+    } else { // AffineBinaryOpExpr, reduction
+      auto binaryExpr = baseExpr.cast<AffineBinaryOpExpr>();
+      int cntDim = 0;
+      binaryExpr.walk([&](AffineExpr expr) {
+        // d0 + d1, d1 is the reduction variable
+        if (!expr.isa<AffineDimExpr>()) {
+          return WalkResult::advance();
+        }
+        auto dimExpr = expr.cast<AffineDimExpr>();
+        if (cntDim++ == 1) {
+          if (reductionVars.count(dim2iv[dimExpr]) > 0) {
+            span = reductionVars[dim2iv[dimExpr]];
+          }
+        }
+        return WalkResult::advance();
+      });
+    }
+    assert(span != 0 && "Span should not be 0");
+    spans.push_back(span);
+  }
 
   // 4) Obtain AffineMaps of load instructions
   // if i-th axis has reduction var before the reuse axis

@@ -1091,14 +1091,21 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     // TODO: require strict load order
     AffineExpr baseExpr = originalLoadExprs[i][0];
     if (baseExpr.isa<AffineDimExpr>()) {
+      bool allAffineDimExpr = true;
       for (int j = 0; j < cntLoad; ++j) {
         auto diff = originalLoadExprs[i][j] - baseExpr;
+        if (!originalLoadExprs[i][j].isa<AffineDimExpr>())
+          allAffineDimExpr = false;
         if (diff.isa<AffineConstantExpr>()) {
           span = std::max(span,
                           (int)diff.cast<AffineConstantExpr>().getValue() + 1);
         } else {
           assert(1 == 0 && "Load order is not strict");
         }
+      }
+      if (allAffineDimExpr &&
+          reductionVars.count(dim2iv[baseExpr.cast<AffineDimExpr>()]) > 0) {
+        span = reductionVars[dim2iv[baseExpr.cast<AffineDimExpr>()]];
       }
     } else if (baseExpr.isa<AffineConstantExpr>()) {
       for (int j = 0; j < cntLoad; ++j) {

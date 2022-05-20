@@ -1583,13 +1583,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     builder = OpBuilder(&(*(ifOp.getThenBlock()->getOperations().begin())));
   }
   AffineLoopBand shiftForOps; // after reuse `axis`
+  bool shiftForFlag = false;
   for (unsigned int i = loopAxis + 1; i < nonReductionLoops.size(); ++i) {
     auto ub =
         target.getType().dyn_cast<MemRefType>().getShape()[i - loopAxis + axis];
     if (nonReductionLoops[i].hasConstantUpperBound() &&
-        nonReductionLoops[i].getConstantUpperBound() == ub) {
+        nonReductionLoops[i].getConstantUpperBound() == ub && !shiftForFlag) {
       shiftForOps.push_back(nonReductionLoops[i]);
     } else {
+      shiftForFlag = true;
       shiftForOps.push_back(builder.create<AffineForOp>(loc, 0, ub));
       shiftForOps.back()->setAttr("spatial", builder.getUnitAttr());
     }

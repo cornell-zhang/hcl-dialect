@@ -1436,7 +1436,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       loadAffineExpr.push_back(diff);
       int loadRank = 0;
       int operandIdx = 0;
-      operandIdx++;
       // i < axis
       for (int i = 0; i < axis; ++i) {
         if (spans[i] > 1) {
@@ -1444,7 +1443,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         }
       }
       // i > axis
-      SmallVector<AffineExpr> dims{rewriter.getAffineDimExpr(0)};
+      SmallVector<AffineExpr> dims;
+      for (int i = 0; i < axis + 1; ++i) {
+        auto expr = loadMap.getResult(i);
+        if (!expr.isa<AffineConstantExpr>()) {
+          operandIdx++;
+          dims.push_back(rewriter.getAffineDimExpr(0)); // placeholder
+        }
+      }
       for (unsigned int i = axis + 1; i < rank; ++i) {
         dims.push_back(rewriter.getAffineDimExpr(loadRank++));
       }

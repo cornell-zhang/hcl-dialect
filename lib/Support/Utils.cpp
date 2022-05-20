@@ -108,6 +108,17 @@ LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
 }
 
 void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
+                       AffineForOp &retForOp, int &retDepth);
+
+void recursiveFindLoopWithIf(AffineIfOp ifOp, int depth, StringRef loop_name,
+                             AffineForOp &retForOp, int &retDepth) {
+  for (auto nextForOp : ifOp.getThenBlock()->getOps<AffineForOp>())
+    recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+  for (auto nextIfOp : ifOp.getThenBlock()->getOps<AffineIfOp>())
+    recursiveFindLoopWithIf(nextIfOp, depth, loop_name, retForOp, retDepth);
+}
+
+void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
                        AffineForOp &retForOp, int &retDepth) {
   if (getLoopName(forOp) == loop_name) {
     retForOp = forOp;
@@ -116,10 +127,8 @@ void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
   }
   for (auto nextForOp : forOp.getOps<AffineForOp>())
     recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
-  for (auto ifOp : forOp.getOps<AffineIfOp>()) {
-    for (auto nextForOp : ifOp.getThenBlock()->getOps<AffineForOp>())
-      recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
-  }
+  for (auto ifOp : forOp.getOps<AffineIfOp>())
+    recursiveFindLoopWithIf(ifOp, depth, loop_name, retForOp, retDepth);
 }
 
 int hcl::getLoop(AffineForOp &forOp, StringRef loop_name) {

@@ -1019,14 +1019,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
-  // 2.1) Find the requested stage
+  // 2) Find the requested stage
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, stage_name))) {
     f.emitError("Cannot find Stage ") << stage_name.str();
     return failure();
   }
 
-  // 2.2) Find the requested loop and get the axis id
+  // 3) Find the requested loop and get the axis id
   AffineForOp reuseLoop = rootForOp;
   int loopAxis = getLoop(reuseLoop, loop_name);
   if (loopAxis == -1) {
@@ -1034,7 +1034,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return failure();
   }
 
-  // 3) Find (non-)reduction loops
+  // 4) Find (non-)reduction loops
   AffineLoopBand nonReductionLoops;
   AffineLoopBand previousShiftLoops;
   // InductionVar -> Loop upper bound
@@ -1062,7 +1062,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   std::reverse(nonReductionLoops.begin(), nonReductionLoops.end());
   AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
 
-  // 4) Get span of each dimension
+  // 5) Get span of each dimension
   //    e.g. d0, d0+1, d0+2, span is 2
   //         d0+d1, d1\in[0,2], span is 2
   SmallVector<SmallVector<AffineExpr>> originalLoadExprs;
@@ -1138,7 +1138,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     spans.push_back(span);
   }
 
-  // 4) Obtain AffineMaps of load instructions
+  // 6) Obtain AffineMaps of load instructions
   // if i-th axis has reduction var before the reuse axis
   //  reductionLoopBound[i] should be the dimension size
   // if i-th axis has reduction var after the reuse axis
@@ -1203,7 +1203,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   });
   assert(distance != -1);
 
-  // 5) Try to find reuse pattern
+  // 7) Try to find reuse pattern
   //    TODO: support more reuse patterns
   bool canReuse = false;
   auto baseVar = *(requestedVars.begin());
@@ -1221,7 +1221,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return failure();
   }
 
-  // 6) Obtain indices and strides in load instructions
+  // 8) Obtain indices and strides in load instructions
   SmallVector<AffineMap> allLoadAffineMaps;
   SmallVector<SmallVector<Value>> allLoadOperands;
   SmallVector<int> preRDim;
@@ -1340,7 +1340,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   if (result.wasInterrupted())
     return failure();
 
-  // 7) Create reuse buffer
+  // 9) Create reuse buffer
   //    e.g., %1 = memref.alloc() : memref<3xi32>
   SmallVector<int64_t> shape;
   // i < axis
@@ -1358,15 +1358,15 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       MemRefType::get(
           shape, target.getType().dyn_cast<MemRefType>().getElementType()));
 
-  // 8) link the result SSA with the buffer
+  // 10) link the result SSA with the buffer
   reuseAtOp.getResult().replaceAllUsesWith(buf);
 
-  // 9) Update loop bound
+  // 11) Update loop bound
   // TODO: support non-constant bound
   nonReductionLoops[loopAxis].setConstantUpperBound(
       target.getType().dyn_cast<MemRefType>().getShape()[axis]);
 
-  // 10) Update store index, since some load/store will be created later, this
+  // 12) Update store index, since some load/store will be created later, this
   // step is done in advance reduction case:
   //   skip the first store (to reduction variable)
   //     affine.store %0, %1[%c0] {to = "sum_rv"} : memref<1xi32>
@@ -1404,7 +1404,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return WalkResult::advance();
   });
 
-  // 11) Rewrite original memref to load from buffer
+  // 13) Rewrite original memref to load from buffer
   // reduction case:
   //   skip the first load (from reduction variable)
   //     %1 = affine.load %0[%c0] {from = "sum_rv"} : memref<1xi32>
@@ -1516,7 +1516,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return WalkResult::advance();
   });
 
-  // 12) Create if structure
+  // 14) Create if structure
   //     only if the indices are inside the output tensor iteration space,
   //     results will be computed and written to output
   AffineIfOp ifOp;
@@ -1569,7 +1569,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     ifOp = outerIfOp;
   }
 
-  // 13) shift buffer elements & load from memory to buffer
+  // 15) shift buffer elements & load from memory to buffer
   // reduction case:
   // non-reduction case:
   //   %2 = affine.load %1[1] : memref<3xi32>
@@ -1723,28 +1723,48 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
                                   allLoadOperands[loadCnt]);
   }
 
-  // 14) Remove all the useless operations
+  // 16) Remove all the useless operations
   for (Operation *op : opToRemove) {
     op->erase();
   }
 
-  // 15) Merge loops with the same bound
-  // if (previousShiftLoops.size() > 0) {
-  //   // TODO: only support one shift loop now
-  //   AffineForOp firstLoop = previousShiftLoops.back();
-  //   AffineForOp secondLoop = nonReductionLoops[loopAxis];
-  //   if (firstLoop.getConstantUpperBound() ==
-  //       secondLoop.getConstantUpperBound()) {
-  //     auto &firstBody = firstLoop.getBody()->getOperations();
-  //     auto &secondBody = secondLoop.getBody()->getOperations();
-  //     // do not need affine.yield op, so that's why using std::prev
-  //     secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
-  //                       std::prev(firstBody.end()));
-  //     firstLoop.getInductionVar().replaceAllUsesWith(
-  //         secondLoop.getInductionVar());
-  //     firstLoop.erase();
-  //   }
-  // }
+  // 17) Merge loops with the same bound
+  int cntIf = 0;
+  nonReductionLoops[0].walk([&](AffineIfOp ifOp) { cntIf++; });
+  if (previousShiftLoops.size() > 0) {
+    // TODO: only support one shift loop now
+    AffineForOp firstLoop = previousShiftLoops.back();
+    AffineForOp secondLoop = nonReductionLoops[loopAxis];
+    if (cntIf < 3) {
+      if (firstLoop.getConstantUpperBound() ==
+          secondLoop.getConstantUpperBound()) {
+        auto &firstBody = firstLoop.getBody()->getOperations();
+        auto &secondBody = secondLoop.getBody()->getOperations();
+        auto firstOpInSecondLoop = secondBody.begin();
+        // do not need affine.yield op, so that's why using std::prev
+        secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+                          std::prev(firstBody.end()));
+        firstLoop.getInductionVar().replaceAllUsesWith(
+            secondLoop.getInductionVar());
+        firstLoop.erase();
+        auto parent = secondLoop->getParentOp();
+        if (llvm::isa<AffineIfOp>(parent)) {
+          auto ifOp = llvm::cast<AffineIfOp>(parent);
+          auto &ifBody = ifOp.getThenBlock()->getOperations();
+          auto &parentBody =
+              nonReductionLoops[loopAxis - 1].getBody()->getOperations();
+          parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
+                            std::prev(ifBody.end()));
+          // skip the previous reuse part
+          ifOp->moveBefore(&(*firstOpInSecondLoop));
+          // move the rest into the if body
+          auto &secondBody = secondLoop.getBody()->getOperations();
+          ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
+                        std::prev(secondBody.end()));
+        }
+      }
+    }
+  }
 
   return success();
 }

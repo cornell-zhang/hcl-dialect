@@ -116,6 +116,10 @@ void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
   }
   for (auto nextForOp : forOp.getOps<AffineForOp>())
     recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+  for (auto ifOp : forOp.getOps<AffineIfOp>()) {
+    for (auto nextForOp : ifOp.getThenBlock()->getOps<AffineForOp>())
+      recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+  }
 }
 
 int hcl::getLoop(AffineForOp &forOp, StringRef loop_name) {

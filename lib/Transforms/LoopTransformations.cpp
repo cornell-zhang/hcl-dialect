@@ -1515,9 +1515,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   //     results will be computed and written to output
   AffineIfOp ifOp;
   if (!llvm::isa<AffineIfOp>(
-          innerMostForOp.getBody()->getOperations().front())) {
-    OpBuilder builder(&(innerMostForOp.getBody()->getOperations().front()));
-    auto loc = innerMostForOp.getBody()->getOperations().begin()->getLoc();
+          nonReductionLoops[loopAxis].getBody()->getOperations().front())) {
+    OpBuilder builder(
+        &(nonReductionLoops[loopAxis].getBody()->getOperations().front()));
+    auto loc = nonReductionLoops[loopAxis]
+                   .getBody()
+                   ->getOperations()
+                   .begin()
+                   ->getLoc();
     // e.g. #set = affine_set<(d0, d1)[s0]: (d0 - 10 >= 0, s0 - d0 - 9 >= 0,
     //                                d1 - 10 >= 0, s0 - d1 - 9 >= 0)>
     SmallVector<AffineExpr> constraints{builder.getAffineDimExpr(0) - distance};
@@ -1529,7 +1534,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         nonReductionLoops[loopAxis].getInductionVar()};
     ifOp = builder.create<AffineIfOp>(loc, ifCondSet, setOperands,
                                       /*withElseRegion=*/false);
-    auto &innerMostBody = innerMostForOp.getBody()->getOperations();
+    auto &innerMostBody =
+        nonReductionLoops[loopAxis].getBody()->getOperations();
     auto &ifThenBody = ifOp.getThenBlock()->getOperations();
     ifThenBody.splice(ifThenBody.begin(), innerMostBody,
                       std::next(innerMostBody.begin()),
@@ -1583,18 +1589,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     builder = OpBuilder(&(*(ifOp.getThenBlock()->getOperations().begin())));
   }
   AffineLoopBand shiftForOps; // after reuse `axis`
-  bool shiftForFlag = false;
   for (unsigned int i = loopAxis + 1; i < nonReductionLoops.size(); ++i) {
     auto ub =
         target.getType().dyn_cast<MemRefType>().getShape()[i - loopAxis + axis];
-    if (nonReductionLoops[i].hasConstantUpperBound() &&
-        nonReductionLoops[i].getConstantUpperBound() == ub && !shiftForFlag) {
-      shiftForOps.push_back(nonReductionLoops[i]);
-    } else {
-      shiftForFlag = true;
-      shiftForOps.push_back(builder.create<AffineForOp>(loc, 0, ub));
-      shiftForOps.back()->setAttr("spatial", builder.getUnitAttr());
-    }
+    shiftForOps.push_back(builder.create<AffineForOp>(loc, 0, ub));
+    shiftForOps.back()->setAttr("spatial", builder.getUnitAttr());
     builder =
         OpBuilder(&(*(shiftForOps.back().getBody()->getOperations().begin())));
     loc = shiftForOps.back().getBody()->getOperations().begin()->getLoc();
@@ -1631,7 +1630,6 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       if (reductionForOps.size() > 0) {
         SmallVector<AffineExpr> loadAffineExpr;
         SmallVector<Value> memAffineIndices;
-        originalLoadOp.dump();
         auto operands = originalLoadOp.getMapOperands();
         auto loadMap = originalLoadOp.getAffineMap();
         int operandIdx = 0;
@@ -1725,22 +1723,22 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 15) Merge loops with the same bound
-  if (previousShiftLoops.size() > 0) {
-    // TODO: only support one shift loop now
-    AffineForOp firstLoop = previousShiftLoops.back();
-    AffineForOp secondLoop = nonReductionLoops[loopAxis];
-    if (firstLoop.getConstantUpperBound() ==
-        secondLoop.getConstantUpperBound()) {
-      auto &firstBody = firstLoop.getBody()->getOperations();
-      auto &secondBody = secondLoop.getBody()->getOperations();
-      // do not need affine.yield op, so that's why using std::prev
-      secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
-                        std::prev(firstBody.end()));
-      firstLoop.getInductionVar().replaceAllUsesWith(
-          secondLoop.getInductionVar());
-      firstLoop.erase();
-    }
-  }
+  // if (previousShiftLoops.size() > 0) {
+  //   // TODO: only support one shift loop now
+  //   AffineForOp firstLoop = previousShiftLoops.back();
+  //   AffineForOp secondLoop = nonReductionLoops[loopAxis];
+  //   if (firstLoop.getConstantUpperBound() ==
+  //       secondLoop.getConstantUpperBound()) {
+  //     auto &firstBody = firstLoop.getBody()->getOperations();
+  //     auto &secondBody = secondLoop.getBody()->getOperations();
+  //     // do not need affine.yield op, so that's why using std::prev
+  //     secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+  //                       std::prev(firstBody.end()));
+  //     firstLoop.getInductionVar().replaceAllUsesWith(
+  //         secondLoop.getInductionVar());
+  //     firstLoop.erase();
+  //   }
+  // }
 
   return success();
 }

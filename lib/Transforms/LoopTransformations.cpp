@@ -1150,14 +1150,17 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // if i-th axis has reduction var after the reuse axis
   //  target.shape[i] should be the dimension size
   std::set<AffineExpr, ExprCompare> requestedVars;
+  SmallVector<AffineLoadOp> allLoadOps;
   std::map<int, int> dimBounds; // dim expr->reduction bound
   int axis = -1;
   int distance = -1;
+  int numLoadOp = 0;
   // TODO: eliminate order in inputs
   reuseAtOp.emitWarning("Need to guarantee the loads have orders");
   reuseLoop.walk([&](AffineLoadOp loadOp) {
     if (loadOp.getOperand(0) != target)
       return WalkResult::advance();
+    numLoadOp++;
     auto loadMap = loadOp.getAffineMap();
     int numDims = loadMap.getNumDims();
     auto operands = loadOp.getMapOperands();
@@ -1175,9 +1178,14 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           if (operands[operandIdx++] ==
               nonReductionLoops[loopAxis].getInductionVar())
             axis = j;
-          if (operands[operandIdx++] ==
-              nonReductionLoops[loopAxis].getInductionVar())
-            axis = j;
+          int cntDim = 0;
+          for (int i = 0; i < numDims; ++i)
+            if (expr.isFunctionOfDim(i))
+              cntDim++;
+          if (cntDim > 1)
+            if (operands[operandIdx++] ==
+                nonReductionLoops[loopAxis].getInductionVar())
+              axis = j;
         }
       }
       for (int i = 0; i < numDims; ++i) {
@@ -1191,6 +1199,22 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     assert(axis != -1);
     OpBuilder builder(loadOp);
     AffineExpr expr = loadMap.getResult(axis);
+    auto insertLoadOp = [&](AffineLoadOp loadOp) {
+      int size = allLoadOps.size();
+      auto exp1 = loadOp.getAffineMap().getResult(axis);
+      ExprCompare cmp;
+      for (int i = 0; i < size; ++i) {
+        int val1 = cmp.findConstantExpr(exp1);
+        auto exp2 = allLoadOps[i].getAffineMap().getResult(axis);
+        int val2 = cmp.findConstantExpr(exp2);
+        if (val1 < val2) {
+          allLoadOps.insert(allLoadOps.begin() + i, loadOp);
+          return;
+        }
+      }
+      allLoadOps.push_back(loadOp);
+    };
+    insertLoadOp(loadOp);
     if (rDim != -1) {
       int ub = reductionVars[operands[rDim]];
       distance = ub - 1;
@@ -1207,7 +1231,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     }
     return WalkResult::advance();
   });
-  assert(distance != -1);
+  assert(distance > -1);
 
   // 7) Try to find reuse pattern
   //    TODO: support more reuse patterns
@@ -1234,9 +1258,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   SmallVector<int> preRDimAxis;
   int rDim = -1;
   AffineLoadOp originalLoadOp;
-  result = reuseLoop.walk([&](AffineLoadOp loadOp) {
-    if (loadOp.getOperand(0) != target)
-      return WalkResult::advance();
+  bool resultFlag = true;
+  for (auto loadOp : allLoadOps) {
     auto loadMap = loadOp.getAffineMap();
     // e.g. d0 d0+2, diff=2
     //      d0 d0+d1, diff=d1
@@ -1332,7 +1355,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         singleLoadAffineExpr.push_back(diff);
       } else {
         reuseAtOp.emitError("Cannot support non-constant stride");
-        return WalkResult::interrupt();
+        resultFlag = false;
+        break;
       }
       // i > axis
       for (unsigned int i = axis + 1; i < rank; ++i) {
@@ -1347,9 +1371,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         allLoadOperands.push_back(memAffineIndices);
       }
     }
-    return WalkResult::advance();
-  });
-  if (result.wasInterrupted())
+  }
+  if (!resultFlag)
     return failure();
 
   // 9) Create reuse buffer
@@ -1427,14 +1450,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   //   %4 = affine.load %arg0[%arg1, %arg2 + 0,1,2] : memref<10x10xi32>
   // * load should be changed to %buf[0,1,2]
   // * buffer shifting will be done later
-  reuseLoop.walk([&](AffineLoadOp op) {
-    if (op.getOperand(0) != target)
-      return WalkResult::advance();
-    // skip reduction variable store
-    auto arrayType = op.getOperand(0).getType().dyn_cast<MemRefType>();
-    if (arrayType.getRank() == 1 && arrayType.getShape()[0] == 1) {
-      return WalkResult::advance();
-    }
+  for (auto op : allLoadOps) {
     OpBuilder rewriter(op);
     SmallVector<AffineExpr> loadAffineExpr;
     SmallVector<Value> memAffineIndices;
@@ -1525,8 +1541,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     }
     op->replaceAllUsesWith(newLoad);
     opToRemove.push_back(op);
-    return WalkResult::advance();
-  });
+  }
 
   // 14) Create if structure
   //     only if the indices are inside the output tensor iteration space,

@@ -1090,6 +1090,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     int span = 0;
     // TODO: require strict load order
     AffineExpr baseExpr = originalLoadExprs[i][0];
+    int baseCst = 0;
     if (baseExpr.isa<AffineDimExpr>()) {
       bool allAffineDimExpr = true;
       for (int j = 0; j < cntLoad; ++j) {
@@ -1122,15 +1123,20 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       int cntDim = 0;
       binaryExpr.walk([&](AffineExpr expr) {
         // d0 + d1, d1 is the reduction variable
-        if (!expr.isa<AffineDimExpr>()) {
-          return WalkResult::advance();
-        }
-        auto dimExpr = expr.cast<AffineDimExpr>();
-        if (cntDim++ == 1) {
-          if (reductionVars.count(dim2iv[dimExpr]) > 0) {
-            span = reductionVars[dim2iv[dimExpr]];
+        if (expr.isa<AffineDimExpr>()) {
+          auto dimExpr = expr.cast<AffineDimExpr>();
+          if (cntDim == 1) {
+            if (reductionVars.count(dim2iv[dimExpr]) > 0) {
+              span = reductionVars[dim2iv[dimExpr]];
+            }
           }
+        } else if (expr.isa<AffineConstantExpr>()) {
+          int cst = expr.cast<AffineConstantExpr>().getValue();
+          if (baseCst == 0)
+            baseCst = cst;
+          span = std::max(span, cst - baseCst + 1);
         }
+        cntDim++;
         return WalkResult::advance();
       });
     }
@@ -1300,8 +1306,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         }
         auto affineMap = AffineMap::get(
             loadRank /*rank*/, 0, singleLoadAffineExpr, builder.getContext());
-        allLoadAffineMaps.push_back(affineMap);
-        allLoadOperands.push_back(memAffineIndices);
+        if (std::find(allLoadAffineMaps.begin(), allLoadAffineMaps.end(),
+                      affineMap) == allLoadAffineMaps.end()) {
+          allLoadAffineMaps.push_back(affineMap);
+          allLoadOperands.push_back(memAffineIndices);
+        }
       }
     } else {
       originalLoadOp = loadOp;
@@ -1332,8 +1341,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       }
       auto affineMap = AffineMap::get(loadRank, 0, singleLoadAffineExpr,
                                       builder.getContext());
-      allLoadAffineMaps.push_back(affineMap);
-      allLoadOperands.push_back(memAffineIndices);
+      if (std::find(allLoadAffineMaps.begin(), allLoadAffineMaps.end(),
+                    affineMap) == allLoadAffineMaps.end()) {
+        allLoadAffineMaps.push_back(affineMap);
+        allLoadOperands.push_back(memAffineIndices);
+      }
     }
     return WalkResult::advance();
   });

@@ -331,11 +331,15 @@ def cast_types(lhs, rhs):
         res_type = ltype
     # 5) Fixed types
     elif is_fixed_type(ltype):
-        # TODO: UFixed type
         if is_integer_type(rtype):
             res_type = hcl_d.FixedType.get(rtype.width + ltype.frac, ltype.frac)
         else:
-            raise RuntimeError("Type conversion not implemented")
+            if is_signed_fixed_type(rtype):
+                # TODO: Fixed<8, 2> <- Fixed<5,3>
+                res_type = hcl_d.FixedType.get(ltype.width, ltype.frac)
+            else:
+                # TODO: UFixed type
+                raise RuntimeError("Type conversion not implemented")
     else:
         raise RuntimeError("Type conversion failed")
     print(
@@ -380,10 +384,13 @@ class ExprOp(object):
 
     @staticmethod
     def generic_op(OpClass, lhs, rhs, arg=None):
-        if (hasattr(lhs, 'v') and lhs.v is not None)\
-            or (hasattr(rhs, 'v') and rhs.v is not None):
-            raise RuntimeError("Cannot use hcl.scalar to construct expression, " +
-                               "use hcl.scalar.v instead")
+        if (hasattr(lhs, "v") and lhs.v is not None) or (
+            hasattr(rhs, "v") and rhs.v is not None
+        ):
+            raise RuntimeError(
+                "Cannot use hcl.scalar to construct expression, "
+                + "use hcl.scalar.v instead"
+            )
         # turn py builtin op to hcl op
         lhs = get_hcl_op(lhs)
         rhs = get_hcl_op(rhs)
@@ -429,7 +436,9 @@ class ExprOp(object):
     def generic_scalar_tensor_access(scalar):
         # check scalar shape
         if scalar.shape != (1,):
-            raise RuntimeError("Scalar should be 1D: got {} instead".format(scalar.shape))
+            raise RuntimeError(
+                "Scalar should be 1D: got {} instead".format(scalar.shape)
+            )
         return scalar[0]
 
     def __add__(self, other):
@@ -437,7 +446,7 @@ class ExprOp(object):
 
     def __radd__(self, other):
         # if other is an hcl.scalar
-        if hasattr(other, 'op') and isinstance(other.op, TensorOp):
+        if hasattr(other, "op") and isinstance(other.op, TensorOp):
             other = self.generic_scalar_tensor_access(other)
         return self.generic_op(AddOp, other, self)
 
@@ -1011,6 +1020,7 @@ class TensorOp(ExprOp):
             return StoreOp(expr, self, new_indices)
         else:
             raise RuntimeError("Indices length > # of array dimensions")
+
 
 #################################################
 #
@@ -2257,9 +2267,7 @@ class ASTVisitor:
         return value
 
 
-def make_for(
-    lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None
-):
+def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=None):
     # TODO: need to test if lb, ub, step are all affine
     # Construct step
     if not isinstance(step, int):

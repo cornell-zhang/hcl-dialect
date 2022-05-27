@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s --fixed-to-integer
 module {
 
-  func @issue_56(%arg0: memref<1000x!hcl.Fixed<8, 6>>) -> memref<1000x!hcl.Fixed<8, 6>> attributes {extra_itypes = "_", extra_otypes = "_", llvm.emit_c_interface, top} {
+  func @issue_56(%arg0: memref<1000x!hcl.Fixed<8, 6>>) -> memref<1000x!hcl.Fixed<8, 6>> attributes {itypes = "_", otypes = "_", llvm.emit_c_interface, top} {
     %0 = memref.alloc() {name = "compute_1"} : memref<1000x!hcl.Fixed<8, 6>>
     affine.for %arg1 = 0 to 1000 {
       %2 = affine.load %arg0[%arg1] {from = "compute_0"} : memref<1000x!hcl.Fixed<8, 6>>
@@ -15,7 +15,7 @@ module {
     return %1 : memref<1000x!hcl.Fixed<8, 6>>
   }
 
-  func @func_call(%arg0: memref<10xi32>, %arg1: memref<10xi32>) attributes {extra_itypes = "ss", extra_otypes = ""} {
+  func @func_call(%arg0: memref<10xi32>, %arg1: memref<10xi32>) attributes {itypes = "ss", otypes = ""} {
     %0 = hcl.create_loop_handle "loop_0" : !hcl.LoopHandle
     affine.for %arg2 = 0 to 10 {
       affine.for %arg3 = 0 to 10 {
@@ -25,7 +25,7 @@ module {
     %1 = hcl.create_loop_handle "loop_1" : !hcl.LoopHandle
     return
   }
-  func @Stage_update_B(%arg0: memref<10xi32>, %arg1: memref<10xi32>, %arg2: index) attributes {extra_itypes = "sss"} {
+  func @Stage_update_B(%arg0: memref<10xi32>, %arg1: memref<10xi32>, %arg2: index) attributes {itypes = "sss"} {
     %0 = affine.load %arg0[%arg2] {from = "compute_0"} : memref<10xi32>
     %c1_i32 = arith.constant 1 : i32
     %1 = arith.addi %0, %c1_i32 : i32
@@ -67,7 +67,7 @@ module {
     return %0 : memref<10x!hcl.Fixed<32, 2>>
   }
 
-  func @no_change_int(%arg0: memref<10xi32>) -> memref<10xi32> attributes {extra_itypes = "s", extra_otypes = "s"} {
+  func @no_change_int(%arg0: memref<10xi32>) -> memref<10xi32> attributes {itypes = "s", otypes = "s"} {
     %0 = memref.alloc() {name = "compute_1"} : memref<10xi32>
     affine.for %arg1 = 0 to 10 {
       %1 = affine.load %arg0[%arg1] {from = "compute_0"} : memref<10xi32>
@@ -77,7 +77,7 @@ module {
     } {loop_name = "x", stage_name = "compute_1"}
     return %0 : memref<10xi32>
   }
-  func @no_change_float(%arg0: memref<10xf32>) -> memref<10xf32> attributes {extra_itypes = "_", extra_otypes = "_"} {
+  func @no_change_float(%arg0: memref<10xf32>) -> memref<10xf32> attributes {itypes = "_", otypes = "_"} {
     %0 = memref.alloc() {name = "compute_1"} : memref<10xf32>
     affine.for %arg1 = 0 to 10 {
       %1 = affine.load %arg0[%arg1] {from = "compute_0"} : memref<10xf32>

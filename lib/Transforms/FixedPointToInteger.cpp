@@ -42,15 +42,15 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
   SmallVector<Type, 8> new_arg_types;
 
   // Set the extra type hint based on the input/output memref type
-  std::string extra_itypes = "";
-  if (funcOp->hasAttr("extra_itypes")) {
-    extra_itypes =
-        funcOp->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  std::string itypes = "";
+  if (funcOp->hasAttr("itypes")) {
+    itypes =
+        funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
   }
-  std::string extra_otypes = "";
-  if (funcOp->hasAttr("extra_otypes")) {
-    extra_otypes =
-        funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  std::string otypes = "";
+  if (funcOp->hasAttr("otypes")) {
+    otypes =
+        funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
   }
 
   for (auto v : llvm::enumerate(result_types)) {
@@ -63,11 +63,11 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_result_types.push_back(memrefType.clone(newElementType));
-        // update the extra_otypes
-        if (et.isa<FixedType>() and v.index() < extra_otypes.length()) {
-          extra_otypes[v.index()] = 's';
-        } else if (et.isa<UFixedType>() and v.index() < extra_otypes.length()) {
-          extra_otypes[v.index()] = 'u';
+        // update the otypes
+        if (et.isa<FixedType>() and v.index() < otypes.length()) {
+          otypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < otypes.length()) {
+          otypes[v.index()] = 'u';
         }
       } else {
         new_result_types.push_back(memrefType);
@@ -87,11 +87,11 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
         size_t width = 64;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_arg_types.push_back(memrefType.clone(newElementType));
-        // update the extra_itypes
-        if (et.isa<FixedType>() and v.index() < extra_itypes.length()) {
-          extra_itypes[v.index()] = 's';
-        } else if (et.isa<UFixedType>() and v.index() < extra_itypes.length()) {
-          extra_itypes[v.index()] = 'u';
+        // update the itypes
+        if (et.isa<FixedType>() and v.index() < itypes.length()) {
+          itypes[v.index()] = 's';
+        } else if (et.isa<UFixedType>() and v.index() < itypes.length()) {
+          itypes[v.index()] = 'u';
         }
       } else {
         new_arg_types.push_back(memrefType);
@@ -101,10 +101,10 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
     }
   }
 
-  funcOp->setAttr("extra_itypes",
-                  StringAttr::get(funcOp.getContext(), extra_itypes));
-  funcOp->setAttr("extra_otypes",
-                  StringAttr::get(funcOp.getContext(), extra_otypes));
+  funcOp->setAttr("itypes",
+                  StringAttr::get(funcOp.getContext(), itypes));
+  funcOp->setAttr("otypes",
+                  StringAttr::get(funcOp.getContext(), otypes));
 
   // Update FuncOp's block argument types
   for (Block &block : funcOp.getBlocks()) {
@@ -184,16 +184,16 @@ void updateReturnOp(FuncOp &funcOp) {
           OpBuilder builder(op);
           Location loc = op->getLoc();
           // Get signedness hint information
-          std::string extra_otypes = "";
-          if (funcOp->hasAttr("extra_otypes")) {
-            extra_otypes = funcOp->getAttr("extra_otypes")
+          std::string otypes = "";
+          if (funcOp->hasAttr("otypes")) {
+            otypes = funcOp->getAttr("otypes")
                                .cast<StringAttr>()
                                .getValue()
                                .str();
           }
           bool is_unsigned = false;
-          if (i < extra_otypes.length()) {
-            is_unsigned = extra_otypes[i] == 'u';
+          if (i < otypes.length()) {
+            is_unsigned = otypes[i] == 'u';
           }
           Value castedMemRef =
               castIntMemRef(builder, loc, arg, 64, is_unsigned, false);

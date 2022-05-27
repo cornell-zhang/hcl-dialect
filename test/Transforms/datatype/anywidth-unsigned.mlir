@@ -1,6 +1,6 @@
 // RUN: hcl-opt %s --lower-anywidth-integer
 module {
-  func @top(%arg0: memref<10xi32>) -> memref<10xi2> attributes {extra_itypes = "u", extra_otypes = "u", llvm.emit_c_interface, top} {
+  func @top(%arg0: memref<10xi32>) -> memref<10xi2> attributes {itypes = "u", otypes = "u", llvm.emit_c_interface, top} {
     %0 = memref.alloc() {name = "B", unsigned} : memref<10xi2>
     affine.for %arg1 = 0 to 10 {
       %1 = affine.load %arg0[%arg1] {from = "compute_0", unsigned} : memref<10xi32>

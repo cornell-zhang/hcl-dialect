@@ -971,17 +971,17 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
     // suppose only one output
     input_args.push_back(output_names);
   }
-  std::string extra_itypes = "";
-  if (func->hasAttr("extra_itypes"))
-    extra_itypes =
-        func->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  std::string itypes = "";
+  if (func->hasAttr("itypes"))
+    itypes =
+        func->getAttr("itypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
-      extra_itypes += "x";
+      itypes += "x";
   }
   for (auto &arg : func.getArguments()) {
     indent();
-    fixUnsignedType(arg, extra_itypes[argIdx] == 'u');
+    fixUnsignedType(arg, itypes[argIdx] == 'u');
     if (arg.getType().isa<ShapedType>()) {
       if (input_args.size() == 0) {
         emitBufferDecl(arg, isAccessor, true);
@@ -1002,13 +1002,13 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
 
   // Emit results.
   auto args = func.getArguments();
-  std::string extra_otypes = "";
-  if (func->hasAttr("extra_otypes"))
-    extra_otypes =
-        func->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  std::string otypes = "";
+  if (func->hasAttr("otypes"))
+    otypes =
+        func->getAttr("otypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
-      extra_otypes += "x";
+      otypes += "x";
   }
   if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
     unsigned idx = 0;
@@ -1018,7 +1018,7 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
 
         // TODO: a known bug, cannot return a value twice, e.g. return %0, %0
         // : index, index. However, typically this should not happen.
-        fixUnsignedType(result, extra_otypes[idx] == 'u');
+        fixUnsignedType(result, otypes[idx] == 'u');
         if (result.getType().isa<ShapedType>()) {
           if (output_names != "")
             emitBufferDecl(result, isAccessor, false);

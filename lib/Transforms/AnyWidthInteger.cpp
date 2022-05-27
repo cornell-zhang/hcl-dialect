@@ -73,15 +73,15 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
   }
 
   // Get signedness hint information
-  std::string extra_itypes = "";
-  if (funcOp->hasAttr("extra_itypes")) {
-    extra_itypes =
-        funcOp->getAttr("extra_itypes").cast<StringAttr>().getValue().str();
+  std::string itypes = "";
+  if (funcOp->hasAttr("itypes")) {
+    itypes =
+        funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
   }
-  std::string extra_otypes = "";
-  if (funcOp->hasAttr("extra_otypes")) {
-    extra_otypes =
-        funcOp->getAttr("extra_otypes").cast<StringAttr>().getValue().str();
+  std::string otypes = "";
+  if (funcOp->hasAttr("otypes")) {
+    otypes =
+        funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
   }
 
   // Update FuncOp's block argument types
@@ -101,8 +101,8 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
           size_t oldWidth = et.cast<IntegerType>().getWidth();
           block.getArgument(i).setType(newMemRefType);
           bool is_unsigned = false;
-          if (i < extra_itypes.length()) {
-            is_unsigned = extra_itypes[i] == 'u';
+          if (i < itypes.length()) {
+            is_unsigned = itypes[i] == 'u';
           }
           Value newMemRef =
               castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i),
@@ -131,8 +131,8 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
       if (etype.isa<IntegerType>()) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
           bool is_unsigned = false;
-          if (i < extra_otypes.length()) {
-            is_unsigned = extra_otypes[i] == 'u';
+          if (i < otypes.length()) {
+            is_unsigned = otypes[i] == 'u';
           }
           Value newMemRef =
               castIntMemRef(returnRewriter, op->getLoc(), allocOp.getResult(),
@@ -147,8 +147,8 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
       Value newMemRef = v.value();
       Value &blockArg = blockArgs[v.index()];
       bool is_unsigned = false;
-      if (v.index() < extra_itypes.length()) {
-        is_unsigned = extra_itypes[v.index()] == 'u';
+      if (v.index() < itypes.length()) {
+        is_unsigned = itypes[v.index()] == 'u';
       }
       castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned,
                     false, blockArg);

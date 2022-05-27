@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s --jit | FileCheck %s
 module {
   memref.global "private" @gv0 : memref<1xi32> = dense<[3]>
-  func @top() -> () attributes {bit, extra_itypes = "s", extra_otypes = "s", top} {
+  func @top() -> () attributes {bit, itypes = "s", otypes = "s", top} {
     %0 = memref.get_global @gv0 : memref<1xi32>
     %res =memref.alloc() : memref<1xi32>
     affine.for %arg1 = 0 to 1 {

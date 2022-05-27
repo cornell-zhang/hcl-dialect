@@ -31,7 +31,7 @@ module {
   }
 
 
-  func @top(%arg0: memref<100xi8>, %arg1: memref<100x!hcl.Fixed<13, 11>>, %arg2: memref<100xf32>) attributes {extra_itypes = "s__", extra_otypes = ""} {
+  func @top(%arg0: memref<100xi8>, %arg1: memref<100x!hcl.Fixed<13, 11>>, %arg2: memref<100xf32>) attributes {itypes = "s__", otypes = ""} {
     %0 = memref.alloc() {name = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
     affine.for %arg3 = 0 to 100 {
       %2 = affine.load %arg0[%arg3] {from = "compute_0"} : memref<100xi8>

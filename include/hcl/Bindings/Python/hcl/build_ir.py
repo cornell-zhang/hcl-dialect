@@ -2355,10 +2355,15 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
 
 def make_if(cond, ip=None):
     # suppose in a imperative context (build in-place)
-    if not isinstance(cond, CmpOp):
+    if not isinstance(cond, (CmpOp, LogicalAndOp)):
         raise RuntimeError("`if` operation condition should be CmpOp")
     visitor = ASTVisitor(mode="profile")
-    visitor.visit(cond)
+    if isinstance(cond, LogicalAndOp):
+        lst = cond.cond_lst
+        for single_cond in lst:
+            visitor.visit(single_cond)
+    else:
+        visitor.visit(cond)
     if visitor.scf_cnt > 0 or len(visitor.load) != 0 or len(visitor.store) != 0:
         if cond.built_op is not None:
             remover = ASTVisitor(mode="remove")
@@ -2367,38 +2372,50 @@ def make_if(cond, ip=None):
         builder.visit(cond)
         if_op = scf.IfOp(cond.result, ip=ip)
     else:  # Affine expression
-        if not isinstance(cond.lhs.dtype, (IntegerType, IndexType)) or not isinstance(
-            cond.rhs.dtype, (IntegerType, IndexType)
-        ):
-            raise RuntimeError("`affine.if` can only support integer comparison")
-        # only support affine expressions now (i.e. calculations on iteration variables)
-        if cond.arg == 0:  # eq
-            # lhs==rhs
-            eq_flags = [True]
-            new_conds = [cond.lhs - cond.rhs]
-        elif cond.arg == 1:  # ne
-            # lhs>rhs and lhs<rhs
-            raise RuntimeError("Not supported for `affine.if`")
-        elif cond.arg == 2:  # slt
-            # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
-            eq_flags = [False]
-            new_conds = [cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1)]
-        elif cond.arg == 3:  # sle
-            # lhs<=rhs -> rhs-lhs>=0
-            eq_flags = [False]
-            new_conds = [cond.rhs - cond.lhs]
-        elif cond.arg == 4:  # sgt
-            # lhs>rhs -> lhs-rhs-1>=0
-            eq_flags = [False]
-            new_conds = [cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1)]
-        elif cond.arg == 5:  # sge
-            # lhs>=rhs -> lhs-rhs>=0
-            eq_flags = [False]
-            new_conds = [cond.lhs - cond.rhs]
-        else:
-            raise RuntimeError("Predicate of CmpOp")
+        eq_flags = []
+        new_conds = []
 
-        cond.built_op.operation.erase()
+        def build_single_cond(cond, eq_flag, new_conds):
+            if not isinstance(
+                cond.lhs.dtype, (IntegerType, IndexType)
+            ) or not isinstance(cond.rhs.dtype, (IntegerType, IndexType)):
+                raise RuntimeError("`affine.if` can only support integer comparison")
+            # only support affine expressions now (i.e. calculations on iteration variables)
+            if cond.arg == 0:  # eq
+                # lhs==rhs
+                eq_flags.append(True)
+                new_conds.append(cond.lhs - cond.rhs)
+            elif cond.arg == 1:  # ne
+                # lhs>rhs and lhs<rhs
+                raise RuntimeError("Not supported for `affine.if`")
+            elif cond.arg == 2:  # slt
+                # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
+                eq_flags.append(False)
+                new_conds.append(cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1))
+            elif cond.arg == 3:  # sle
+                # lhs<=rhs -> rhs-lhs>=0
+                eq_flags.append(False)
+                new_conds.append(cond.rhs - cond.lhs)
+            elif cond.arg == 4:  # sgt
+                # lhs>rhs -> lhs-rhs-1>=0
+                eq_flags.append(False)
+                new_conds.append(cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1))
+            elif cond.arg == 5:  # sge
+                # lhs>=rhs -> lhs-rhs>=0
+                eq_flags.append(False)
+                new_conds.append(cond.lhs - cond.rhs)
+            else:
+                raise RuntimeError("Predicate of CmpOp")
+
+            cond.built_op.operation.erase()
+
+        if isinstance(cond, LogicalAndOp):
+            lst = cond.cond_lst
+            for single_cond in lst:
+                build_single_cond(single_cond, eq_flags, new_conds)
+        else:
+            build_single_cond(cond, eq_flags, new_conds)
+
         exprs = []
         # make sure all the AffineExpr are referenced in one visitor
         builder = ASTVisitor(mode="build")

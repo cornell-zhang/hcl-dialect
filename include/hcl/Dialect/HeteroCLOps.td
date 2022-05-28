@@ -553,4 +553,22 @@ def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
 
 }
 
+def LogicalAndOp : HeteroCL_Op<"logical_and"> {
+    let summary = "logical and operation";
+    let arguments = (ins Variadic<AnyType>:$input);
+    let results = (outs BoolLike:$result);
+    let assemblyFormat = [{
+        ($input^)? attr-dict `:` type($input) `->` type($result)
+    }];
+}
+
+def LogicalOrOp : HeteroCL_Op<"logical_or"> {
+    let summary = "logical or operation";
+    let arguments = (ins Variadic<AnyType>:$input);
+    let results = (outs BoolLike:$result);
+    let assemblyFormat = [{
+        ($input^)? attr-dict `:` type($input) `->` type($result)
+    }];
+}
+
 #endif // HCL_OPS

@@ -175,7 +175,7 @@ public:
   HANDLE(arith::MaxUIOp);
   HANDLE(arith::MinUIOp);
 
-  // Logical expressions.
+  // Bit operations.
   HANDLE(arith::XOrIOp);
   HANDLE(arith::AndIOp);
   HANDLE(arith::OrIOp);
@@ -187,6 +187,9 @@ public:
   HANDLE(hcl::GetIntSliceOp);
   HANDLE(hcl::SetIntSliceOp);
   HANDLE(hcl::BitReverseOp);
+  // Logical operations
+  HANDLE(hcl::LogicalAndOp);
+  HANDLE(hcl::LogicalOrOp);
 
   // Special operations.
   HANDLE(CallOp);

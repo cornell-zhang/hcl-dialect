@@ -1497,6 +1497,25 @@ class GetBitOp(ExprOp):
         return self.built_op
 
 
+class LogicalAndOp(ExprOp):
+    def __init__(self, *cond):
+        super().__init__(hcl_d.LogicalAndOp, IntegerType.get_signless(1))
+        self.cond_lst = cond
+
+    def build(self):
+        raise RuntimeError("Do not build logical_and op!")
+
+
+class LogicalOrOp(ExprOp):
+    def __init__(self, *cond):
+        super().__init__(hcl_d.LogicalOrOp, IntegerType.get_signless(1))
+        self.cond_lst = cond
+        raise RuntimeError("Not implemented!")
+
+    def build(self):
+        raise RuntimeError("Do not build logical_or op!")
+
+
 class SetBitOp(ExprOp):
     def __init__(self, num, index, val):
         super().__init__(hcl_d.SetIntBitOp, None)  # No return value!

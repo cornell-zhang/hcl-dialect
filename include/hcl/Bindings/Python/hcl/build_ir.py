@@ -1668,6 +1668,10 @@ class LoadOp(ExprOp):
                 flag = False
                 break
         if flag:
+            remover = ASTVisitor(mode="remove")
+            for index in self.indices:
+                if index.built_op is not None:
+                    remover.visit(index)
             affine_map = AffineMap.get(
                 dim_count=len(visitor.iv), symbol_count=0, exprs=exprs
             )
@@ -2006,6 +2010,12 @@ class ASTVisitor:
         else:
             raise RuntimeError("Not an affine index!")
 
+    def erase_op(self, expr):
+        try:
+            expr.built_op.operation.erase()
+        except:
+            pass
+
     def visit_unary_op(self, expr):
         if self.mode == "build":
             self.visit(expr.val)
@@ -2013,7 +2023,7 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.visit(expr.val)
         else:
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             self.visit(expr.val)
 
     def visit_binary_op(self, expr):
@@ -2025,7 +2035,7 @@ class ASTVisitor:
             self.visit(expr.lhs)
             self.visit(expr.rhs)
         else:
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             self.visit(expr.rhs)
             self.visit(expr.lhs)
 
@@ -2060,7 +2070,7 @@ class ASTVisitor:
             self.visit(expr.true_val)
             self.visit(expr.false_val)
         else:
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             self.visit(expr.false_val)
             self.visit(expr.true_val)
             self.visit(expr.cond)
@@ -2076,7 +2086,7 @@ class ASTVisitor:
 
     def visit_load_op(self, expr):
         if self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             return
         elif self.mode == "profile":
             self.load.append(expr)
@@ -2086,7 +2096,7 @@ class ASTVisitor:
 
     def visit_store_op(self, expr):
         if self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             return
         elif self.mode == "profile":
             self.store.append(expr)
@@ -2096,7 +2106,7 @@ class ASTVisitor:
 
     def visit_cast_op(self, expr):
         if self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
         self.visit(expr.val)
         if self.mode == "build":
             return expr.build()
@@ -2107,7 +2117,7 @@ class ASTVisitor:
             self.visit(expr.index)
             return expr.build()
         elif self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             self.visit(expr.index)
             self.visit(expr.num)
         else:
@@ -2121,7 +2131,7 @@ class ASTVisitor:
             self.visit(expr.lo)
             return expr.build()
         elif self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
             self.visit(expr.lo)
             self.visit(expr.hi)
             self.visit(expr.num)
@@ -2132,7 +2142,7 @@ class ASTVisitor:
 
     def visit_setbit_op(self, expr):
         if self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
         self.visit(expr.num)
         self.visit(expr.index)
         self.visit(expr.val)
@@ -2141,7 +2151,7 @@ class ASTVisitor:
 
     def visit_setslice_op(self, expr):
         if self.mode == "remove":
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
         self.visit(expr.num)
         self.visit(expr.hi)
         self.visit(expr.lo)
@@ -2155,7 +2165,7 @@ class ASTVisitor:
         elif self.mode == "profile":
             pass
         else:
-            expr.built_op.operation.erase()
+            self.erase_op(expr)
 
     def visit_reduce_op(self, expr):
         if self.mode == "remove":

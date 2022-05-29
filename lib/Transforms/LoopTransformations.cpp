@@ -1758,6 +1758,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 17) Merge loops with the same bound
   int cntIf = 0;
   nonReductionLoops[0].walk([&](AffineIfOp ifOp) { cntIf++; });
+  nonReductionLoops[nonReductionLoops.size() - 1].walk(
+      [&](AffineIfOp ifOp) { cntIf--; });
   if (previousShiftLoops.size() > 0) {
     // TODO: only support one shift loop now
     AffineForOp firstLoop = previousShiftLoops.back();

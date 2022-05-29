@@ -2032,12 +2032,18 @@ class ASTVisitor:
     def visit_ternary_op(self, expr):
         if self.mode == "build":
             # condition
+            if is_unsigned_type(expr.dtype):
+                dtype = IntegerType.get_signless(expr.dtype.width)
+            else:
+                dtype = expr.dtype
             if_op = make_if(
                 expr.cond,
                 ip=GlobalInsertionPoint.get(),
                 hasElse=True,
-                resultType=[expr.dtype],
+                resultType=[dtype],
             )
+            if is_unsigned_type(expr.dtype):
+                if_op.attributes["unsigned"] = UnitAttr.get()
             # true branch
             GlobalInsertionPoint.save(if_op.then_block)
             self.visit(expr.true_val)

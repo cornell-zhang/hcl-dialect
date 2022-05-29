@@ -2031,10 +2031,24 @@ class ASTVisitor:
 
     def visit_ternary_op(self, expr):
         if self.mode == "build":
-            self.visit(expr.cond)
+            # condition
+            if_op = make_if(
+                expr.cond,
+                ip=GlobalInsertionPoint.get(),
+                hasElse=True,
+                resultType=[expr.dtype],
+            )
+            # true branch
+            GlobalInsertionPoint.save(if_op.then_block)
             self.visit(expr.true_val)
+            affine.AffineYieldOp([expr.true_val.result], ip=GlobalInsertionPoint.get())
+            GlobalInsertionPoint.restore()
+            # false branch
+            GlobalInsertionPoint.save(if_op.else_block)
             self.visit(expr.false_val)
-            return expr.build()
+            affine.AffineYieldOp([expr.false_val.result], ip=GlobalInsertionPoint.get())
+            GlobalInsertionPoint.restore()
+            return if_op
         elif self.mode == "profile":
             self.visit(expr.cond)
             self.visit(expr.true_val)
@@ -2353,11 +2367,12 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
     return forOp
 
 
-def make_if(cond, ip=None):
+def make_if(cond, ip=None, hasElse=False, resultType=[]):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, (CmpOp, LogicalAndOp)):
         raise RuntimeError("`if` operation condition should be CmpOp")
     visitor = ASTVisitor(mode="profile")
+    print(cond)
     if isinstance(cond, LogicalAndOp):
         lst = cond.cond_lst
         for single_cond in lst:
@@ -2374,8 +2389,10 @@ def make_if(cond, ip=None):
     else:  # Affine expression
         eq_flags = []
         new_conds = []
+        built_flag = True
 
         def build_single_cond(cond, eq_flag, new_conds):
+            nonlocal built_flag
             if not isinstance(
                 cond.lhs.dtype, (IntegerType, IndexType)
             ) or not isinstance(cond.rhs.dtype, (IntegerType, IndexType)):
@@ -2407,7 +2424,10 @@ def make_if(cond, ip=None):
             else:
                 raise RuntimeError("Predicate of CmpOp")
 
-            cond.built_op.operation.erase()
+            if cond.built_op is not None:
+                cond.built_op.operation.erase()
+            else:
+                built_flag = False
 
         if isinstance(cond, LogicalAndOp):
             lst = cond.cond_lst
@@ -2420,14 +2440,17 @@ def make_if(cond, ip=None):
         # make sure all the AffineExpr are referenced in one visitor
         builder = ASTVisitor(mode="build")
         for new_cond in new_conds:
-            remover = ASTVisitor(mode="remove")
-            remover.visit(new_cond)
+            if built_flag:
+                remover = ASTVisitor(mode="remove")
+                remover.visit(new_cond)
             # rebuild condition
             exprs.append(builder.visit_affine_expr(new_cond))
         if_cond_set = IntegerSet.get(len(builder.iv), 0, exprs, eq_flags)
         attr = hcl_d.IntegerSetAttr.get(if_cond_set)
 
-        if_op = affine.AffineIfOp(attr, builder.iv, ip=ip)
+        if_op = affine.AffineIfOp(
+            attr, builder.iv, ip=ip, hasElse=hasElse, results_=resultType
+        )
 
     return if_op
 

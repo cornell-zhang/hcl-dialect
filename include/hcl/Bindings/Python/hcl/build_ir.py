@@ -1264,6 +1264,17 @@ class RemOp(BinaryOp):
 
 class LeftShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
+        print("leftshift", lhs, rhs)
+        if isinstance(rhs, int):
+            new_type = IntegerType.get_signless(lhs.dtype.width + rhs)
+            lhs = CastOp(lhs, new_type)
+            rhs = CastOp(rhs, new_type)
+        elif isinstance(rhs, CastOp):
+            new_type = IntegerType.get_signless(lhs.dtype.width + rhs.dtype.width)
+            lhs = CastOp(lhs, new_type)
+            rhs = CastOp(rhs, new_type)
+        else:
+            new_type = lhs.dtype
         super().__init__(arith.ShLIOp, lhs.dtype, lhs, rhs)
 
 
@@ -2388,7 +2399,6 @@ def make_if(cond, ip=None, hasElse=False, resultType=[]):
     if not isinstance(cond, (CmpOp, LogicalAndOp)):
         raise RuntimeError("`if` operation condition should be CmpOp")
     visitor = ASTVisitor(mode="profile")
-    print(cond)
     if isinstance(cond, LogicalAndOp):
         lst = cond.cond_lst
         for single_cond in lst:

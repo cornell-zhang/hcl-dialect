@@ -1048,11 +1048,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
              "lower bound";
       return WalkResult::interrupt();
     }
-    if (!forOp->hasAttr("reduction") && !forOp->hasAttr("spatial")) {
+    if (!forOp->hasAttr("reduction") && !forOp->hasAttr("spatial") &&
+        !forOp->hasAttr("buffer")) {
       nonReductionLoops.push_back(forOp);
     } else if (forOp->hasAttr("spatial")) {
       previousShiftLoops.push_back(forOp);
-    } else {
+    } else if (forOp->hasAttr("reduction")) {
       reductionVars[forOp.getInductionVar()] = forOp.getConstantUpperBound();
     }
     return WalkResult::advance();
@@ -2057,6 +2058,8 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
     newNameArr.push_back(nonReductionNameArr[axis + 1].str() + "_back");
     SmallVector<AffineForOp, 6> newLoops{initLoops[0], writeBackLoops[0]};
     setLoopNames(newLoops, newNameArr);
+    initLoops[0]->setAttr("buffer", init_builder.getUnitAttr());
+    writeBackLoops[0]->setAttr("buffer", back_builder.getUnitAttr());
 
     // f) Automatic pipelining
     SmallVector<AffineForOp, 6> twoLoops{

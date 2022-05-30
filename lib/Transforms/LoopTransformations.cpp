@@ -2204,6 +2204,27 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
   return success();
 }
 
+LogicalResult runInterKernelDataPlacementSingleFunction(Value &arrayToStream,
+                                                        int fifo_depth = -1) {
+  // Construct new array type (add stream attribute)
+  auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
+  auto shape = arrayType.getShape();
+  if (fifo_depth == -1) {
+    // a conversative estimation
+    fifo_depth = 1;
+    for (auto size : shape)
+      fifo_depth *= size;
+  }
+  auto newType = MemRefType::get(
+      arrayType.getShape(), arrayType.getElementType(), arrayType.getLayout(),
+      StringAttr::get(arrayToStream.getDefiningOp()->getContext(),
+                      "stream:" + std::to_string(fifo_depth)));
+
+  // Set new type
+  arrayToStream.setType(newType);
+  return success();
+}
+
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
@@ -2292,8 +2313,21 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
           return false;
         }
       } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
-        // if (failed(runInterKernelDataPlacement(f, new_op)))
-        //   return false;
+        Value array;
+        auto optional_fifo_depth = new_op.fifo_depth();
+        unsigned int fifo_depth;
+        if (optional_fifo_depth.hasValue()) {
+          fifo_depth = optional_fifo_depth.getValue();
+        } else {
+          fifo_depth = -1; // conservative assumption
+        }
+        if (findArray(f, new_op.target(), array)) {
+          if (failed(
+                  runInterKernelDataPlacementSingleFunction(array, fifo_depth)))
+            return false;
+        } else {
+          return false;
+        }
       }
       opToRemove.push_back(&op);
     }

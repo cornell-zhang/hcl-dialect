@@ -1264,7 +1264,6 @@ class RemOp(BinaryOp):
 
 class LeftShiftOp(BinaryOp):
     def __init__(self, lhs, rhs):
-        print("leftshift", lhs, rhs)
         if isinstance(rhs, int):
             new_type = IntegerType.get_signless(lhs.dtype.width + rhs)
             lhs = CastOp(lhs, new_type)

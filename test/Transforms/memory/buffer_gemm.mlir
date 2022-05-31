@@ -12,7 +12,7 @@ module {
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
             // CHECK: affine.for %[[VAR:.*]] = 0 to 1024 {
             // CHECK:     affine.store %cst, {{.*}}[%[[VAR]]] : memref<1024xf32>
-            // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_init", pipeline_ii = 1 : i32}
             // CHECK: affine.for %[[VAR]] = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 512 {
@@ -28,7 +28,7 @@ module {
             // CHECK: affine.for %[[VAR]] = 0 to 1024 {
             // CHECK:     %[[RES:.*]] = affine.load {{.*}}[%[[VAR]]] : memref<1024xf32>
             // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}] : memref<1024x1024xf32>
-            // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %li) -> memref<1024xf32>
         return
@@ -93,7 +93,7 @@ module {
             // CHECK: {{.*}} = memref.alloc() : memref<1024xf32>
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
             // CHECK: affine.for %[[VAR:.*]] = 0 to 1024 {
-            // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_init", pipeline_ii = 1 : i32}
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 512 {
                     %a = affine.load %A[%i, %k] : memref<1024x512xf32>
@@ -107,7 +107,7 @@ module {
             // CHECK:     } {loop_name = "j", pipeline_ii = 1 : i32}
             // CHECK: } {loop_name = "k", reduction = 1 : i32}
             // CHECK: affine.for %[[VAR]] = 0 to 1024 {
-            // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
         hcl.reorder(%s, %lk, %lj)
         %buf = hcl.buffer_at(%s, %C: memref<1024x1024xf32>, %li) -> memref<1024xf32>

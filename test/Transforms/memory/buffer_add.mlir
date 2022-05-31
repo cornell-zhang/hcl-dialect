@@ -11,7 +11,7 @@ module {
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
             // CHECK: affine.for %[[VAR:.*]] = 0 to 1024 {
             // CHECK:     affine.store %cst, %[[MEM]][%[[VAR]]] : memref<1024xf32>
-            // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_init", pipeline_ii = 1 : i32}
             // CHECK: affine.for %[[VAR]] = 0 to 1024
             affine.for %j = 0 to 1024 {
                 // B[i, j] = A[i, j] + 1
@@ -24,7 +24,7 @@ module {
             // CHECK: affine.for %[[VAR]] = 0 to 1024 {
             // CHECK:     %[[RES:.*]] = affine.load %[[MEM]][%[[VAR]]] : memref<1024xf32>
             // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, %[[VAR]]] : memref<1024x1024xf32>
-            // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
+            // CHECK: } {buffer, loop_name = "j_back", pipeline_ii = 1 : i32}
         } { loop_name = "i", stage_name = "s" }
         %buf = hcl.buffer_at(%s, %B: memref<1024x1024xf32>, %l1) -> memref<1024xf32>
         return

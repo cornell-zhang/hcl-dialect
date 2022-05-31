@@ -13,7 +13,7 @@ module {
       // CHECK: %cst = arith.constant 0.000000e+00 : f32
       // CHECK: affine.for %[[VAR:.*]] = 0 to 30 {
       // CHECK:   affine.store %cst, %[[MEM]][%[[VAR]]] : memref<30xf32>
-      // CHECK: } {loop_name = "j_init", pipeline_ii = 1 : i32}
+      // CHECK: } {buffer, loop_name = "j_init", pipeline_ii = 1 : i32}
       // CHECK: affine.for {{.*}} = 0 to 3 {
       affine.for %j = 0 to 30 {
         // CHECK: affine.for {{.*}} = 0 to 3 {
@@ -34,7 +34,7 @@ module {
       // CHECK: affine.for %[[VAR]] = 0 to 30 {
       // CHECK:   %[[RES:.*]] = affine.load %[[MEM]][%[[VAR]]] : memref<30xf32>
       // CHECK:   affine.store %[[RES]], {{.*}}[{{.*}}, %[[VAR]]] : memref<30x30xf32>
-      // CHECK: } {loop_name = "j_back", pipeline_ii = 1 : i32}
+      // CHECK: } {buffer, loop_name = "j_back", pipeline_ii = 1 : i32}
     } { loop_name = "i", stage_name = "s" }
     hcl.reorder(%s, %lry, %lrx, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<30x30xf32>, %li) -> memref<30xf32>
@@ -117,7 +117,7 @@ module {
     // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
     // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
     // CHECK:   } {pipeline_ii = 1 : i32}
-    // CHECK: } {loop_name = "i_init"}
+    // CHECK: } {buffer, loop_name = "i_init"}
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
           affine.for %rc = 0 to 3 { // in channel
@@ -140,7 +140,7 @@ module {
       // CHECK:     %[[RES:.*]] = affine.load %[[MEM]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
       // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
-      // CHECK: } {loop_name = "i_back"}
+      // CHECK: } {buffer, loop_name = "i_back"}
     } {loop_name = "oc", stage_name = "s" }
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %loc) -> memref<30x30xf32>
     return
@@ -161,7 +161,7 @@ module {
       // CHECK:   affine.for %[[VAR2:.*]] = 0 to 30 {
       // CHECK:     affine.store %cst, %[[MEM:.*]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
-      // CHECK: } {loop_name = "i_init"}
+      // CHECK: } {buffer, loop_name = "i_init"}
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
           affine.for %rc = 0 to 3 { // in channel
@@ -188,7 +188,7 @@ module {
       // CHECK:     %[[RES:.*]] = affine.load %[[MEM]][%[[VAR1]], %[[VAR2]]] : memref<30x30xf32>
       // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
-      // CHECK: } {loop_name = "i_back"}
+      // CHECK: } {buffer, loop_name = "i_back"}
     } {loop_name = "oc", stage_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %li, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %loc) -> memref<30x30xf32>

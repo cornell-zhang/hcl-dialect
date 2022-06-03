@@ -13,6 +13,7 @@
 
 #include "hcl/Translation/EmitIntelHLS.h"
 #include "hcl/Translation/EmitVivadoHLS.h"
+#include "hcl/Translation/EmitMlirGpu.h"
 #include "mlir/InitAllTranslations.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Translation.h"
@@ -26,6 +27,7 @@ int main(int argc, char **argv) {
   mlir::registerAllTranslations();
   mlir::hcl::registerEmitVivadoHLSTranslation();
   mlir::hcl::registerEmitIntelHLSTranslation();
+  mlir::hcl::registerEmitMlirGpuTranslation();
 #ifdef OPENSCOP
   mlir::hcl::registerToOpenScopExtractTranslation();
 #endif

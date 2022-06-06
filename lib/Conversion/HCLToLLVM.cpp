@@ -378,10 +378,14 @@ public:
     Location loc = op->getLoc();
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
     // Create two constants: number of bits, and zero
-    Value const_0 =
-        rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, rewriter.getIndexType());
+    Value const_0_i32 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, rewriter.getI32Type());
+    Value const_width_i32 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, rewriter.getI32Type());
+    Value const_0 = 
+        rewriter.create<mlir::arith::IndexCastOp>(loc, const_0_i32, rewriter.getIndexType());
     Value const_width =
-        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, rewriter.getIndexType());
+        rewriter.create<mlir::arith::IndexCastOp>(loc, const_width_i32, rewriter.getIndexType());
     // Create a single-element memref to store the result
     MemRefType memRefType = MemRefType::get({1}, input.getType());
     Value resultMemRef = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);

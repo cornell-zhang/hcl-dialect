@@ -367,6 +367,29 @@ public:
   }
 };
 
+class BitReverseOpLowering : public ConversionPattern {
+public:
+  explicit BitReverseOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::BitReverseOp::getOperationName(), 1, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    Value input = operands[0];
+    Location loc = op->getLoc();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    // Create two constants: number of bits, and zero
+    Value const_0 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, rewriter.getIndexType());
+    Value const_width =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, rewriter.getIndexType());
+    
+    
+    // op->getResult(0).replaceAllUsesWith(res);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {
@@ -424,6 +447,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<GetIntBitOpLowering>(&context);
   patterns.add<SetIntSliceOpLowering>(&context);
   patterns.add<GetIntSliceOpLowering>(&context);
+  patterns.add<BitReverseOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

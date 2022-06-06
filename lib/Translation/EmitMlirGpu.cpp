@@ -38,9 +38,113 @@ public:
   void emitModule(ModuleOp module);
 
 private:
+  void emitInfoAndNewLine(Operation *op);
+  void emitBlock(Block &block);
+  void emitArrayDecl(Value array, bool isFunc = false, std::string name = "");
   void emitFunction(FuncOp func);
 };
 } // namespace
+
+void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
+  os << "\t//";
+  // Print line number.
+  if (auto loc = op->getLoc().dyn_cast<FileLineColLoc>())
+    os << " L" << loc.getLine();
+  os << "\n";
+}
+
+void ModuleEmitter::emitBlock(Block &block) {
+  os << "\n=====BEGIN BLOCK EMIT=====\n";
+  for (auto &op : block) {
+    // if (ExprVisitor(*this).dispatchVisitor(&op))
+    //   continue;
+
+    // if (StmtVisitor(*this).dispatchVisitor(&op))
+    //   continue;
+
+    // emitError(&op, "can't be correctly emitted.");
+    os << op;
+  }
+  os << "\n";
+  os << "=====END BLOCKEMIT=====\n\n";
+
+  // TODO: hard-code for now..
+  indent();
+  os << "// Register data to device\n";
+  indent();
+  os << "gpu.host_register %cast_'v[0-9]+' : type(memref<256xf32>)\n\n";
+  indent();
+  os << "// GPU Kernel definition\n";
+  indent();
+  os << "gpu.launch ";
+  os << "blocks(%bx, %by, %bz) in (%grid_x = %c1, %grid_y = %c1, %grid_z = %c1)\n";
+  indent();
+  os << "          threads(%tx, %ty, %tz) in (%block_x = %c5, %block_y = %c1, %block_z = %c1) {\n";
+
+  addIndent();
+  indent();
+  os << "// Kernel body\n";
+  indent();
+  os << "...\n";
+  indent();
+  os << "gpu.terminate\n";
+  reduceIndent();
+  indent();
+  os << "}\n\n";
+  indent();
+  os << "return\n";
+}
+
+void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
+  assert(!isDeclared(array) && "has been declared before.");
+
+  auto arrayType = array.getType().cast<ShapedType>();
+  if (arrayType.hasStaticShape()) {
+    auto memref = array.getType().dyn_cast<MemRefType>();
+    if (memref) {
+      // auto attr = memref.getMemorySpace();
+      // if (attr &&
+      //     attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+      //   // Value has been declared before or is a constant number.
+      //   if (isDeclared(array)) {
+      //     os << getName(array);
+      //     return;
+      //   }
+      //   // print stream type
+      //   os << "hls::stream< " << getTypeName(array) << " > ";
+      //   if (isFunc) {
+      //     os << "&"; // pass by reference
+      //   }
+      //   // Add the new value to nameTable and emit its name.
+      //   os << addName(array, /*isPtr=*/false, name);
+      //   // Add original array declaration as comment
+      //   os << " /* ";
+      //   emitValue(array, 0, false, name);
+      //   for (auto &shape : arrayType.getShape())
+      //     os << "[" << shape << "]";
+      //   os << " */";
+      // }
+      if (false) {
+        // TODO
+      } else {
+        // emitValue(array, 0, false, name);
+        os << "%" << addName(array, false) << ": " << memref;
+        // os << ": " << memref;
+        // if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
+        //   // do nothing;
+        // } else {
+        //   for (auto &shape : arrayType.getShape())
+        //     os << "[" << shape << "]";
+        // }
+      }
+    } 
+    //else { // tensor
+    //   emitValue(array, 0, false, name);
+    // }
+  } 
+  // else
+  //   emitValue(array, /*rank=*/0, /*isPtr=*/true, name);
+}
 
 void ModuleEmitter::emitFunction(FuncOp func) {
   // if (func->hasAttr("bit"))
@@ -55,97 +159,62 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   // Emit function signature.
   addIndent();
   indent();
-  os << "func @" << func.getName() << " (\n";
+  os << "func @" << func.getName() << " (";
 
-  // Emit function arguments
-  unsigned int argIdx = 0;
+  // This vector is to record all ports of the function.
   SmallVector<Value, 8> portList;
-  addIndent();
+
+  // Emit function arguments.
+  unsigned int argIdx = 0;
+  // std::vector<std::string> input_args;
+  // if (func->hasAttr("inputs")) {
+  //   std::string input_names =
+  //       func->getAttr("inputs").cast<StringAttr>().getValue().str();
+  //   input_args = split_names(input_names);
+  // }
+  // std::string output_names;
+  // if (func->hasAttr("outputs")) {
+  //   output_names = func->getAttr("outputs").cast<StringAttr>().getValue().str();
+  //   // suppose only one output
+  //   input_args.push_back(output_names);
+  // }
+
   for (auto &arg : func.getArguments()) {
-    indent();
     if (arg.getType().isa<ShapedType>()) {
-      os << arg;
+      // TODO: for now, input_args.size() == 0
+      // if (input_args.size() == 0) {
+      emitArrayDecl(arg, true);
+      // } else {
+        // emitArrayDecl(arg, true, input_args[argIdx]);
+      // }
     } else {
-      os << "NO\n";
+      os << "N/A\n";
     }
 
     if (argIdx++ != func.getNumArguments() - 1)
-      os << ",\n";
+      os << ", ";
 
     portList.push_back(arg);
   }
-  os << "\n";
-  reduceIndent();
+
+  os << ") {";
+  emitInfoAndNewLine(func);
 
   // Emit function body
-  indent();
-  os << ") {\n";
-  // emitInfoAndNewLine(func);
-
-  // Data register
-  // TODO: do we really need to cast the memref?
   addIndent();
-  // indent();
-  // os << "%cast_src0 = memref.cast %src0 : memref<5xi32> to memref<*xi32>\n";
-  indent();
-  os << "gpu.host_register %cast_A : memref<256xf32>\n";
-  // indent();
-  // os << "%cast_src1 = memref.cast %src1 : memref<5xi32> to memref<*xi32>\n";
-  indent();
-  os << "gpu.host_register %cast_B : memref<256xf32>\n";
-  // indent();
-  // os << "%cast_dest = memref.cast %dest : memref<5xi32> to memref<*xi32>\n";
-  indent();
-  os << "gpu.host_register %cast_C : memref<256xf32>\n";
-
-  // GPU Kernel definition
-  os << "\n";
-  indent();
-  os << "gpu.launch ";
-
-  // TODO: Calculate dimensions based off of split?
-
-  // Block dimension definition
-  os << "blocks(%bx, %by, %bz) in (%grid_x = %c1, %grid_y = %c1, %grid_z = %c1)\n";
-
-  // Thread dimension definition
-  indent();
-  os << "          threads(%tx, %ty, %tz) in (%block_x = %c5, %block_y = %c1, %block_z = %c1) {\n";
-
-  // Kernel body
-  addIndent();
-
-  indent();
-  os << "%a = memref.load %cast_A[%tx] : memref<256xf32>\n";
-  indent();
-  os << "%b = memref.load %cast_B[%tx] : memref<256xf32>\n";
-  indent();
-  os << "%sum = arith.addf %a, %b : f32\n";
-  indent();
-  os << "memref.store %sum, %cast_C[%tx] : memref<256xf32>\n";
-
-  indent();
-  os << "gpu.terminator\n";
-
-  reduceIndent();
-  indent();
-  os << "}\n";
-
-  // End function
-  indent();
-  os << "return\n";
-
+  emitBlock(func.front());
   reduceIndent();
   indent();
   os << "}\n";
 
   // End module
-  os << "}";
+  os << "}\n";
 
   // An empty line.
   os << "\n";
 }
 
+/// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
   std::string run_instr = R"XXX(// RUN: hcl-opt -opt %s | FileCheck %s)XXX";
   os << run_instr << "\n\n";
@@ -155,6 +224,10 @@ void ModuleEmitter::emitModule(ModuleOp module) {
     emitFunction(op);
   }
 }
+
+//===----------------------------------------------------------------------===//
+// Entry of hcl-translate
+//===----------------------------------------------------------------------===//
 
 LogicalResult hcl::emitMlirGpu(ModuleOp module, llvm::raw_ostream &os) {
   HCLEmitterState state(os);

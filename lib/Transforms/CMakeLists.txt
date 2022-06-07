@@ -5,6 +5,7 @@ add_mlir_library(MLIRHCLPasses
     AnyWidthInteger.cpp
     MoveReturnToInput.cpp
     LowerCompositeType.cpp
+    LowerBitOps.cpp
     Passes.cpp
 
     ADDITIONAL_HEADER_DIRS

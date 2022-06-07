@@ -37,4 +37,9 @@ def LowerCompositeType : Pass<"lower-composite-type", "ModuleOp"> {
   let constructor = "mlir::hcl::createLowerCompositeTypePass()";
 }
 
+def LowerBitOps : Pass<"lower-bit-ops", "ModuleOp"> {
+  let summary = "Lower bit operations";
+  let constructor = "mlir::hcl::createLowerBitOpsPass()";
+}
+
 #endif // HCL_MLIR_PASSES

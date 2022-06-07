@@ -264,35 +264,6 @@ public:
   }
 };
 
-/*
-class GetIntSliceOpLowering : public ConversionPattern {
-public:
-  explicit GetIntSliceOpLowering(MLIRContext *context)
-      : ConversionPattern(hcl::GetIntSliceOp::getOperationName(), 4, context) {}
-  LogicalResult
-  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                  ConversionPatternRewriter &rewriter) const override {
-    Value input = operands[0];
-    // Value hi = operands[1];
-    Value lo = operands[2];
-    // cast low and high index to int32 type
-    Type i32 = rewriter.getI32Type();
-    Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, i32);
-    // Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi,
-    // i32); Shift and truncate
-    Type resType = op->getResult(0).getType();
-    Value shifted =
-        rewriter.create<mlir::arith::ShRSIOp>(loc, input, lo_casted);
-    Value slice = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, resType);
-    op->getResult(0).replaceAllUsesWith(slice);
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
-*/
-
-// Another way to implement GetIntSliceOp with just shifting
 class GetIntSliceOpLowering : public ConversionPattern {
 public:
   explicit GetIntSliceOpLowering(MLIRContext *context)
@@ -396,6 +367,53 @@ public:
   }
 };
 
+class BitReverseOpLowering : public ConversionPattern {
+public:
+  explicit BitReverseOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::BitReverseOp::getOperationName(), 1, context) {}
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    Value input = operands[0];
+    Location loc = op->getLoc();
+    unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    // Create two constants: number of bits, and zero
+    Value const_0_i32 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, rewriter.getI32Type());
+    Value const_width_i32 =
+        rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, rewriter.getI32Type());
+    Value const_0 = 
+        rewriter.create<mlir::arith::IndexCastOp>(loc, const_0_i32, rewriter.getIndexType());
+    Value const_width =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, const_width_i32, rewriter.getIndexType());
+    // Create a single-element memref to store the result
+    MemRefType memRefType = MemRefType::get({1}, input.getType());
+    Value resultMemRef = rewriter.create<mlir::memref::AllocOp>(loc, memRefType);
+    // Create a loop to iterate over the bits
+    SmallVector<int64_t, 1> steps(1, 1);
+    SmallVector<int64_t, 1> lbs(1, 0);
+    SmallVector<int64_t, 1> ubs(1, iwidth);
+    buildAffineLoopNest(
+      rewriter, loc, lbs, ubs, steps,
+      [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+        Value res = nestedBuilder.create<AffineLoadOp>(loc, resultMemRef, const_0);
+        // Get the bit at the width - current position
+        Value reverse_idx = nestedBuilder.create<mlir::arith::SubIOp>(loc, const_width, ivs[0]);
+        Type one_bit_type = nestedBuilder.getIntegerType(1);
+        Value bit = nestedBuilder.create<mlir::hcl::GetIntBitOp>(loc, one_bit_type, input, reverse_idx);
+        // Set the bit at the current position
+        nestedBuilder.create<mlir::hcl::SetIntBitOp>(loc, res, ivs[0], bit);
+        nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef, const_0);
+      }
+    );
+    // Load the result from resultMemRef
+    Value res = rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0);
+    op->getResult(0).replaceAllUsesWith(res);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {
@@ -453,6 +471,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<GetIntBitOpLowering>(&context);
   patterns.add<SetIntSliceOpLowering>(&context);
   patterns.add<GetIntSliceOpLowering>(&context);
+  patterns.add<BitReverseOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This
   // ensures that only legal operations will remain after the conversion.

@@ -45,14 +45,13 @@ void lowerBitReverseOps(FuncOp &func) {
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
     OpBuilder rewriter(bitReverseOp);
     // Create two constants: number of bits, and zero
-    Value const_0_i32 = rewriter.create<mlir::arith::ConstantIntOp>(
-        loc, 0, rewriter.getI32Type());
     Value const_width_i32 = rewriter.create<mlir::arith::ConstantIntOp>(
         loc, iwidth, rewriter.getI32Type());
-    Value const_0 = rewriter.create<mlir::arith::IndexCastOp>(
-        loc, const_0_i32, rewriter.getIndexType());
     Value const_width = rewriter.create<mlir::arith::IndexCastOp>(
         loc, const_width_i32, rewriter.getIndexType());
+    SmallVector<Value> const_0_indices;
+    const_0_indices.push_back(rewriter.create<arith::ConstantIndexOp>(loc, 0));
+
     // Create a single-element memref to store the result
     MemRefType memRefType = MemRefType::get({1}, input.getType());
     Value resultMemRef =
@@ -65,7 +64,7 @@ void lowerBitReverseOps(FuncOp &func) {
         rewriter, loc, lbs, ubs, steps,
         [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
           Value res =
-              nestedBuilder.create<AffineLoadOp>(loc, resultMemRef, const_0);
+              nestedBuilder.create<AffineLoadOp>(loc, resultMemRef, const_0_indices);
           // Get the bit at the width - current position
           Value reverse_idx = nestedBuilder.create<mlir::arith::SubIOp>(
               loc, const_width, ivs[0]);
@@ -74,10 +73,10 @@ void lowerBitReverseOps(FuncOp &func) {
               loc, one_bit_type, input, reverse_idx);
           // Set the bit at the current position
           nestedBuilder.create<mlir::hcl::SetIntBitOp>(loc, res, ivs[0], bit);
-          nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef, const_0);
+          nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef, const_0_indices);
         });
     // Load the result from resultMemRef
-    Value res = rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0);
+    Value res = rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0_indices);
     op->getResult(0).replaceAllUsesWith(res);
   }
 

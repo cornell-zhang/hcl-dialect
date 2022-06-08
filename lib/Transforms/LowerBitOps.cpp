@@ -43,6 +43,7 @@ void lowerBitReverseOps(FuncOp &func) {
     Value input = bitReverseOp.getOperand();
     Location loc = bitReverseOp.getLoc();
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
+    iwidth = iwidth - 1;
     OpBuilder rewriter(bitReverseOp);
     // Create two constants: number of bits, and zero
     Value const_width_i32 = rewriter.create<mlir::arith::ConstantIntOp>(

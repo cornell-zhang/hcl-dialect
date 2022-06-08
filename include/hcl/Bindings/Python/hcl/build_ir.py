@@ -2066,13 +2066,19 @@ class ASTVisitor:
                 if_op.attributes["unsigned"] = UnitAttr.get()
             # true branch
             GlobalInsertionPoint.save(if_op.then_block)
-            self.visit(expr.true_val)
-            affine.AffineYieldOp([expr.true_val.result], ip=GlobalInsertionPoint.get())
+            true_val = self.visit(expr.true_val).result
+            if isinstance(if_op, affine.AffineIfOp):
+                affine.AffineYieldOp([true_val], ip=GlobalInsertionPoint.get())
+            else:  # scf.IfOp
+                scf.YieldOp([true_val], ip=GlobalInsertionPoint.get())
             GlobalInsertionPoint.restore()
             # false branch
             GlobalInsertionPoint.save(if_op.else_block)
-            self.visit(expr.false_val)
-            affine.AffineYieldOp([expr.false_val.result], ip=GlobalInsertionPoint.get())
+            false_val = self.visit(expr.false_val).result
+            if isinstance(if_op, affine.AffineIfOp):
+                affine.AffineYieldOp([false_val], ip=GlobalInsertionPoint.get())
+            else:  # scf.IfOp
+                scf.YieldOp([false_val], ip=GlobalInsertionPoint.get())
             GlobalInsertionPoint.restore()
             return if_op
         elif self.mode == "profile":
@@ -2388,7 +2394,6 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
             ip=ip,
             loc=loc,
         )
-        print(forOp)
 
     return forOp
 
@@ -2410,7 +2415,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[]):
             remover.visit(cond)
         builder = ASTVisitor(mode="build")
         builder.visit(cond)
-        if_op = scf.IfOp(cond.result, ip=ip)
+        if_op = scf.IfOp(cond.result, hasElse=hasElse, results_=resultType, ip=ip)
     else:  # Affine expression
         eq_flags = []
         new_conds = []

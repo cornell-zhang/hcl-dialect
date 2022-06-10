@@ -838,7 +838,7 @@ class ConstantOp(ExprOp):
                         "Type error: unrecognized type: " + str(self.dtype)
                     )
                 if is_unsigned_type(self.dtype):
-                    dtype = IntegerType.get_signless(64)
+                    dtype = IntegerType.get_signless(self.dtype.width)
                     self.built_op = self.op(
                         dtype, value_attr, ip=GlobalInsertionPoint.get()
                     )
@@ -851,7 +851,7 @@ class ConstantOp(ExprOp):
             else:  # fixed types
                 self.val *= 2 ** self.dtype.frac
                 self.val %= 2 ** self.dtype.width
-                value_attr = IntegerAttr.get(IntegerType.get_signless(64), self.val)
+                value_attr = IntegerAttr.get(IntegerType.get_signless(self.dtype.width), self.val)
                 self.built_op = self.op(
                     IntegerType.get_signless(64),
                     value_attr,

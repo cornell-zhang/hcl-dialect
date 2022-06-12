@@ -342,6 +342,7 @@ def cast_types(lhs, rhs):
                 raise RuntimeError("Type conversion not implemented")
     else:
         raise RuntimeError("Type conversion failed")
+    # TODO(Niansong): make this warning suppressable, and add line number or stage name
     print(
         "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
@@ -713,6 +714,14 @@ class ReduceVar(IterVar):
 
 
 class ConstantOp(ExprOp):
+    # TODO(Niansong): Needs a robust way to handle overflow
+    """
+    Constant tensor is implemented as global memref in MLIR.
+    To support anywidth integer and fixed point numbers,
+    we use i64 global memref to represent the constant.
+    When the constant is to be consumed, we cast it to the 
+    target width.
+    """
     def __init__(self, dtype, val, name="const_tensor"):
         super().__init__(arith.ConstantOp)
         self.val = val
@@ -723,17 +732,10 @@ class ConstantOp(ExprOp):
 
     def build(self):
         if isinstance(self.val, (List, np.ndarray)):
+            # val is numpy ndarray
             if is_integer_type(self.dtype):
-                if self.dtype.width == 1:
-                    np_dtype = np.bool
-                elif self.dtype.width <= 8:
-                    np_dtype = np.int8
-                elif self.dtype.width <= 16:
-                    np_dtype = np.int16
-                elif self.dtype.width <= 32:
-                    np_dtype = np.int32
-                # elif self.dtype.width <= 64:
-                #     np_dtype = np.int64
+                if self.dtype.width <= 64:
+                    np_dtype = np.int64
                 else:
                     raise RuntimeError(
                         "Integer width ({}) too large, not supported by numpy".format(
@@ -749,12 +751,26 @@ class ConstantOp(ExprOp):
                     np_dtype = np.float64
                 else:
                     raise RuntimeError("Unrecognized data type")
-            else:  # Fixed point
-                raise RuntimeError("Not supported by numpy")
-            self.val = np.array(self.val, dtype=np_dtype)
-            if is_unsigned_type(self.dtype):
-                dtype = IntegerType.get_signless(self.dtype.width)
+            elif is_fixed_type(self.dtype):  # Fixed point
+                if is_signed_type(self.dtype):
+                    sb = 1 << self.dtype.width
+                    sb_limit = 1 << (self.dtype.width - 1)
+                    self.val = self.val * (2**self.dtype.frac)
+                    self.val = np.fix(self.val) % sb
+                    def cast_func(x): return x if x < sb_limit else x - sb
+                    self.val = np.vectorize(cast_func)(self.val)
+                else:
+                    sb = 1 << self.dtype.width
+                    self.val = self.val * (2**self.dtype.frac)
+                    self.val = np.fix(self.val) % sb
+                np_dtype = np.int64
             else:
+                raise RuntimeError("Unrecognized data type")
+            
+            self.val = np.array(self.val, dtype=np_dtype)
+            if is_integer_type(self.dtype) or is_fixed_type(self.dtype):
+                dtype = IntegerType.get_signless(64)
+            else: # floating point
                 dtype = self.dtype
             value_attr = DenseElementsAttr.get(self.val, type=dtype)
             sym_name = StringAttr.get(self.name)
@@ -772,8 +788,11 @@ class ConstantOp(ExprOp):
             )
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
+            # tensor_wrapper = TensorOp(
+            #     self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
+            # )
             tensor_wrapper = TensorOp(
-                self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
+                self.val.shape, memref.AllocOp, dtype, "const_tensor"
             )
             tensor_wrapper.build()
             self.tensor = tensor_wrapper
@@ -782,8 +801,8 @@ class ConstantOp(ExprOp):
                 FlatSymbolRefAttr.get(self.name),
                 ip=GlobalInsertionPoint.get(),
             )
-            # Note: why we have an update_op here?
-            # memref.GetGlobalOp is not subscriptale
+            # Note: Why do we have an update_op here?
+            # memref.GetGlobalOp is not subscriptable,
             # meaning that we can't do something like
             # const_tensor[x] on it, so that we need to
             # create a tensor wrapper to do that.
@@ -796,7 +815,8 @@ class ConstantOp(ExprOp):
             self.tensor.update_op(store)
             self.built_op = store
             return self.built_op
-        else:
+        else:# val is not a numpy ndarray, it's a scalar
+            # Int and Float
             if not is_fixed_type(self.dtype):
                 if isinstance(self.dtype, IntegerType):
                     if self.dtype.width == 1:
@@ -829,20 +849,14 @@ class ConstantOp(ExprOp):
                     )
                 return self.built_op
             else:  # fixed types
-                if isinstance(self.val, float):
-                    value_attr = FloatAttr.get(F32Type.get(), self.val)
-                    self.built_op = self.op(
-                        F32Type.get(), value_attr, ip=GlobalInsertionPoint.get()
-                    )
-                elif isinstance(self.val, int):
-                    value_attr = IntegerAttr.get(IntegerType.get_signless(32), self.val)
-                    self.built_op = self.op(
-                        IntegerType.get_signless(32),
-                        value_attr,
-                        ip=GlobalInsertionPoint.get(),
-                    )
-                else:
-                    raise RuntimeError("Type error")
+                self.val *= 2 ** self.dtype.frac
+                self.val %= 2 ** self.dtype.width
+                value_attr = IntegerAttr.get(IntegerType.get_signless(self.dtype.width), self.val)
+                self.built_op = self.op(
+                    IntegerType.get_signless(64),
+                    value_attr,
+                    ip=GlobalInsertionPoint.get(),
+                )
                 return self.built_op
 
 

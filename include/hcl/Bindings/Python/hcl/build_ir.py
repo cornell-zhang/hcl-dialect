@@ -2080,6 +2080,7 @@ class ASTVisitor:
             else:  # scf.IfOp
                 scf.YieldOp([false_val], ip=GlobalInsertionPoint.get())
             GlobalInsertionPoint.restore()
+            expr.built_op = if_op
             return if_op
         elif self.mode == "profile":
             self.visit(expr.cond)
@@ -2413,9 +2414,20 @@ def make_if(cond, ip=None, hasElse=False, resultType=[]):
         if cond.built_op is not None:
             remover = ASTVisitor(mode="remove")
             remover.visit(cond)
-        builder = ASTVisitor(mode="build")
-        builder.visit(cond)
-        if_op = scf.IfOp(cond.result, hasElse=hasElse, results_=resultType, ip=ip)
+        if not isinstance(cond, LogicalAndOp):
+            builder = ASTVisitor(mode="build")
+            builder.visit(cond)
+            cond_result = cond.result
+        else:
+            lst = cond.cond_lst
+            res = lst[0]
+            for i, single_cond in enumerate(lst):
+                if i == 0:
+                    continue
+                res = AndOp(res, single_cond)
+                res.build()
+            cond_result = res.result
+        if_op = scf.IfOp(cond_result, hasElse=hasElse, results_=resultType, ip=ip)
     else:  # Affine expression
         eq_flags = []
         new_conds = []

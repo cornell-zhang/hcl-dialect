@@ -328,8 +328,8 @@ void markFixedOperations(FuncOp &f) {
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
     }
-    // if op is MulFixedOp, double lwidth, rwidth, and reswidth
-    if (llvm::isa<MulFixedOp>(op)) {
+    // if op is MulFixedOp/DivFixedOp, double lwidth, rwidth, and reswidth
+    if (llvm::isa<MulFixedOp>(op) || llvm::isa<DivFixedOp>(op)) {
       lwidth *= 2;
       rwidth *= 2;
       reswidth *= 2;
@@ -504,19 +504,19 @@ void lowerFixedDiv(DivFixedOp &op) {
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
-
+  arith::ShLIOp lhs_shifted = rewriter.create<arith::ShLIOp>(op->getLoc(), lhs, fracCstOp);
   if (opTy.isa<FixedType>()) { // fixed
     arith::DivSIOp res =
-        rewriter.create<arith::DivSIOp>(op->getLoc(), lhs, rhs);
-    arith::ShLIOp shift =
-        rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
-    op->replaceAllUsesWith(shift);
+        rewriter.create<arith::DivSIOp>(op->getLoc(), lhs_shifted, rhs);
+    // arith::ShLIOp shift =
+        // rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
+    op->replaceAllUsesWith(res);
   } else { // ufixed
     arith::DivUIOp res =
-        rewriter.create<arith::DivUIOp>(op->getLoc(), lhs, rhs);
-    arith::ShLIOp shift =
-        rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
-    op->replaceAllUsesWith(shift);
+        rewriter.create<arith::DivUIOp>(op->getLoc(), lhs_shifted, rhs);
+    // arith::ShLIOp shift =
+        // rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
+    op->replaceAllUsesWith(res);
   }
 }
 

@@ -56,6 +56,15 @@ def is_floating_point_type(dtype):
     return isinstance(dtype, (F16Type, F32Type, F64Type))
 
 
+def get_floating_point_width(dtype):
+    if F16Type.isinstance(dtype):
+        return 16
+    elif F32Type.isinstance(dtype):
+        return 32
+    elif F64Type.isinstance(dtype):
+        return 64
+
+
 def is_integer_type(dtype):
     return isinstance(dtype, IntegerType)
 
@@ -1454,9 +1463,11 @@ class CastOp(ExprOp):
         elif is_floating_point_type(res_type) and is_floating_point_type(
             self.val.dtype
         ):
-            if res_type.width < self.val.dtype.width:
+            res_width = get_floating_point_width(res_type)
+            val_width = get_floating_point_width(self.val.dtype)
+            if res_width < val_width:
                 op = arith.TruncFOp
-            elif res_type.width == self.val.dtype.width:
+            elif res_width == val_width:
                 op = None
             else:
                 op = arith.ExtFOp

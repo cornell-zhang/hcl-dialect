@@ -498,24 +498,22 @@ void lowerFixedDiv(DivFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width);
   // lhs<width, frac> / rhs<width, frac> -> res<width, 0>
-  // Therefore, we need to left shift the result for frac bit
+  // Therefore, we need to left shift the lhs for frac bit
+  // lhs<width, 2 * frac> / rhs<width, frac> -> res<width, frac>
   Type opTy = op->getOperand(0).getType();
   IntegerType intTy = IntegerType::get(op->getContext(), width);
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
-  arith::ShLIOp lhs_shifted = rewriter.create<arith::ShLIOp>(op->getLoc(), lhs, fracCstOp);
+  arith::ShLIOp lhs_shifted =
+      rewriter.create<arith::ShLIOp>(op->getLoc(), lhs, fracCstOp);
   if (opTy.isa<FixedType>()) { // fixed
     arith::DivSIOp res =
         rewriter.create<arith::DivSIOp>(op->getLoc(), lhs_shifted, rhs);
-    // arith::ShLIOp shift =
-        // rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
     op->replaceAllUsesWith(res);
   } else { // ufixed
     arith::DivUIOp res =
         rewriter.create<arith::DivUIOp>(op->getLoc(), lhs_shifted, rhs);
-    // arith::ShLIOp shift =
-        // rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
     op->replaceAllUsesWith(res);
   }
 }

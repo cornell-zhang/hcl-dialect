@@ -44,13 +44,11 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
   // Set the extra type hint based on the input/output memref type
   std::string itypes = "";
   if (funcOp->hasAttr("itypes")) {
-    itypes =
-        funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
+    itypes = funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
   }
   std::string otypes = "";
   if (funcOp->hasAttr("otypes")) {
-    otypes =
-        funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
+    otypes = funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
   }
 
   for (auto v : llvm::enumerate(result_types)) {
@@ -101,10 +99,8 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
     }
   }
 
-  funcOp->setAttr("itypes",
-                  StringAttr::get(funcOp.getContext(), itypes));
-  funcOp->setAttr("otypes",
-                  StringAttr::get(funcOp.getContext(), otypes));
+  funcOp->setAttr("itypes", StringAttr::get(funcOp.getContext(), itypes));
+  funcOp->setAttr("otypes", StringAttr::get(funcOp.getContext(), otypes));
 
   // Update FuncOp's block argument types
   for (Block &block : funcOp.getBlocks()) {
@@ -186,10 +182,8 @@ void updateReturnOp(FuncOp &funcOp) {
           // Get signedness hint information
           std::string otypes = "";
           if (funcOp->hasAttr("otypes")) {
-            otypes = funcOp->getAttr("otypes")
-                               .cast<StringAttr>()
-                               .getValue()
-                               .str();
+            otypes =
+                funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
           }
           bool is_unsigned = false;
           if (i < otypes.length()) {
@@ -300,8 +294,8 @@ void lowerPrintOp(FuncOp &funcOp) {
 void markFixedOperations(FuncOp &f) {
   SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
-    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp,
-                  MaxFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
+                  MinFixedOp, MaxFixedOp>(op)) {
       fixedOps.push_back(op);
     }
   });
@@ -491,6 +485,41 @@ void lowerFixedMul(MulFixedOp &op) {
   }
 }
 
+// Lower FixedDivOp to DivSIOp/DivUIOp
+void lowerFixedDiv(DivFixedOp &op) {
+  size_t width =
+      op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t frac =
+      op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
+
+  OpBuilder rewriter(op);
+  Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(0), width);
+  Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
+                               op->getOperand(1), width);
+  // lhs<width, frac> / rhs<width, frac> -> res<width, 0>
+  // Therefore, we need to left shift the result for frac bit
+  Type opTy = op->getOperand(0).getType();
+  IntegerType intTy = IntegerType::get(op->getContext(), width);
+  auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
+  auto fracCstOp =
+      rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
+
+  if (opTy.isa<FixedType>()) { // fixed
+    arith::DivSIOp res =
+        rewriter.create<arith::DivSIOp>(op->getLoc(), lhs, rhs);
+    arith::ShLIOp shift =
+        rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
+    op->replaceAllUsesWith(shift);
+  } else { // ufixed
+    arith::DivUIOp res =
+        rewriter.create<arith::DivUIOp>(op->getLoc(), lhs, rhs);
+    arith::ShLIOp shift =
+        rewriter.create<arith::ShLIOp>(op->getLoc(), res, fracCstOp);
+    op->replaceAllUsesWith(shift);
+  }
+}
+
 // Lower CmpFixedOp to CmpIOp
 void lowerFixedCmp(CmpFixedOp &op) {
   size_t width =
@@ -602,6 +631,8 @@ void visitOperation(Operation &op) {
     lowerFixedSub(new_op);
   } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
     lowerFixedMul(new_op);
+  } else if (auto new_op = dyn_cast<DivFixedOp>(op)) {
+    lowerFixedDiv(new_op);
   } else if (auto new_op = dyn_cast<CmpFixedOp>(op)) {
     lowerFixedCmp(new_op);
   } else if (auto new_op = dyn_cast<MinFixedOp>(op)) {
@@ -621,8 +652,8 @@ void visitBlock(Block &block) {
   SmallVector<Operation *, 10> opToRemove;
   for (auto &op : block.getOperations()) {
     visitOperation(op);
-    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, CmpFixedOp, MinFixedOp,
-                  MaxFixedOp>(op)) {
+    if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
+                  MinFixedOp, MaxFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }
@@ -656,7 +687,6 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateReturnOp(func);
     func.setType(newFuncType);
   }
-
 
   return true;
 }

@@ -90,4 +90,15 @@ module {
     } {loop_name = "x", stage_name = "compute_1"}
     return %0 : memref<10xf32>
   }
+
+  func @fixed_div(%arg0: memref<100x!hcl.Fixed<6, 2>>, %arg1: memref<100x!hcl.Fixed<6, 2>>) -> memref<100x!hcl.Fixed<6, 2>> attributes {itypes = "__", otypes = "_"} {
+    %0 = memref.alloc() {name = "compute_2"} : memref<100x!hcl.Fixed<6, 2>>
+    affine.for %arg2 = 0 to 100 {
+      %1 = affine.load %arg0[%arg2] {from = "compute_0"} : memref<100x!hcl.Fixed<6, 2>>
+      %2 = affine.load %arg1[%arg2] {from = "compute_1"} : memref<100x!hcl.Fixed<6, 2>>
+      %3 = "hcl.div_fixed"(%1, %2) : (!hcl.Fixed<6, 2>, !hcl.Fixed<6, 2>) -> !hcl.Fixed<6, 2>
+      affine.store %3, %0[%arg2] {to = "compute_2"} : memref<100x!hcl.Fixed<6, 2>>
+    } {loop_name = "x", stage_name = "compute_2"}
+    return %0 : memref<100x!hcl.Fixed<6, 2>>
+  }
 }

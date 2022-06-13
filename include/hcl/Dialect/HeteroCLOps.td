@@ -403,6 +403,10 @@ def MulFixedOp : FixedBinaryOp<"mul_fixed"> {
   let summary = "fixed point mulplication operation";
 }
 
+def DivFixedOp : FixedBinaryOp<"div_fixed"> {
+  let summary = "fixed point division operation";
+}
+
 def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, TypesMatchWith<
     "result type has i1 element type and same shape as operands",
     "lhs", "result", "getI1SameShape($_self)">] # ElementwiseMappable.traits> {

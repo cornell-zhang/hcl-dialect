@@ -436,6 +436,7 @@ public:
   bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
   bool visitOp(hcl::SubFixedOp op) { return emitter.emitBinary(op, "-"), true; }
   bool visitOp(hcl::MulFixedOp op) { return emitter.emitBinary(op, "*"), true; }
+  bool visitOp(hcl::DivFixedOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(hcl::CmpFixedOp op);
   bool visitOp(hcl::MinFixedOp op) {
     return emitter.emitMaxMin(op, "min"), true;
@@ -1814,8 +1815,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   }
   std::string itypes = "";
   if (func->hasAttr("itypes"))
-    itypes =
-        func->getAttr("itypes").cast<StringAttr>().getValue().str();
+    itypes = func->getAttr("itypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
       itypes += "x";
@@ -1846,8 +1846,7 @@ void ModuleEmitter::emitFunction(FuncOp func) {
   auto args = func.getArguments();
   std::string otypes = "";
   if (func->hasAttr("otypes"))
-    otypes =
-        func->getAttr("otypes").cast<StringAttr>().getValue().str();
+    otypes = func->getAttr("otypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
       otypes += "x";

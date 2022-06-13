@@ -719,9 +719,10 @@ class ConstantOp(ExprOp):
     Constant tensor is implemented as global memref in MLIR.
     To support anywidth integer and fixed point numbers,
     we use i64 global memref to represent the constant.
-    When the constant is to be consumed, we cast it to the 
+    When the constant is to be consumed, we cast it to the
     target width.
     """
+
     def __init__(self, dtype, val, name="const_tensor"):
         super().__init__(arith.ConstantOp)
         self.val = val
@@ -755,22 +756,25 @@ class ConstantOp(ExprOp):
                 if is_signed_type(self.dtype):
                     sb = 1 << self.dtype.width
                     sb_limit = 1 << (self.dtype.width - 1)
-                    self.val = self.val * (2**self.dtype.frac)
+                    self.val = self.val * (2 ** self.dtype.frac)
                     self.val = np.fix(self.val) % sb
-                    def cast_func(x): return x if x < sb_limit else x - sb
+
+                    def cast_func(x):
+                        return x if x < sb_limit else x - sb
+
                     self.val = np.vectorize(cast_func)(self.val)
                 else:
                     sb = 1 << self.dtype.width
-                    self.val = self.val * (2**self.dtype.frac)
+                    self.val = self.val * (2 ** self.dtype.frac)
                     self.val = np.fix(self.val) % sb
                 np_dtype = np.int64
             else:
                 raise RuntimeError("Unrecognized data type")
-            
+
             self.val = np.array(self.val, dtype=np_dtype)
             if is_integer_type(self.dtype) or is_fixed_type(self.dtype):
                 dtype = IntegerType.get_signless(64)
-            else: # floating point
+            else:  # floating point
                 dtype = self.dtype
             value_attr = DenseElementsAttr.get(self.val, type=dtype)
             sym_name = StringAttr.get(self.name)
@@ -815,7 +819,7 @@ class ConstantOp(ExprOp):
             self.tensor.update_op(store)
             self.built_op = store
             return self.built_op
-        else:# val is not a numpy ndarray, it's a scalar
+        else:  # val is not a numpy ndarray, it's a scalar
             # Int and Float
             if not is_fixed_type(self.dtype):
                 if isinstance(self.dtype, IntegerType):
@@ -851,7 +855,9 @@ class ConstantOp(ExprOp):
             else:  # fixed types
                 self.val *= 2 ** self.dtype.frac
                 self.val %= 2 ** self.dtype.width
-                value_attr = IntegerAttr.get(IntegerType.get_signless(self.dtype.width), self.val)
+                value_attr = IntegerAttr.get(
+                    IntegerType.get_signless(self.dtype.width), self.val
+                )
                 self.built_op = self.op(
                     IntegerType.get_signless(64),
                     value_attr,
@@ -1245,7 +1251,12 @@ class MulOp(BinaryOp):
 class DivOp(BinaryOp):
     def __init__(self, dtype, lhs, rhs):
         super().__init__(
-            {"float": arith.DivFOp, "int": arith.DivSIOp, "uint": arith.DivUIOp},
+            {
+                "float": arith.DivFOp,
+                "int": arith.DivSIOp,
+                "uint": arith.DivUIOp,
+                "fixed": hcl_d.DivFixedOp,
+            },
             dtype,
             lhs,
             rhs,

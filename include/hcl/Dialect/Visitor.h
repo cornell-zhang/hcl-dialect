@@ -70,10 +70,11 @@ public:
             UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
-            hcl::SubFixedOp, hcl::MulFixedOp, hcl::CmpFixedOp, hcl::MinFixedOp,
-            hcl::MaxFixedOp, hcl::PrintOp>([&](auto opNode) -> ResultType {
-          return thisCast->visitOp(opNode, args...);
-        })
+            hcl::SubFixedOp, hcl::MulFixedOp, hcl::DivFixedOp, hcl::CmpFixedOp,
+            hcl::MinFixedOp, hcl::MaxFixedOp, hcl::PrintOp>(
+            [&](auto opNode) -> ResultType {
+              return thisCast->visitOp(opNode, args...);
+            })
         .Default([&](auto opNode) -> ResultType {
           return thisCast->visitInvalidOp(op, args...);
         });
@@ -219,6 +220,7 @@ public:
   HANDLE(hcl::AddFixedOp);
   HANDLE(hcl::SubFixedOp);
   HANDLE(hcl::MulFixedOp);
+  HANDLE(hcl::DivFixedOp);
   HANDLE(hcl::CmpFixedOp);
   HANDLE(hcl::MinFixedOp);
   HANDLE(hcl::MaxFixedOp);

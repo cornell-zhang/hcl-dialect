@@ -464,6 +464,15 @@ def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
   let summary = "fixed point maximum operation";
 }
 
+def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed"> {
+    let summary = "generates a fixed point memref from a int global memref";
+    let arguments = (ins FlatSymbolRefAttr:$global);
+    let results = (outs AnyStaticShapeMemRef:$result);
+    let assemblyFormat = [{
+        $global `:` type($result) attr-dict
+    }];
+}
+
 // Bitwise operators
 def GetIntBitOp : HeteroCL_Op<"get_bit"> {
     let summary = "get bit of an integer";

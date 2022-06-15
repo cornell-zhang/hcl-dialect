@@ -379,6 +379,22 @@ def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to">
     }];
 }
 
+def HeteroCL_OutlineOp : HeteroCL_Op<"outline"> 
+{
+    let summary = "outline";
+    let description = [{
+        hcl.outline(stage)
+
+        Outline a stage as a function
+    }];
+
+    let arguments = (ins StageHandle:$stage);
+    let results = (outs ); //(outs FunctionType)
+    let assemblyFormat = [{
+        `(` $stage `)` attr-dict
+    }];
+}
+
 // Fixed-point operators
 def AnyFixed : Type<CPred<"$_self.isa<hcl::FixedType>() || $_self.isa<hcl::UFixedType>()">, "fixed-point",
                     "hcl::AnyFixedType">;

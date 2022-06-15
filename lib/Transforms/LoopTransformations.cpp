@@ -2228,10 +2228,81 @@ LogicalResult runInterKernelDataPlacementSingleFunction(Value &arrayToStream,
   return success();
 }
 
+template <class T, int opId>
+void getMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
+  stage.walk([&](T op) {
+    auto target = op.getOperand(opId);
+    if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
+        allMemrefs.end())
+      allMemrefs.push_back(target);
+  });
+}
+
+LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
+  // 1) Get the schedule
+  const auto stage_name =
+      dyn_cast<CreateStageHandleOp>(outlineOp.stage().getDefiningOp())
+          .stage_name();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, stage_name))) {
+    f.emitError("Cannot find Stage ") << stage_name.str();
+    return failure();
+  }
+
+  // 3) Find all load/store memrefs
+  SmallVector<Value> allMemrefs;
+  getMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
+  getMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs);
+  getMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
+  getMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs);
+  // remove memref defined inside the stage
+  rootForOp.walk([&](memref::AllocOp alloc) {
+    auto target = alloc.getResult();
+    if (std::find(allMemrefs.begin(), allMemrefs.end(), target) !=
+        allMemrefs.end())
+      allMemrefs.erase(
+          std::remove(allMemrefs.begin(), allMemrefs.end(), target),
+          allMemrefs.end());
+  });
+  SmallVector<Value> newMemrefs(allMemrefs);
+
+  // 4) Create a new function
+  auto builder = OpBuilder::atBlockBegin(mod.getBody());
+  TypeRange argTypes = ValueRange(newMemrefs).getTypes();
+  FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
+  auto func_name = "Stage_" + stage_name.str();
+  auto func =
+      builder.create<FuncOp>(mod.getLoc(), StringRef(func_name), funcType);
+  func.setPrivate();
+  Block *entryBlock = func.addEntryBlock();
+  builder.setInsertionPointToStart(entryBlock);
+  auto ret = builder.create<ReturnOp>(func->getLoc());
+
+  // 5) Create callop in the main function
+  OpBuilder call_builder(rootForOp);
+  call_builder.create<CallOp>(rootForOp.getLoc(), func, allMemrefs);
+
+  // 6) Move original stage to the new function
+  rootForOp->moveBefore(ret);
+
+  // 7) Update memrefs
+  //    Order of step 5-7 is important
+  //    Otherwise will mess up the references
+  for (auto item : llvm::enumerate(newMemrefs)) {
+    auto newMemref = func.getArgument(item.index());
+    auto oldMemref = item.value();
+    replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.region());
+  }
+
+  return success();
+}
+
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   ReshapeOp, ThreadBindOp, InterKernelToOp>(op);
+                   OutlineOp, ReshapeOp, ThreadBindOp, InterKernelToOp>(op);
 }
 
 template <class HCLOp>
@@ -2260,7 +2331,7 @@ void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   }
 }
 
-bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
+bool applyLoopTransformationOnSingleFunction(ModuleOp &mod, FuncOp &f) {
   SmallVector<Operation *, 10> opToRemove;
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
@@ -2331,6 +2402,9 @@ bool applyLoopTransformationOnSingleFunction(FuncOp &f) {
         } else {
           return false;
         }
+      } else if (auto new_op = dyn_cast<OutlineOp>(op)) {
+        if (failed(runOutline(mod, f, new_op)))
+          return false;
       }
       opToRemove.push_back(&op);
     }
@@ -2355,7 +2429,7 @@ bool applyLoopTransformation(ModuleOp &mod) {
   // apply schedule
   if (!isFoundTopFunc || !funcMap["top"]->hasAttr("top")) { // fallback
     for (FuncOp f : mod.getOps<FuncOp>()) {
-      applyLoopTransformationOnSingleFunction(f);
+      applyLoopTransformationOnSingleFunction(mod, f);
     }
   } else {
     for (FuncOp func : mod.getOps<FuncOp>()) {

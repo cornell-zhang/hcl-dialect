@@ -540,6 +540,15 @@ def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   }];
 }
 
+def FixedToFixedOp : HeteroCL_Op<"fixed_to_fixed"> {
+  let summary = "Cast operation from one fixed point type to another";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FixedLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
 def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
     let summary = "struct construct";
     let description = [{

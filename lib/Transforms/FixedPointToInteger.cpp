@@ -746,8 +746,40 @@ void lowerFixedToInt(FixedToIntOp &op) {
       op->replaceAllUsesWith(rshifted);
     }
   }
-  
 }
+
+void lowerIntToFixed(IntToFixedOp &op) {
+  OpBuilder rewriter(op);
+  auto loc = op.getLoc();
+  auto src = op.getOperand();
+  size_t dst_width =
+      op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t dst_frac =
+      op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
+  auto srcType = src.getType().cast<IntegerType>();
+  auto dstType = IntegerType::get(op.getContext(), dst_width);
+  size_t src_width = srcType.getWidth();
+  auto frac = rewriter.create<arith::ConstantOp>(
+      loc, srcType, rewriter.getIntegerAttr(srcType, dst_frac));
+  auto lshifted = rewriter.create<arith::ShLIOp>(loc, srcType, src, frac);
+  if (dst_width > src_width) {
+    if (isSigned) {
+      auto res = rewriter.create<arith::ExtSIOp>(loc, dstType, lshifted);
+      op->replaceAllUsesWith(res);
+    } else {
+      auto res = rewriter.create<arith::ExtUIOp>(loc, dstType, lshifted);
+      op->replaceAllUsesWith(res);
+    }
+  } else if (dst_width < src_width) {
+    auto res = rewriter.create<arith::TruncIOp>(loc, dstType, lshifted);
+    op->replaceAllUsesWith(res);
+  } else {
+    op->replaceAllUsesWith(lshifted);
+  }
+}
+  
 
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);

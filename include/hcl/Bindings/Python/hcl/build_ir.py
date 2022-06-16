@@ -801,19 +801,22 @@ class ConstantOp(ExprOp):
             )
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
-            # tensor_wrapper = TensorOp(
-            #     self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
-            # )
-            tensor_wrapper = TensorOp(
-                self.val.shape, memref.AllocOp, dtype, "const_tensor"
-            )
-            tensor_wrapper.build()
-            self.tensor = tensor_wrapper
-            store = memref.GetGlobalOp(
-                memref_type,
-                FlatSymbolRefAttr.get(self.name),
-                ip=GlobalInsertionPoint.get(),
-            )
+            
+            if is_fixed_type(self.dtype):
+                tensor_wrapper = TensorOp(self.val.shape, memref.AllocOp, self.dtype, "const_tensor")
+                tensor_wrapper.build()
+                self.tensor = tensor_wrapper
+                fixed_memref_type = MemRefType.get(self.val.shape, self.dtype)
+                store = hcl_d.GetGlobalFixedOp(fixed_memref_type, FlatSymbolRefAttr.get(self.name))
+            else:
+                tensor_wrapper = TensorOp(self.val.shape, memref.AllocOp, dtype, "const_tensor")
+                tensor_wrapper.build()
+                self.tensor = tensor_wrapper
+                store = memref.GetGlobalOp(
+                    memref_type,
+                    FlatSymbolRefAttr.get(self.name),
+                    ip=GlobalInsertionPoint.get(),
+                )
             # Note: Why do we have an update_op here?
             # memref.GetGlobalOp is not subscriptable,
             # meaning that we can't do something like

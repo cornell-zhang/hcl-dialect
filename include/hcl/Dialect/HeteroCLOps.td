@@ -549,6 +549,24 @@ def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   }];
 }
 
+def IntToFixedOp : HeteroCL_Op<"int_to_fixed"> {
+  let summary = "int to fixed cast operation";
+  let arguments = (ins SignlessIntegerLike:$input);
+  let results = (outs FixedLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def FixedToIntOp : HeteroCL_Op<"fixed_to_int"> {
+  let summary = "fixed to int cast operation";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs SignlessIntegerLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
 def FixedToFixedOp : HeteroCL_Op<"fixed_to_fixed"> {
   let summary = "Cast operation from one fixed point type to another";
   let arguments = (ins FixedLike:$input);

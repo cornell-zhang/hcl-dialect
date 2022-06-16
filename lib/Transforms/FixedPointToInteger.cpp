@@ -660,6 +660,30 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
   op->replaceAllUsesWith(res);
 }
 
+void lowerFixedToFloat(FixedToFloatOp &op) {
+  OpBuilder rewriter(op);
+  // size_t src_width =
+      // op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t src_frac = 
+      op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
+  auto loc = op.getLoc();
+  auto src = op.getOperand();
+  auto dst = op.getResult();
+  auto dstTy = dst.getType().cast<FloatType>();
+  auto frac = rewriter.create<arith::ConstantOp>(loc, dstTy, rewriter.getFloatAttr(dstTy, pow(2, src_frac)));
+  if (isSigned) {
+    auto res = rewriter.create<arith::SIToFPOp>(loc, dstTy, src);
+    auto real = rewriter.create<arith::DivFOp>(loc, dstTy, res, frac);
+    op->replaceAllUsesWith(real);
+  } else {
+    auto res = rewriter.create<arith::UIToFPOp>(loc, dstTy, src);
+    auto real = rewriter.create<arith::DivFOp>(loc, dstTy, res, frac);
+    op->replaceAllUsesWith(real);
+  }
+}
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);

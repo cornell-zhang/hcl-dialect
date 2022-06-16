@@ -647,6 +647,9 @@ void lowerFixedMax(MaxFixedOp &op) {
   }
 }
 
+// Build a memref.get_global operation that points to an I64 global memref
+// The assumption is that all fixed-point encoding's global memrefs are of
+// type I64.
 void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
   OpBuilder rewriter(op);
   auto loc = op.getLoc();

@@ -344,7 +344,7 @@ void markFixedCastOps(FuncOp &f) {
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
       op->setAttr("src_frac", builder.getIntegerAttr(targetType, frac));
-      op->setAttr("sign", builder.getStringAttr("signed"));
+      op->setAttr("src_sign", builder.getStringAttr("signed"));
     } else if (opr.getType().isa<UFixedType>()) {
       UFixedType srcType = opr.getType().cast<UFixedType>();
       size_t width = srcType.getWidth();
@@ -352,7 +352,7 @@ void markFixedCastOps(FuncOp &f) {
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
       op->setAttr("src_frac", builder.getIntegerAttr(targetType, frac));
-      op->setAttr("sign", builder.getStringAttr("unsigned"));
+      op->setAttr("src_sign", builder.getStringAttr("unsigned"));
     }
     // Mark result's fixed-type information
     if (res.getType().isa<FixedType>()) {
@@ -362,7 +362,7 @@ void markFixedCastOps(FuncOp &f) {
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("dst_width", builder.getIntegerAttr(targetType, width));
       op->setAttr("dst_frac", builder.getIntegerAttr(targetType, frac));
-      op->setAttr("sign", builder.getStringAttr("signed"));
+      op->setAttr("dst_sign", builder.getStringAttr("signed"));
     } else if (res.getType().isa<UFixedType>()) {
       UFixedType dstType = res.getType().cast<UFixedType>();
       size_t width = dstType.getWidth();
@@ -370,7 +370,7 @@ void markFixedCastOps(FuncOp &f) {
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("dst_width", builder.getIntegerAttr(targetType, width));
       op->setAttr("dst_frac", builder.getIntegerAttr(targetType, frac));
-      op->setAttr("sign", builder.getStringAttr("unsigned"));
+      op->setAttr("dst_sign", builder.getStringAttr("unsigned"));
     }
   }
 }
@@ -650,6 +650,7 @@ void lowerFixedMax(MaxFixedOp &op) {
 // The assumption is that all fixed-point encoding's global memrefs are of
 // type I64.
 void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
+  // TODO(Niansong): truncate the global memref to the width of the fixed-point
   OpBuilder rewriter(op);
   auto loc = op.getLoc();
   MemRefType oldType = op->getResult(0).getType().dyn_cast<MemRefType>();
@@ -665,7 +666,8 @@ void lowerFixedToFloat(FixedToFloatOp &op) {
   // op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
   size_t src_frac =
       op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
-  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  std::string sign =
+      op->getAttr("src_sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
   auto loc = op.getLoc();
   auto src = op.getOperand();
@@ -692,7 +694,8 @@ void lowerFloatToFixed(FloatToFixedOp &op) {
       op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
   size_t dst_frac =
       op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
-  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  std::string sign =
+      op->getAttr("dst_sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
   auto FType = src.getType().cast<FloatType>();
   auto frac = rewriter.create<arith::ConstantOp>(
@@ -715,7 +718,8 @@ void lowerFixedToInt(FixedToIntOp &op) {
   auto dst = op.getResult();
   size_t src_frac =
       op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
-  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  std::string sign =
+      op->getAttr("src_sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
   auto srcType = src.getType().cast<IntegerType>();
   auto dstType = dst.getType().cast<IntegerType>();
@@ -756,7 +760,8 @@ void lowerIntToFixed(IntToFixedOp &op) {
       op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
   size_t dst_frac =
       op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
-  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  std::string sign =
+      op->getAttr("dst_sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
   auto srcType = src.getType().cast<IntegerType>();
   auto dstType = IntegerType::get(op.getContext(), dst_width);
@@ -779,7 +784,96 @@ void lowerIntToFixed(IntToFixedOp &op) {
     op->replaceAllUsesWith(lshifted);
   }
 }
-  
+
+// src and dst is guaranteed to be of different fixed types.
+// src: src_width, src_frac
+// dst: dst_width, dst_frac
+// case 1: src_width > dst_width, src_frac > dst_frac
+// case 2: src_width > dst_width, src_frac < dst_frac
+// case 3: src_width < dst_width, src_frac > dst_frac
+// case 4: src_width < dst_width, src_frac < dst_frac
+// src_base * 2^(-src_frac) = dst_base * 2^(-dst_frac)
+// ==> dst_base = src_base * 2^(dst_frac - src_frac)
+void lowerFixedToFixed(FixedToFixedOp &op) {
+  // Step 1: match bitwidth to max(src_width, dst_width)
+  // Step 2: shift src_base to get dst_base
+  //    - if dst_frac > src_frac, left shift (dst_frac - src_frac)
+  //    - if dst_frac < src_frac, right shift (src_frac - dst_frac)
+  // Step 3 (optional): truncate dst_base
+  OpBuilder rewriter(op);
+  auto loc = op.getLoc();
+  auto src = op.getOperand();
+  size_t src_width =
+      op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t src_frac =
+      op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t dst_width =
+      op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t dst_frac =
+      op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
+
+  std::string src_sign =
+      op->getAttr("src_sign").cast<StringAttr>().getValue().str();
+  std::string dst_sign =
+      op->getAttr("dst_sign").cast<StringAttr>().getValue().str();
+  bool isSignedSrc = src_sign == "signed";
+  // bool isSignedDst = dst_sign == "signed";
+
+  auto srcType = src.getType().cast<IntegerType>();
+  if (srcType.getWidth() != src_width) {
+    llvm::errs() << "src_width != srcType.getWidth()\n";
+  }
+  auto dstType = IntegerType::get(op.getContext(), dst_width);
+
+  // Step1: match bitwidth to max(src_width, dst_width)
+  bool truncate_dst = false;
+  Value matched_src;
+  if (dst_width >= src_width) {
+    // if (dst_width >= src_width), no need to truncate dst_base at step3
+    truncate_dst = false;
+    // extend src_base to dst_width
+    if (isSignedSrc) {
+      matched_src = rewriter.create<arith::ExtSIOp>(loc, dstType, src);
+    } else {
+      matched_src = rewriter.create<arith::ExtUIOp>(loc, dstType, src);
+    }
+  } else {
+    // if (dst_width < src_width), truncate dst_base at step3
+    truncate_dst = true;
+    matched_src = src;
+  }
+
+  // Step2: shift src_base to get dst_base
+  Value shifted_src;
+  if (dst_frac > src_frac) {
+    // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
+    auto frac = rewriter.create<arith::ConstantOp>(
+        loc, srcType, rewriter.getIntegerAttr(srcType, dst_frac - src_frac));
+    shifted_src =
+        rewriter.create<arith::ShLIOp>(loc, srcType, matched_src, frac);
+  } else if (dst_frac < src_frac) {
+    // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
+    auto frac = rewriter.create<arith::ConstantOp>(
+        loc, srcType, rewriter.getIntegerAttr(srcType, src_frac - dst_frac));
+    if (isSignedSrc) {
+      shifted_src =
+          rewriter.create<arith::ShRSIOp>(loc, srcType, matched_src, frac);
+    } else {
+      shifted_src =
+          rewriter.create<arith::ShRUIOp>(loc, srcType, matched_src, frac);
+    }
+  } else {
+    shifted_src = matched_src;
+  }
+
+  // Step3 (optional): truncate dst_base
+  if (truncate_dst) {
+    auto res = rewriter.create<arith::TruncIOp>(loc, dstType, shifted_src);
+    op->replaceAllUsesWith(res);
+  } else {
+    op->getResult(0).replaceAllUsesWith(shifted_src);
+  }
+}
 
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);

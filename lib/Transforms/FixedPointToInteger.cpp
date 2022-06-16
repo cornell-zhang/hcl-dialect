@@ -647,6 +647,16 @@ void lowerFixedMax(MaxFixedOp &op) {
   }
 }
 
+void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
+  OpBuilder rewriter(op);
+  auto loc = op.getLoc();
+  MemRefType oldType = op->getResult(0).getType().dyn_cast<MemRefType>();
+  auto memRefType = oldType.clone(IntegerType::get(op.getContext(), 64));
+  auto symbolName = op.global();
+  auto res = rewriter.create<memref::GetGlobalOp>(loc, memRefType, symbolName);
+  op->replaceAllUsesWith(res);
+}
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);
@@ -669,6 +679,8 @@ void visitOperation(Operation &op) {
     lowerFixedMax(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
     updateAffineStore(new_op);
+  } else if (auto new_op = dyn_cast<GetGlobalFixedOp>(op)) {
+    lowerGetGlobalFixedOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {
@@ -681,7 +693,8 @@ void visitBlock(Block &block) {
   for (auto &op : block.getOperations()) {
     visitOperation(op);
     if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
-                  MinFixedOp, MaxFixedOp>(op)) {
+                  MinFixedOp, MaxFixedOp, IntToFixedOp, FixedToIntOp, FloatToFixedOp,
+                  FixedToFloatOp, FixedToFixedOp, GetGlobalFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }

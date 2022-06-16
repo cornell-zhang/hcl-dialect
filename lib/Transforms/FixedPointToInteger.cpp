@@ -192,42 +192,6 @@ void updateReturnOp(FuncOp &funcOp) {
           Value castedMemRef =
               castIntMemRef(builder, loc, arg, 64, is_unsigned, false);
           op->setOperand(i, castedMemRef);
-          // if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp()))
-          // {
-          //   allocOp->getResult(0).setType(newType);
-          //   for (auto &use : allocOp->getResult(0).getUses()) {
-          //     Value storeEle;
-          //     bool isStore= false;
-          //     if (auto storeOp = dyn_cast<memref::StoreOp>(use.getOwner())) {
-          //       storeEle = storeOp.getOperand(0);
-          //       isStore = true;
-          //     } else if (auto storeOp =
-          //                    dyn_cast<AffineStoreOp>(use.getOwner())) {
-          //       storeEle = storeOp.getOperand(0);
-          //       isStore = true;
-          //     }
-          //     if (isStore) {
-          //       // check storeEle's type and cast it if necessary
-          //       OpBuilder builder(use.getOwner());
-          //       Location loc = use.getOwner()->getLoc();
-          //       unsigned width;
-          //       if (etype.isa<FixedType>()) {
-          //         width = etype.cast<FixedType>().getWidth();
-          //       } else {
-          //         width = etype.cast<UFixedType>().getWidth();
-          //       }
-          //       Type oldType = builder.getIntegerType(width);
-          //       if (oldType != IntegerType::get(funcOp.getContext(), 64)) {
-          //         // cast it
-          //         Value casted =
-          //             castInteger(builder, loc, storeEle, oldType,
-          //                         IntegerType::get(funcOp.getContext(), 64),
-          //                         etype.isa<FixedType>());
-          //         use.getOwner()->setOperand(0, casted);
-          //       }
-          //     }
-          //   }
-          // }
         }
       }
     }
@@ -291,7 +255,7 @@ void lowerPrintOp(FuncOp &funcOp) {
  * type, these information will not be directly
  * accessible through operands' types.
  */
-void markFixedOperations(FuncOp &f) {
+void markFixedArithOps(FuncOp &f) {
   SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
     if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
@@ -343,6 +307,72 @@ void markFixedOperations(FuncOp &f) {
     op->setAttr("rfrac", builder.getIntegerAttr(targetType, rfrac));
     op->setAttr("reswidth", builder.getIntegerAttr(targetType, reswidth));
     op->setAttr("resfrac", builder.getIntegerAttr(targetType, resfrac));
+    if (opr_l.getType().isa<FixedType>()) {
+      op->setAttr("sign", builder.getStringAttr("signed"));
+    } else {
+      op->setAttr("sign", builder.getStringAttr("unsigned"));
+    }
+  }
+}
+
+
+/* Add attributes to fixed-point operations
+ * to preserve operands and result's fixed-type
+ * information. After block arguments and
+ * affine load operations are updated to integer
+ * type, these information will not be directly
+ * accessible through operands' types.
+ */
+void markFixedCastOps(FuncOp &f) {
+  // collect operations to mark
+  SmallVector<Operation *, 10> fixedOps;
+  f.walk([&](Operation *op) {
+    if (llvm::isa<IntToFixedOp, FixedToIntOp, FloatToFixedOp,
+                  FixedToFloatOp, FixedToFixedOp>(op)) {
+      fixedOps.push_back(op);
+    }
+  });
+  // They are unary ops, they have one operand
+  for (auto op : fixedOps) {
+    OpBuilder builder(f.getContext());
+    Value opr = op->getOperand(0);
+    Value res = op->getResult(0);
+    // Mark operand's fixed-type information
+    if (opr.getType().isa<FixedType>()) {
+      FixedType srcType = opr.getType().cast<FixedType>();
+      size_t width = srcType.getWidth();
+      size_t frac = srcType.getFrac();
+      IntegerType targetType = builder.getIntegerType(32);
+      op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
+      op->setAttr("src_frac", builder.getIntegerAttr(targetType, frac));
+      op->setAttr("sign", builder.getStringAttr("signed"));
+    } else if (opr.getType().isa<UFixedType>()) {
+      UFixedType srcType = opr.getType().cast<UFixedType>();
+      size_t width = srcType.getWidth();
+      size_t frac = srcType.getFrac();
+      IntegerType targetType = builder.getIntegerType(32);
+      op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
+      op->setAttr("src_frac", builder.getIntegerAttr(targetType, frac));
+      op->setAttr("sign", builder.getStringAttr("unsigned"));
+    }
+    // Mark result's fixed-type information
+    if (res.getType().isa<FixedType>()) {
+      FixedType dstType = res.getType().cast<FixedType>();
+      size_t width = dstType.getWidth();
+      size_t frac = dstType.getFrac();
+      IntegerType targetType = builder.getIntegerType(32);
+      op->setAttr("dst_width", builder.getIntegerAttr(targetType, width));
+      op->setAttr("dst_frac", builder.getIntegerAttr(targetType, frac));
+      op->setAttr("sign", builder.getStringAttr("signed"));
+    } else if (res.getType().isa<UFixedType>()) {
+      UFixedType dstType = res.getType().cast<UFixedType>();
+      size_t width = dstType.getWidth();
+      size_t frac = dstType.getFrac();
+      IntegerType targetType = builder.getIntegerType(32);
+      op->setAttr("dst_width", builder.getIntegerAttr(targetType, width));
+      op->setAttr("dst_frac", builder.getIntegerAttr(targetType, frac));
+      op->setAttr("sign", builder.getStringAttr("unsigned"));
+    }
   }
 }
 
@@ -674,7 +704,8 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (FuncOp func : mod.getOps<FuncOp>()) {
     lowerPrintOp(func);
-    markFixedOperations(func);
+    markFixedArithOps(func);
+    markFixedCastOps(func);
     FunctionType newFuncType = updateFunctionSignature(func);
     updateAffineLoad(func);
     updateAlloc(func);

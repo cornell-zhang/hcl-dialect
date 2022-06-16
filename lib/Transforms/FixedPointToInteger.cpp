@@ -684,6 +684,29 @@ void lowerFixedToFloat(FixedToFloatOp &op) {
   }
 }
 
+void lowerFloatToFixed(FloatToFixedOp &op) {
+  OpBuilder rewriter(op);
+  auto loc = op.getLoc();
+  auto src = op.getOperand();
+  size_t dst_width = 
+      op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t dst_frac = 
+      op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
+  auto FType = src.getType().cast<FloatType>();
+  auto frac = rewriter.create<arith::ConstantOp>(loc, FType, rewriter.getFloatAttr(FType, pow(2, dst_frac)));
+  auto dstType = IntegerType::get(op.getContext(), dst_width);
+  auto FEncoding = rewriter.create<arith::MulFOp>(loc, FType, src, frac);
+  if (isSigned) {
+    auto IEncoding = rewriter.create<arith::FPToSIOp>(loc, dstType, FEncoding);
+    op->replaceAllUsesWith(IEncoding);
+  } else {
+    auto IEncoding = rewriter.create<arith::FPToUIOp>(loc, dstType, FEncoding);
+    op->replaceAllUsesWith(IEncoding);
+  }
+}
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);

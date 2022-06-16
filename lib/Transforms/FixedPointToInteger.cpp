@@ -315,7 +315,6 @@ void markFixedArithOps(FuncOp &f) {
   }
 }
 
-
 /* Add attributes to fixed-point operations
  * to preserve operands and result's fixed-type
  * information. After block arguments and
@@ -327,8 +326,8 @@ void markFixedCastOps(FuncOp &f) {
   // collect operations to mark
   SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
-    if (llvm::isa<IntToFixedOp, FixedToIntOp, FloatToFixedOp,
-                  FixedToFloatOp, FixedToFixedOp>(op)) {
+    if (llvm::isa<IntToFixedOp, FixedToIntOp, FloatToFixedOp, FixedToFloatOp,
+                  FixedToFixedOp>(op)) {
       fixedOps.push_back(op);
     }
   });
@@ -663,8 +662,8 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
 void lowerFixedToFloat(FixedToFloatOp &op) {
   OpBuilder rewriter(op);
   // size_t src_width =
-      // op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
-  size_t src_frac = 
+  // op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
+  size_t src_frac =
       op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
   std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
@@ -672,7 +671,8 @@ void lowerFixedToFloat(FixedToFloatOp &op) {
   auto src = op.getOperand();
   auto dst = op.getResult();
   auto dstTy = dst.getType().cast<FloatType>();
-  auto frac = rewriter.create<arith::ConstantOp>(loc, dstTy, rewriter.getFloatAttr(dstTy, pow(2, src_frac)));
+  auto frac = rewriter.create<arith::ConstantOp>(
+      loc, dstTy, rewriter.getFloatAttr(dstTy, std::pow(2, src_frac)));
   if (isSigned) {
     auto res = rewriter.create<arith::SIToFPOp>(loc, dstTy, src);
     auto real = rewriter.create<arith::DivFOp>(loc, dstTy, res, frac);
@@ -688,14 +688,15 @@ void lowerFloatToFixed(FloatToFixedOp &op) {
   OpBuilder rewriter(op);
   auto loc = op.getLoc();
   auto src = op.getOperand();
-  size_t dst_width = 
+  size_t dst_width =
       op->getAttr("dst_width").cast<IntegerAttr>().getValue().getSExtValue();
-  size_t dst_frac = 
+  size_t dst_frac =
       op->getAttr("dst_frac").cast<IntegerAttr>().getValue().getSExtValue();
   std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
   auto FType = src.getType().cast<FloatType>();
-  auto frac = rewriter.create<arith::ConstantOp>(loc, FType, rewriter.getFloatAttr(FType, pow(2, dst_frac)));
+  auto frac = rewriter.create<arith::ConstantOp>(
+      loc, FType, rewriter.getFloatAttr(FType, std::pow(2, dst_frac)));
   auto dstType = IntegerType::get(op.getContext(), dst_width);
   auto FEncoding = rewriter.create<arith::MulFOp>(loc, FType, src, frac);
   if (isSigned) {
@@ -705,6 +706,47 @@ void lowerFloatToFixed(FloatToFixedOp &op) {
     auto IEncoding = rewriter.create<arith::FPToUIOp>(loc, dstType, FEncoding);
     op->replaceAllUsesWith(IEncoding);
   }
+}
+
+void lowerFixedToInt(FixedToIntOp &op) {
+  OpBuilder rewriter(op);
+  auto loc = op.getLoc();
+  auto src = op.getOperand();
+  auto dst = op.getResult();
+  size_t src_frac =
+      op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
+  auto srcType = src.getType().cast<IntegerType>();
+  auto dstType = dst.getType().cast<IntegerType>();
+  size_t src_width = srcType.getWidth();
+  size_t dst_width = dstType.getWidth();
+  auto frac = rewriter.create<arith::ConstantOp>(
+      loc, srcType, rewriter.getIntegerAttr(srcType, src_frac));
+  if (isSigned) {
+    auto rshifted = rewriter.create<arith::ShRSIOp>(loc, srcType, src, frac);
+    if (dst_width > src_width) {
+      auto res = rewriter.create<arith::ExtSIOp>(loc, dstType, rshifted);
+      op->replaceAllUsesWith(res);
+    } else if (dst_width < src_width) {
+      auto res = rewriter.create<arith::TruncIOp>(loc, dstType, rshifted);
+      op->replaceAllUsesWith(res);
+    } else {
+      op->replaceAllUsesWith(rshifted);
+    }
+  } else {
+    auto rshifted = rewriter.create<arith::ShRUIOp>(loc, srcType, src, frac);
+    if (dst_width > src_width) {
+      auto res = rewriter.create<arith::ExtUIOp>(loc, dstType, rshifted);
+      op->replaceAllUsesWith(res);
+    } else if (dst_width < src_width) {
+      auto res = rewriter.create<arith::TruncIOp>(loc, dstType, rshifted);
+      op->replaceAllUsesWith(res);
+    } else {
+      op->replaceAllUsesWith(rshifted);
+    }
+  }
+  
 }
 
 /// Visitors to recursively update all operations
@@ -743,8 +785,9 @@ void visitBlock(Block &block) {
   for (auto &op : block.getOperations()) {
     visitOperation(op);
     if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
-                  MinFixedOp, MaxFixedOp, IntToFixedOp, FixedToIntOp, FloatToFixedOp,
-                  FixedToFloatOp, FixedToFixedOp, GetGlobalFixedOp>(op)) {
+                  MinFixedOp, MaxFixedOp, IntToFixedOp, FixedToIntOp,
+                  FloatToFixedOp, FixedToFloatOp, FixedToFixedOp,
+                  GetGlobalFixedOp>(op)) {
       opToRemove.push_back(&op);
     }
   }

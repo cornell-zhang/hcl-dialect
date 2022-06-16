@@ -1474,6 +1474,20 @@ class CastOp(ExprOp):
                 op = None
             else:
                 op = arith.ExtFOp
+        elif is_fixed_type(res_type) and is_floating_point_type(self.val.dtype):
+            op = hcl_d.FloatToFixedOp
+        elif is_floating_point_type(res_type) and is_fixed_type(self.val.dtype):
+            op = hcl_d.FixedToFloatOp
+        elif is_fixed_type(res_type) and is_integer_type(self.val.dtype):
+            op = hcl_d.IntToFixedOp
+        elif is_integer_type(res_type) and is_fixed_type(self.val.dtype):
+            op = hcl_d.FixedToIntOp
+        elif is_fixed_type(res_type) and is_fixed_type(self.val.dtype):
+            if res_type.width == self.val.dtype.width and \
+                    res_type.frac == self.val.dtype.frac:
+                op = None
+            else:
+                op = hcl_d.FixedToFixedOp
         else:
             op = builtin.UnrealizedConversionCastOp
         super().__init__(op, res_type)
@@ -1492,6 +1506,11 @@ class CastOp(ExprOp):
             arith.ExtUIOp,
             arith.ExtSIOp,
             arith.ExtFOp,
+            hcl_d.FixedToIntOp,
+            hcl_d.IntToFixedOp,
+            hcl_d.FixedToFloatOp,
+            hcl_d.FloatToFixedOp,
+            hcl_d.FixedToFixedOp
         ]:
             if is_unsigned_type(self.dtype):
                 dtype = IntegerType.get_signless(self.dtype.width)

@@ -4,7 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-
+import warnings
 from typing import List
 
 import numpy as np
@@ -351,11 +351,10 @@ def cast_types(lhs, rhs):
                 raise RuntimeError("Type conversion not implemented")
     else:
         raise RuntimeError("Type conversion failed")
-    # TODO(Niansong): make this warning suppressable, and add line number or stage name
-    print(
+    warnings.warn(
         "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
-        )
+        ), RuntimeWarning
     )
     return CastOp(rhs, res_type)
 
@@ -1490,6 +1489,9 @@ class CastOp(ExprOp):
                 op = hcl_d.FixedToFixedOp
         else:
             op = builtin.UnrealizedConversionCastOp
+            warnings.warn(
+                "Unrealized conversion cast: {} -> {}".format(self.val.dtype, res_type), 
+                RuntimeWarning)
         super().__init__(op, res_type)
         if flags.BUILD_INPLACE:
             self.build()

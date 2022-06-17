@@ -2084,6 +2084,7 @@ class ASTVisitor:
                 ip=GlobalInsertionPoint.get(),
                 hasElse=True,
                 resultType=[dtype],
+                yieldOp=False,
             )
             if is_unsigned_type(expr.dtype):
                 if_op.attributes["unsigned"] = UnitAttr.get()
@@ -2398,6 +2399,7 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
             ip=ip,
             loc=loc,
         )
+        affine.AffineYieldOp([], ip=InsertionPoint(forOp.body))
     else:
         lb_expr = CastOp(lb, IndexType.get())
         lb_expr.build()
@@ -2418,11 +2420,12 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
             ip=ip,
             loc=loc,
         )
+        scf.YieldOp([], ip=InsertionPoint(forOp.body))
 
     return forOp
 
 
-def make_if(cond, ip=None, hasElse=False, resultType=[]):
+def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, (CmpOp, LogicalAndOp)):
         raise RuntimeError("`if` operation condition should be CmpOp")
@@ -2451,6 +2454,10 @@ def make_if(cond, ip=None, hasElse=False, resultType=[]):
                 res.build()
             cond_result = res.result
         if_op = scf.IfOp(cond_result, hasElse=hasElse, results_=resultType, ip=ip)
+        if yieldOp:
+            scf.YieldOp([], ip=InsertionPoint(if_op.then_block))
+            if hasElse:
+                scf.YieldOp([], ip=InsertionPoint(if_op.else_block))
     else:  # Affine expression
         eq_flags = []
         new_conds = []
@@ -2516,6 +2523,10 @@ def make_if(cond, ip=None, hasElse=False, resultType=[]):
         if_op = affine.AffineIfOp(
             attr, builder.iv, ip=ip, hasElse=hasElse, results_=resultType
         )
+        if yieldOp:
+            affine.AffineYieldOp([], ip=InsertionPoint(if_op.then_block))
+            if hasElse:
+                affine.AffineYieldOp([], ip=InsertionPoint(if_op.else_block))
 
     return if_op
 

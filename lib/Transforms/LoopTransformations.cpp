@@ -2240,39 +2240,62 @@ void getMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
 
 LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   // 1) Get the schedule
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(outlineOp.stage().getDefiningOp())
-          .stage_name();
+  auto stages = outlineOp.stages();
+  SmallVector<AffineForOp> rootForOps;
+  SmallVector<Value> allMemrefs;
+  std::vector<std::string> stageNames;
+  for (auto stage : stages) {
+    const auto stage_name =
+        dyn_cast<CreateStageHandleOp>(stage.getDefiningOp()).stage_name();
+    stageNames.push_back(stage_name.str());
 
-  // 2) Find the requested stage
-  AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
-    return failure();
+    // 2) Find the requested stages
+    AffineForOp rootForOp;
+    if (failed(getStage(f, rootForOp, stage_name))) {
+      f.emitError("Cannot find Stage ") << stage_name.str();
+      return failure();
+    }
+    rootForOps.push_back(rootForOp);
+
+    // 3) Find all load/store memrefs
+    getMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
+    getMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs);
+    getMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
+    getMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs);
+    // remove memref defined inside the stage
+    rootForOp.walk([&](memref::AllocOp alloc) {
+      auto target = alloc.getResult();
+      if (std::find(allMemrefs.begin(), allMemrefs.end(), target) !=
+          allMemrefs.end())
+        allMemrefs.erase(
+            std::remove(allMemrefs.begin(), allMemrefs.end(), target),
+            allMemrefs.end());
+    });
   }
 
-  // 3) Find all load/store memrefs
-  SmallVector<Value> allMemrefs;
-  getMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
-  getMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs);
-  getMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
-  getMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs);
-  // remove memref defined inside the stage
-  rootForOp.walk([&](memref::AllocOp alloc) {
-    auto target = alloc.getResult();
-    if (std::find(allMemrefs.begin(), allMemrefs.end(), target) !=
-        allMemrefs.end())
+  // 4) Remove connecting buffers
+  SmallVector<memref::AllocOp> allocToMove;
+  f.walk([&](memref::AllocOp alloc) {
+    auto name = alloc->getAttr("name").cast<StringAttr>().getValue().str();
+    auto iter = std::find(stageNames.begin(), stageNames.end(), name);
+    // output is not connecting buffer
+    if (iter != stageNames.end() && iter != std::prev(stageNames.end())) {
       allMemrefs.erase(
-          std::remove(allMemrefs.begin(), allMemrefs.end(), target),
+          std::remove(allMemrefs.begin(), allMemrefs.end(), alloc.getResult()),
           allMemrefs.end());
+      allocToMove.push_back(alloc);
+    }
   });
   SmallVector<Value> newMemrefs(allMemrefs);
 
-  // 4) Create a new function
+  // 5) Create a new function
   auto builder = OpBuilder::atBlockBegin(mod.getBody());
   TypeRange argTypes = ValueRange(newMemrefs).getTypes();
   FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
-  auto func_name = "Stage_" + stage_name.str();
+  std::string func_name = "Stage";
+  for (auto stage_name : stageNames) {
+    func_name += "_" + stage_name;
+  }
   auto func =
       builder.create<FuncOp>(mod.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
@@ -2280,20 +2303,25 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());
 
-  // 5) Create callop in the main function
-  OpBuilder call_builder(rootForOp);
-  call_builder.create<CallOp>(rootForOp.getLoc(), func, allMemrefs);
+  // 6) Create callop in the main function
+  OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+  call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(), func,
+                              allMemrefs);
 
-  // 6) Move original stage to the new function
-  rootForOp->moveBefore(ret);
+  // 7) Move original stage to the new function
+  for (auto rootForOp : rootForOps) {
+    rootForOp->moveBefore(ret);
+  }
+  for (auto alloc : allocToMove) {
+    alloc->moveBefore(rootForOps[0]);
+  }
 
-  // 7) Update memrefs
-  //    Order of step 5-7 is important
-  //    Otherwise will mess up the references
+  // 8) Update memrefs
   for (auto item : llvm::enumerate(newMemrefs)) {
     auto newMemref = func.getArgument(item.index());
     auto oldMemref = item.value();
-    replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.region());
+    for (auto rootForOp : rootForOps)
+      replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.region());
   }
 
   return success();

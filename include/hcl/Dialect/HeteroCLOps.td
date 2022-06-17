@@ -388,10 +388,10 @@ def HeteroCL_OutlineOp : HeteroCL_Op<"outline">
         Outline a stage as a function
     }];
 
-    let arguments = (ins StageHandle:$stage);
-    let results = (outs ); //(outs FunctionType)
+    let arguments = (ins Variadic<StageHandle>:$stages);
+    let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `)` attr-dict
+        `(` ($stages^)? `)` attr-dict
     }];
 }
 

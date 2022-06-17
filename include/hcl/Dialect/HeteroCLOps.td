@@ -542,8 +542,8 @@ def FixedToFloatOp : HeteroCL_Op<"fixed_to_float"> {
 
 def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   let summary = "float to fixed cast operation";
-  let arguments = (ins FixedLike:$input);
-  let results = (outs FloatLike:$res);
+  let arguments = (ins FloatLike:$input);
+  let results = (outs FixedLike:$res);
   let assemblyFormat = [{
       `(` $input `)` attr-dict `:` type($input) `->` type($res)
   }];

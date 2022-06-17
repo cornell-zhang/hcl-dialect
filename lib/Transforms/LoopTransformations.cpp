@@ -2229,12 +2229,34 @@ LogicalResult runInterKernelDataPlacementSingleFunction(Value &arrayToStream,
 }
 
 template <class T, int opId>
-void getMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
+void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
         allMemrefs.end())
       allMemrefs.push_back(target);
+  });
+}
+
+template <class T, int opId>
+void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
+                      std::map<std::string, memref::AllocOp> &allocMap,
+                      SmallVector<memref::AllocOp> &allocToMove) {
+  stage.walk([&](T op) {
+    auto target = op.getOperand(opId);
+    if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
+        allMemrefs.end()) {
+      allMemrefs.push_back(target);
+    } else {
+      allMemrefs.erase(
+          std::remove(allMemrefs.begin(), allMemrefs.end(), target),
+          allMemrefs.end());
+      const auto stage_name =
+          stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
+      if (allocMap.count(stage_name) > 0) {
+        allocToMove.push_back(allocMap[stage_name]);
+      }
+    }
   });
 }
 
@@ -2257,38 +2279,29 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     }
     rootForOps.push_back(rootForOp);
 
-    // 3) Find all load/store memrefs
-    getMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
-    getMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs);
-    getMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
-    getMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs);
-    // remove memref defined inside the stage
-    rootForOp.walk([&](memref::AllocOp alloc) {
-      auto target = alloc.getResult();
-      if (std::find(allMemrefs.begin(), allMemrefs.end(), target) !=
-          allMemrefs.end())
-        allMemrefs.erase(
-            std::remove(allMemrefs.begin(), allMemrefs.end(), target),
-            allMemrefs.end());
-    });
+    // 3) Find all load memrefs (inputs)
+    getInputMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
+    getInputMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
   }
 
-  // 4) Remove connecting buffers
+  // 4) Get allocation map
   SmallVector<memref::AllocOp> allocToMove;
+  std::map<std::string, memref::AllocOp> allocMap;
   f.walk([&](memref::AllocOp alloc) {
     auto name = alloc->getAttr("name").cast<StringAttr>().getValue().str();
-    auto iter = std::find(stageNames.begin(), stageNames.end(), name);
-    // output is not connecting buffer
-    if (iter != stageNames.end() && iter != std::prev(stageNames.end())) {
-      allMemrefs.erase(
-          std::remove(allMemrefs.begin(), allMemrefs.end(), alloc.getResult()),
-          allMemrefs.end());
-      allocToMove.push_back(alloc);
-    }
+    allocMap[name] = alloc;
   });
+
+  // 5) Find all store memrefs (outputs)
+  for (auto rootForOp : rootForOps) {
+    getOutputMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs, allocMap,
+                                       allocToMove);
+    getOutputMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs, allocMap,
+                                         allocToMove);
+  }
   SmallVector<Value> newMemrefs(allMemrefs);
 
-  // 5) Create a new function
+  // 6) Create a new function
   auto builder = OpBuilder::atBlockBegin(mod.getBody());
   TypeRange argTypes = ValueRange(newMemrefs).getTypes();
   FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
@@ -2303,12 +2316,12 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());
 
-  // 6) Create callop in the main function
+  // 7) Create callop in the main function
   OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
   call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(), func,
                               allMemrefs);
 
-  // 7) Move original stage to the new function
+  // 8) Move original stage to the new function
   for (auto rootForOp : rootForOps) {
     rootForOp->moveBefore(ret);
   }
@@ -2316,7 +2329,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     alloc->moveBefore(rootForOps[0]);
   }
 
-  // 8) Update memrefs
+  // 9) Update memrefs
   for (auto item : llvm::enumerate(newMemrefs)) {
     auto newMemref = func.getArgument(item.index());
     auto oldMemref = item.value();

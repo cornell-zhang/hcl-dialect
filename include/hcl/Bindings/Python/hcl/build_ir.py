@@ -17,7 +17,6 @@ from hcl_mlir.ir import *
 class HCLFlags(object):
     def __init__(self):
         self.BUILD_INPLACE = False
-        self.EXTRACT_FUNCTION = False
         self.BIT_OP = False
 
     def enable_build_inplace(self):
@@ -25,15 +24,6 @@ class HCLFlags(object):
 
     def disable_build_inplace(self):
         self.BUILD_INPLACE = False
-
-    def enable_extract_function(self):
-        self.EXTRACT_FUNCTION = True
-
-    def disable_extract_function(self):
-        self.EXTRACT_FUNCTION = False
-
-    def is_extract_function(self):
-        return self.EXTRACT_FUNCTION
 
     def is_build_inplace(self):
         return self.BUILD_INPLACE
@@ -47,9 +37,6 @@ enable_build_inplace = flags.enable_build_inplace
 disable_build_inplace = flags.disable_build_inplace
 is_build_inplace = flags.is_build_inplace
 reset_build_inplace = flags.reset
-enable_extract_function = flags.enable_extract_function
-disable_extract_function = flags.disable_extract_function
-is_extract_function = flags.is_extract_function
 
 
 def is_floating_point_type(dtype):

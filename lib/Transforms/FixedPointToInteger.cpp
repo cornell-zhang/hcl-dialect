@@ -405,6 +405,42 @@ void updateAlloc(FuncOp &f) {
   }
 }
 
+// Update all GetGlobalFixedOp's return type in FuncOp f
+// from FixedType MemRef to IntegerType MemRef
+void updateGetGlobalFixed(FuncOp &f) {
+  SmallVector<Operation *, 10> getGlobalFixedOps;
+  f.walk([&](Operation *op) {
+    if (auto getGlobalFixedOp = dyn_cast<GetGlobalFixedOp>(op)) {
+      getGlobalFixedOps.push_back(op);
+    }
+  });
+
+  for (auto op : getGlobalFixedOps) {
+    auto getGlobalFixedOp = dyn_cast<GetGlobalFixedOp>(op);
+    MemRefType memRefType = getGlobalFixedOp.getType().cast<MemRefType>();
+    Type t = memRefType.getElementType();
+    size_t width;
+    if (auto ft = t.dyn_cast_or_null<FixedType>()) {
+      width = ft.getWidth();
+    } else if (auto uft = t.dyn_cast_or_null<UFixedType>()) {
+      width = uft.getWidth();
+    } else {
+      // Not a fixed-point get_global operation
+      // Return without changing anything
+      continue;
+    }
+    // if width is not 64, throw an error
+    if (width != 64) {
+      llvm::errs() << "Error: get_global_fixed operation's width is not 64\n";
+      return;
+    }
+
+    IntegerType I64 = IntegerType::get(f.getContext(), 64);
+    Type newMemRefType = memRefType.clone(I64);
+    op->getResult(0).setType(newMemRefType); // get_global_fixed has only one result
+  }
+}
+
 void updateAffineStore(AffineStoreOp &op) {
   Type valueTyp = op->getOperand(0).getType();
   Type memRefEleTyp =
@@ -953,9 +989,12 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateAlloc(func);
     updateAffineLoad(func);
+    updateGetGlobalFixed(func);
     visitRegion(func.getBody());
+    updateAffineLoad(func);
     updateReturnOp(func);
     func.setType(newFuncType);
+    llvm::outs() << func << "\n";
   }
 
   return true;

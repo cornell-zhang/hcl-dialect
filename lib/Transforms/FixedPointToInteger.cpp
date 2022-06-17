@@ -694,7 +694,7 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
   }
   auto castedMemRefType =
       oldType.clone(IntegerType::get(op.getContext(), bitwidth)).cast<MemRefType>();
-  Value castedMemRef = rewriter.create<memref::AllocOp>(loc, castedMemRefType);
+  auto castedMemRef = rewriter.create<memref::AllocOp>(loc, castedMemRefType);
   SmallVector<int64_t, 4> lbs(oldType.getRank(), 0);
   SmallVector<int64_t, 4> steps(oldType.getRank(), 1);
   buildAffineLoopNest(
@@ -706,7 +706,7 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
         nestedBuilder.create<AffineStoreOp>(loc, casted, castedMemRef, ivs);
       });
 
-  op->replaceAllUsesWith(res);
+  op->replaceAllUsesWith(castedMemRef);
 }
 
 void lowerFixedToFloat(FixedToFloatOp &op) {
@@ -1007,6 +1007,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateReturnOp(func);
     func.setType(newFuncType);
+    llvm::outs() << func << "\n";
   }
 
   return true;

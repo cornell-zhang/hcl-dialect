@@ -942,6 +942,7 @@ void visitRegion(Region &region) {
   }
 }
 
+/// Pass entry point
 bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (FuncOp func : mod.getOps<FuncOp>()) {
@@ -952,9 +953,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateAlloc(func);
     updateAffineLoad(func);
-    for (Operation &op : func.getOps()) {
-      visitOperation(op);
-    }
+    visitRegion(func.getBody());
     updateReturnOp(func);
     func.setType(newFuncType);
   }

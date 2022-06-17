@@ -1,6 +1,5 @@
 add_mlir_library(MLIRHCLPasses
     LoopTransformations.cpp
-    HostXcelSeparation.cpp
     FixedPointToInteger.cpp
     AnyWidthInteger.cpp
     MoveReturnToInput.cpp

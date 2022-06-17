@@ -75,34 +75,6 @@ static bool loopTransformation(MlirModule &mlir_mod) {
   return applyLoopTransformation(mod);
 }
 
-static bool hostXcelSeparation(MlirModule &pyhost, MlirModule &pyxcel,
-                               MlirModule &pyextern, py::dict pydevice_map,
-                               py::list pygraph_roots, py::dict subgraph) {
-  py::gil_scoped_release();
-  auto host_mod = unwrap(pyhost);
-  auto xcel_mod = unwrap(pyxcel);
-  auto extern_mod = unwrap(pyextern);
-  std::map<std::string, std::string> device_map;
-  for (auto item : pydevice_map) {
-    device_map[item.first.cast<std::string>()] =
-        item.second.cast<std::string>();
-  }
-  std::vector<std::string> graph_roots;
-  for (auto root : pygraph_roots) {
-    graph_roots.push_back(root.cast<std::string>());
-  }
-  std::vector<std::string> inputs;
-  for (auto input : subgraph["inputs"]) {
-    inputs.push_back(input.cast<std::string>());
-  }
-  std::vector<std::string> outputs;
-  for (auto output : subgraph["outputs"]) {
-    outputs.push_back(output.cast<std::string>());
-  }
-  return applyHostXcelSeparation(host_mod, xcel_mod, extern_mod, device_map,
-                                 graph_roots, inputs, outputs);
-}
-
 //===----------------------------------------------------------------------===//
 // Emission APIs
 //===----------------------------------------------------------------------===//
@@ -186,7 +158,6 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Loop transform APIs.
   hcl_m.def("loop_transformation", &loopTransformation);
-  hcl_m.def("host_device_separation", &hostXcelSeparation);
 
   // Codegen APIs.
   hcl_m.def("emit_vhls", &emitVivadoHls);

@@ -21,13 +21,6 @@ std::unique_ptr<OperationPass<ModuleOp>> createLowerBitOpsPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 
-bool applyHostXcelSeparation(ModuleOp &host_mod, ModuleOp &xcel_mod,
-                             ModuleOp &extern_mod,
-                             std::map<std::string, std::string> &device_map,
-                             std::vector<std::string> &graph_roots,
-                             std::vector<std::string> &subgraph_inputs,
-                             std::vector<std::string> &subgraph_outputs);
-
 bool applyFixedPointToInteger(ModuleOp &module);
 bool applyAnyWidthInteger(ModuleOp &module);
 bool applyMoveReturnToInput(ModuleOp &module);

@@ -899,6 +899,16 @@ void visitOperation(Operation &op) {
     updateAffineStore(new_op);
   } else if (auto new_op = dyn_cast<GetGlobalFixedOp>(op)) {
     lowerGetGlobalFixedOp(new_op);
+  } else if (auto new_op = dyn_cast<FixedToFloatOp>(op)) {
+    lowerFixedToFloat(new_op);
+  } else if (auto new_op = dyn_cast<FloatToFixedOp>(op)) {
+    lowerFloatToFixed(new_op);
+  } else if (auto new_op = dyn_cast<FixedToIntOp>(op)) {
+    lowerFixedToInt(new_op);
+  } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
+    lowerIntToFixed(new_op);
+  } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
+    lowerFixedToFixed(new_op);
   }
 
   for (auto &region : op.getRegions()) {

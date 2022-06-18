@@ -869,17 +869,18 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   bool isSignedSrc = src_sign == "signed";
   // bool isSignedDst = dst_sign == "signed";
 
-  auto srcType = src.getType().cast<IntegerType>();
-  if (srcType.getWidth() != src_width) {
-    llvm::errs() << "src_width != srcType.getWidth()\n";
-  }
+  // auto srcType = src.getType().cast<IntegerType>();
+  // if (srcType.getWidth() != src_width) {
+  //   llvm::errs() << "src_width != srcType.getWidth()\n";
+  // }
+  auto srcType = IntegerType::get(op.getContext(), src_width);
   auto dstType = IntegerType::get(op.getContext(), dst_width);
 
   // Step1: match bitwidth to max(src_width, dst_width)
   bool truncate_dst = false;
   Value matched_src;
-  if (dst_width >= src_width) {
-    // if (dst_width >= src_width), no need to truncate dst_base at step3
+  if (dst_width > src_width) {
+    // if (dst_width > src_width), no need to truncate dst_base at step3
     truncate_dst = false;
     // extend src_base to dst_width
     if (isSignedSrc) {
@@ -887,6 +888,9 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     } else {
       matched_src = rewriter.create<arith::ExtUIOp>(loc, dstType, src);
     }
+  } else if (dst_width == src_width)  {
+    truncate_dst = false;    
+    matched_src = src;
   } else {
     // if (dst_width < src_width), truncate dst_base at step3
     truncate_dst = true;

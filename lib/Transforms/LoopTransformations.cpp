@@ -1547,6 +1547,10 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 14) Create if structure
   //     only if the indices are inside the output tensor iteration space,
   //     results will be computed and written to output
+  int cntIf = 0;
+  nonReductionLoops[0].walk([&](AffineIfOp ifOp) { cntIf++; });
+  nonReductionLoops[nonReductionLoops.size() - 1].walk(
+      [&](AffineIfOp ifOp) { cntIf--; });
   AffineIfOp ifOp;
   if (!llvm::isa<AffineIfOp>(
           nonReductionLoops[loopAxis].getBody()->getOperations().front())) {
@@ -1757,41 +1761,35 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 17) Merge loops with the same bound
-  int cntIf = 0;
-  nonReductionLoops[0].walk([&](AffineIfOp ifOp) { cntIf++; });
-  nonReductionLoops[nonReductionLoops.size() - 1].walk(
-      [&](AffineIfOp ifOp) { cntIf--; });
-  if (previousShiftLoops.size() > 0) {
+  if (previousShiftLoops.size() > 0 && cntIf < 2) {
     // TODO: only support one shift loop now
     AffineForOp firstLoop = previousShiftLoops.back();
     AffineForOp secondLoop = nonReductionLoops[loopAxis];
-    if (cntIf < 3) {
-      if (firstLoop.getConstantUpperBound() ==
-          secondLoop.getConstantUpperBound()) {
-        auto &firstBody = firstLoop.getBody()->getOperations();
+    if (firstLoop.getConstantUpperBound() ==
+        secondLoop.getConstantUpperBound()) {
+      auto &firstBody = firstLoop.getBody()->getOperations();
+      auto &secondBody = secondLoop.getBody()->getOperations();
+      auto firstOpInSecondLoop = secondBody.begin();
+      // do not need affine.yield op, so that's why using std::prev
+      secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+                        std::prev(firstBody.end()));
+      firstLoop.getInductionVar().replaceAllUsesWith(
+          secondLoop.getInductionVar());
+      firstLoop.erase();
+      auto parent = secondLoop->getParentOp();
+      if (llvm::isa<AffineIfOp>(parent)) {
+        auto ifOp = llvm::cast<AffineIfOp>(parent);
+        auto &ifBody = ifOp.getThenBlock()->getOperations();
+        auto &parentBody =
+            nonReductionLoops[loopAxis - 1].getBody()->getOperations();
+        parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
+                          std::prev(ifBody.end()));
+        // skip the previous reuse part
+        ifOp->moveBefore(&(*firstOpInSecondLoop));
+        // move the rest into the if body
         auto &secondBody = secondLoop.getBody()->getOperations();
-        auto firstOpInSecondLoop = secondBody.begin();
-        // do not need affine.yield op, so that's why using std::prev
-        secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
-                          std::prev(firstBody.end()));
-        firstLoop.getInductionVar().replaceAllUsesWith(
-            secondLoop.getInductionVar());
-        firstLoop.erase();
-        auto parent = secondLoop->getParentOp();
-        if (llvm::isa<AffineIfOp>(parent)) {
-          auto ifOp = llvm::cast<AffineIfOp>(parent);
-          auto &ifBody = ifOp.getThenBlock()->getOperations();
-          auto &parentBody =
-              nonReductionLoops[loopAxis - 1].getBody()->getOperations();
-          parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
-                            std::prev(ifBody.end()));
-          // skip the previous reuse part
-          ifOp->moveBefore(&(*firstOpInSecondLoop));
-          // move the rest into the if body
-          auto &secondBody = secondLoop.getBody()->getOperations();
-          ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
-                        std::prev(secondBody.end()));
-        }
+        ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
+                      std::prev(secondBody.end()));
       }
     }
   }

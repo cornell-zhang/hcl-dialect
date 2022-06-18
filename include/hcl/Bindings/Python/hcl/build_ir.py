@@ -2279,7 +2279,7 @@ class ASTVisitor:
                 name=axis.name,
                 ip=body_ip,
             )
-            body_ip = InsertionPoint(reduction_loop.body)
+            body_ip = InsertionPoint(reduction_loop.body.operations[0])
 
             # update reduction variable
             axis.update_op(reduction_loop.induction_variable)
@@ -2338,7 +2338,6 @@ class ASTVisitor:
 
         # set terminator
         for axis in new_axes:
-            affine.AffineYieldOp([], ip=GlobalInsertionPoint.get())
             # restore insertion point
             GlobalInsertionPoint.restore()
 

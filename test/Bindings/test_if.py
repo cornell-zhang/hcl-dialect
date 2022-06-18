@@ -20,19 +20,18 @@ with Context() as ctx, Location.unknown() as loc:
         @builtin.FuncOp.from_py_func(memref_type)
         def kernel(A):
             for_i = hcl_mlir.make_for(0, 1024, name="i")
-            hcl_mlir.GlobalInsertionPoint.save(InsertionPoint(for_i.body))
+            hcl_mlir.GlobalInsertionPoint.save(InsertionPoint(for_i.body.operations[0]))
             var = IterVar(for_i.induction_variable)
             var.dtype = idx_type
-            with InsertionPoint(for_i.body):
+            with InsertionPoint(for_i.body.operations[0]):
 
                 def make_if_block(arg):
                     a = memref.LoadOp(A, [for_i.induction_variable])
                     cst = hcl_mlir.ConstantOp(idx_type, 0)
                     cmp = hcl_mlir.CmpOp(var, cst, arg)
                     if_op = hcl_mlir.make_if(cmp)
-                    with InsertionPoint(if_op.then_block):
+                    with InsertionPoint(if_op.then_block.operations[0]):
                         add = arith.AddFOp(a.result, a.result)
-                        affine.AffineYieldOp([])
 
                 make_if_block("eq")
                 # make_if_block("ne")
@@ -40,7 +39,6 @@ with Context() as ctx, Location.unknown() as loc:
                 make_if_block("le")
                 make_if_block("gt")
                 make_if_block("ge")
-                affine.AffineYieldOp([])
 
             return A
 

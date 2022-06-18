@@ -4,7 +4,7 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-
+import warnings
 from typing import List
 
 import numpy as np
@@ -338,11 +338,10 @@ def cast_types(lhs, rhs):
                 raise RuntimeError("Type conversion not implemented")
     else:
         raise RuntimeError("Type conversion failed")
-    # TODO(Niansong): make this warning suppressable, and add line number or stage name
-    print(
+    warnings.warn(
         "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
-        )
+        ), RuntimeWarning
     )
     return CastOp(rhs, res_type)
 
@@ -788,19 +787,22 @@ class ConstantOp(ExprOp):
             )
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
-            # tensor_wrapper = TensorOp(
-            #     self.val.shape, memref.AllocOp, self.dtype, "const_tensor"
-            # )
-            tensor_wrapper = TensorOp(
-                self.val.shape, memref.AllocOp, dtype, "const_tensor"
-            )
-            tensor_wrapper.build()
-            self.tensor = tensor_wrapper
-            store = memref.GetGlobalOp(
-                memref_type,
-                FlatSymbolRefAttr.get(self.name),
-                ip=GlobalInsertionPoint.get(),
-            )
+            
+            if is_fixed_type(self.dtype):
+                tensor_wrapper = TensorOp(self.val.shape, memref.AllocOp, self.dtype, "const_tensor")
+                tensor_wrapper.build()
+                self.tensor = tensor_wrapper
+                fixed_memref_type = MemRefType.get(self.val.shape, self.dtype)
+                store = hcl_d.GetGlobalFixedOp(fixed_memref_type, FlatSymbolRefAttr.get(self.name))
+            else:
+                tensor_wrapper = TensorOp(self.val.shape, memref.AllocOp, dtype, "const_tensor")
+                tensor_wrapper.build()
+                self.tensor = tensor_wrapper
+                store = memref.GetGlobalOp(
+                    memref_type,
+                    FlatSymbolRefAttr.get(self.name),
+                    ip=GlobalInsertionPoint.get(),
+                )
             # Note: Why do we have an update_op here?
             # memref.GetGlobalOp is not subscriptable,
             # meaning that we can't do something like
@@ -1458,8 +1460,25 @@ class CastOp(ExprOp):
                 op = None
             else:
                 op = arith.ExtFOp
+        elif is_fixed_type(res_type) and is_floating_point_type(self.val.dtype):
+            op = hcl_d.FloatToFixedOp
+        elif is_floating_point_type(res_type) and is_fixed_type(self.val.dtype):
+            op = hcl_d.FixedToFloatOp
+        elif is_fixed_type(res_type) and is_integer_type(self.val.dtype):
+            op = hcl_d.IntToFixedOp
+        elif is_integer_type(res_type) and is_fixed_type(self.val.dtype):
+            op = hcl_d.FixedToIntOp
+        elif is_fixed_type(res_type) and is_fixed_type(self.val.dtype):
+            if res_type.width == self.val.dtype.width and \
+                    res_type.frac == self.val.dtype.frac:
+                op = None
+            else:
+                op = hcl_d.FixedToFixedOp
         else:
             op = builtin.UnrealizedConversionCastOp
+            warnings.warn(
+                "Unrealized conversion cast: {} -> {}".format(self.val.dtype, res_type), 
+                RuntimeWarning)
         super().__init__(op, res_type)
         if flags.BUILD_INPLACE:
             self.build()
@@ -1476,6 +1495,11 @@ class CastOp(ExprOp):
             arith.ExtUIOp,
             arith.ExtSIOp,
             arith.ExtFOp,
+            hcl_d.FixedToIntOp,
+            hcl_d.IntToFixedOp,
+            hcl_d.FixedToFloatOp,
+            hcl_d.FloatToFixedOp,
+            hcl_d.FixedToFixedOp
         ]:
             if is_unsigned_type(self.dtype):
                 dtype = IntegerType.get_signless(self.dtype.width)

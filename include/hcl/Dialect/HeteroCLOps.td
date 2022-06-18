@@ -464,6 +464,15 @@ def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
   let summary = "fixed point maximum operation";
 }
 
+def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed"> {
+    let summary = "generates a fixed point memref from a int global memref";
+    let arguments = (ins FlatSymbolRefAttr:$global);
+    let results = (outs AnyStaticShapeMemRef:$result);
+    let assemblyFormat = [{
+        $global `:` type($result) attr-dict
+    }];
+}
+
 // Bitwise operators
 def GetIntBitOp : HeteroCL_Op<"get_bit"> {
     let summary = "get bit of an integer";
@@ -533,8 +542,35 @@ def FixedToFloatOp : HeteroCL_Op<"fixed_to_float"> {
 
 def FloatToFixedOp : HeteroCL_Op<"float_to_fixed"> {
   let summary = "float to fixed cast operation";
+  let arguments = (ins FloatLike:$input);
+  let results = (outs FixedLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def IntToFixedOp : HeteroCL_Op<"int_to_fixed"> {
+  let summary = "int to fixed cast operation";
+  let arguments = (ins SignlessIntegerLike:$input);
+  let results = (outs FixedLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def FixedToIntOp : HeteroCL_Op<"fixed_to_int"> {
+  let summary = "fixed to int cast operation";
   let arguments = (ins FixedLike:$input);
-  let results = (outs FloatLike:$res);
+  let results = (outs SignlessIntegerLike:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
+def FixedToFixedOp : HeteroCL_Op<"fixed_to_fixed"> {
+  let summary = "Cast operation from one fixed point type to another";
+  let arguments = (ins FixedLike:$input);
+  let results = (outs FixedLike:$res);
   let assemblyFormat = [{
       `(` $input `)` attr-dict `:` type($input) `->` type($res)
   }];

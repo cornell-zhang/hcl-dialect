@@ -2246,6 +2246,8 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
         allMemrefs.end()) {
       allMemrefs.push_back(target);
     } else {
+      if (allMemrefs.size() == 1)
+        return WalkResult::advance();
       allMemrefs.erase(
           std::remove(allMemrefs.begin(), allMemrefs.end(), target),
           allMemrefs.end());
@@ -2255,6 +2257,7 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
         allocToMove.push_back(allocMap[stage_name]);
       }
     }
+    return WalkResult::advance();
   });
 }
 

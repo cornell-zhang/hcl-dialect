@@ -60,6 +60,8 @@ def is_integer_type(dtype):
 def is_fixed_type(dtype):
     return isinstance(dtype, (FixedType, UFixedType))
 
+def is_hcl_mlir_type(dtype):
+    return is_floating_point_type(dtype) or is_integer_type(dtype) or is_fixed_type(dtype)
 
 def get_mlir_type(dtype):
     if is_integer_type(dtype) or is_floating_point_type(dtype) or is_fixed_type(dtype):
@@ -451,7 +453,10 @@ class TensorOp(ExprOp):
         # op can be BlockArgument or AllocOp.result
         super().__init__(op)
         self.shape = shape
-        self.dtype = get_mlir_type(dtype)
+        if isinstance(dtype, str):
+            self.dtype = get_mlir_type(dtype)
+        else:
+            self.dtype = dtype
         self.name = name
 
     def build(self):

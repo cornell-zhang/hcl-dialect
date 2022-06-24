@@ -2241,6 +2241,8 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
                       std::map<std::string, memref::AllocOp> &allocMap,
                       SmallVector<memref::AllocOp> &allocToMove) {
   SmallVector<Value> memrefToRemove;
+  const auto stage_name =
+      stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
@@ -2250,8 +2252,11 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
       if (allMemrefs.size() == 1)
         return WalkResult::advance();
       memrefToRemove.push_back(target);
-      const auto stage_name =
-          stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
+      if (!op->hasAttr("to"))
+        return WalkResult::advance();
+      Attribute attr = op->getAttr("to");
+      if (attr.cast<StringAttr>().getValue().str() != stage_name)
+        return WalkResult::advance();
       if (allocMap.count(stage_name) > 0) {
         allocToMove.push_back(allocMap[stage_name]);
       }

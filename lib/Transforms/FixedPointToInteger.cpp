@@ -23,6 +23,28 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
+/* Cast integer to target bitwidth
+ */
+Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
+                       Value v, size_t target_width, bool is_signed) {
+  Value result;
+  Type newType = IntegerType::get(ctx, target_width);
+  if (v.getType().cast<IntegerType>().getWidth() < target_width) {
+    // extend bits
+    if (is_signed) {
+      result = builder.create<arith::ExtSIOp>(loc, newType, v);
+    } else {
+      result = builder.create<arith::ExtUIOp>(loc, newType, v);
+    }
+  } else if (v.getType().cast<IntegerType>().getWidth() > target_width) {
+    // truncate bits
+    result = builder.create<arith::TruncIOp>(loc, newType, v);
+  } else {
+    result = v;
+  }
+  return result;
+}
+
 // TODO(Niansong): function calls also need to be handled
 
 /* Update the function signature and
@@ -405,42 +427,6 @@ void updateAlloc(FuncOp &f) {
   }
 }
 
-// Update all GetGlobalFixedOp's return type in FuncOp f
-// from FixedType MemRef to IntegerType MemRef
-void updateGetGlobalFixed(FuncOp &f) {
-  SmallVector<Operation *, 10> getGlobalFixedOps;
-  f.walk([&](Operation *op) {
-    if (auto getGlobalFixedOp = dyn_cast<GetGlobalFixedOp>(op)) {
-      getGlobalFixedOps.push_back(op);
-    }
-  });
-
-  for (auto op : getGlobalFixedOps) {
-    auto getGlobalFixedOp = dyn_cast<GetGlobalFixedOp>(op);
-    MemRefType memRefType = getGlobalFixedOp.getType().cast<MemRefType>();
-    Type t = memRefType.getElementType();
-    size_t width;
-    if (auto ft = t.dyn_cast_or_null<FixedType>()) {
-      width = ft.getWidth();
-    } else if (auto uft = t.dyn_cast_or_null<UFixedType>()) {
-      width = uft.getWidth();
-    } else {
-      // Not a fixed-point get_global operation
-      // Return without changing anything
-      continue;
-    }
-    // if width is not 64, throw an error
-    if (width != 64) {
-      llvm::errs() << "Error: get_global_fixed operation's width is not 64\n";
-      return;
-    }
-
-    IntegerType I64 = IntegerType::get(f.getContext(), 64);
-    Type newMemRefType = memRefType.clone(I64);
-    op->getResult(0).setType(newMemRefType); // get_global_fixed has only one result
-  }
-}
-
 void updateAffineStore(AffineStoreOp &op) {
   Type valueTyp = op->getOperand(0).getType();
   Type memRefEleTyp =
@@ -464,34 +450,18 @@ void updateAffineStore(AffineStoreOp &op) {
   }
 }
 
-/* Cast integer to target bitwidth
- */
-Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
-                       Value v, size_t target_width) {
-  Value result;
-  Type newType = IntegerType::get(ctx, target_width);
-  if (v.getType().cast<IntegerType>().getWidth() < target_width) {
-    // extend bits
-    result = builder.create<arith::ExtSIOp>(loc, newType, v);
-  } else if (v.getType().cast<IntegerType>().getWidth() > target_width) {
-    // truncate bits
-    result = builder.create<arith::TruncIOp>(loc, newType, v);
-  } else {
-    result = v;
-  }
-  return result;
-}
-
 // Lower AddFixedOp to AddIOp
 void lowerFixedAdd(AddFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
 
   arith::AddIOp newOp = rewriter.create<arith::AddIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);
@@ -501,12 +471,14 @@ void lowerFixedAdd(AddFixedOp &op) {
 void lowerFixedSub(SubFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
 
   arith::SubIOp newOp = rewriter.create<arith::SubIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);
@@ -518,13 +490,15 @@ void lowerFixedMul(MulFixedOp &op) {
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
   size_t frac =
       op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
 
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
 
   arith::MulIOp newOp = rewriter.create<arith::MulIOp>(op->getLoc(), lhs, rhs);
 
@@ -556,12 +530,14 @@ void lowerFixedDiv(DivFixedOp &op) {
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
   size_t frac =
       op->getAttr("lfrac").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
 
   OpBuilder rewriter(op);
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
   // lhs<width, frac> / rhs<width, frac> -> res<width, 0>
   // Therefore, we need to left shift the lhs for frac bit
   // lhs<width, 2 * frac> / rhs<width, frac> -> res<width, frac>
@@ -587,12 +563,14 @@ void lowerFixedDiv(DivFixedOp &op) {
 void lowerFixedCmp(CmpFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
 
   auto prednum =
       op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
@@ -640,12 +618,14 @@ void lowerFixedCmp(CmpFixedOp &op) {
 void lowerFixedMin(MinFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(2), width);
+                               op->getOperand(2), width, isSigned);
 
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {
@@ -663,12 +643,14 @@ void lowerFixedMin(MinFixedOp &op) {
 void lowerFixedMax(MaxFixedOp &op) {
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
+  std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
+  bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width);
+                               op->getOperand(1), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(2), width);
+                               op->getOperand(2), width, isSigned);
 
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {
@@ -690,10 +672,41 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
   OpBuilder rewriter(op);
   auto loc = op.getLoc();
   MemRefType oldType = op->getResult(0).getType().dyn_cast<MemRefType>();
+  Type oldElementType = oldType.getElementType();
+  bool isSigned;
+  if (auto fixedTy = oldElementType.dyn_cast<FixedType>()) {
+    isSigned = true;
+  } else {
+    isSigned = false;
+  }
   auto memRefType = oldType.clone(IntegerType::get(op.getContext(), 64));
   auto symbolName = op.global();
   auto res = rewriter.create<memref::GetGlobalOp>(loc, memRefType, symbolName);
-  op->replaceAllUsesWith(res);
+  // Truncate or Extend I64 memref to the width of the fixed-point
+  size_t bitwidth;
+  if (auto fixedType = oldElementType.dyn_cast<FixedType>()) {
+    bitwidth = fixedType.getWidth();
+  } else if (auto ufixedType = oldElementType.dyn_cast<UFixedType>()) {
+    bitwidth = ufixedType.getWidth();
+  } else {
+    llvm::errs() << "unknown fixed-point type in GetGlobalFixedOp\n";
+    return;
+  }
+  auto castedMemRefType =
+      oldType.clone(IntegerType::get(op.getContext(), bitwidth)).cast<MemRefType>();
+  auto castedMemRef = rewriter.create<memref::AllocOp>(loc, castedMemRefType);
+  SmallVector<int64_t, 4> lbs(oldType.getRank(), 0);
+  SmallVector<int64_t, 4> steps(oldType.getRank(), 1);
+  buildAffineLoopNest(
+      rewriter, loc, lbs, oldType.getShape(), steps,
+      [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+        auto v = nestedBuilder.create<AffineLoadOp>(loc, res, ivs);
+        Value casted = castIntegerWidth(op.getContext(), nestedBuilder, loc, v,
+                                        bitwidth, isSigned);
+        nestedBuilder.create<AffineStoreOp>(loc, casted, castedMemRef, ivs);
+      });
+
+  op->replaceAllUsesWith(castedMemRef);
 }
 
 void lowerFixedToFloat(FixedToFloatOp &op) {
@@ -752,14 +765,15 @@ void lowerFixedToInt(FixedToIntOp &op) {
   auto loc = op.getLoc();
   auto src = op.getOperand();
   auto dst = op.getResult();
+  size_t src_width =
+      op->getAttr("src_width").cast<IntegerAttr>().getValue().getSExtValue();
   size_t src_frac =
       op->getAttr("src_frac").cast<IntegerAttr>().getValue().getSExtValue();
   std::string sign =
       op->getAttr("src_sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
-  auto srcType = src.getType().cast<IntegerType>();
   auto dstType = dst.getType().cast<IntegerType>();
-  size_t src_width = srcType.getWidth();
+  auto srcType = IntegerType::get(op.getContext(), src_width);
   size_t dst_width = dstType.getWidth();
   auto frac = rewriter.create<arith::ConstantOp>(
       loc, srcType, rewriter.getIntegerAttr(srcType, src_frac));
@@ -855,17 +869,18 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   bool isSignedSrc = src_sign == "signed";
   // bool isSignedDst = dst_sign == "signed";
 
-  auto srcType = src.getType().cast<IntegerType>();
-  if (srcType.getWidth() != src_width) {
-    llvm::errs() << "src_width != srcType.getWidth()\n";
-  }
+  // auto srcType = src.getType().cast<IntegerType>();
+  // if (srcType.getWidth() != src_width) {
+  //   llvm::errs() << "src_width != srcType.getWidth()\n";
+  // }
+  auto srcType = IntegerType::get(op.getContext(), src_width);
   auto dstType = IntegerType::get(op.getContext(), dst_width);
 
   // Step1: match bitwidth to max(src_width, dst_width)
   bool truncate_dst = false;
   Value matched_src;
-  if (dst_width >= src_width) {
-    // if (dst_width >= src_width), no need to truncate dst_base at step3
+  if (dst_width > src_width) {
+    // if (dst_width > src_width), no need to truncate dst_base at step3
     truncate_dst = false;
     // extend src_base to dst_width
     if (isSignedSrc) {
@@ -873,6 +888,9 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     } else {
       matched_src = rewriter.create<arith::ExtUIOp>(loc, dstType, src);
     }
+  } else if (dst_width == src_width)  {
+    truncate_dst = false;    
+    matched_src = src;
   } else {
     // if (dst_width < src_width), truncate dst_base at step3
     truncate_dst = true;
@@ -989,11 +1007,11 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateAlloc(func);
     updateAffineLoad(func);
-    updateGetGlobalFixed(func);
     visitRegion(func.getBody());
     updateAffineLoad(func);
     updateReturnOp(func);
     func.setType(newFuncType);
+    llvm::outs() << func << "\n";
   }
 
   return true;

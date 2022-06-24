@@ -2240,17 +2240,16 @@ template <class T, int opId>
 void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
                       std::map<std::string, memref::AllocOp> &allocMap,
                       SmallVector<memref::AllocOp> &allocToMove) {
+  SmallVector<Value> memrefToRemove;
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
-        allMemrefs.end()) {
+        allMemrefs.end()) { // need to prevent adding the same memref again
       allMemrefs.push_back(target);
     } else {
       if (allMemrefs.size() == 1)
         return WalkResult::advance();
-      allMemrefs.erase(
-          std::remove(allMemrefs.begin(), allMemrefs.end(), target),
-          allMemrefs.end());
+      memrefToRemove.push_back(target);
       const auto stage_name =
           stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
       if (allocMap.count(stage_name) > 0) {
@@ -2259,6 +2258,10 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
     }
     return WalkResult::advance();
   });
+  for (auto target : memrefToRemove) {
+    allMemrefs.erase(std::remove(allMemrefs.begin(), allMemrefs.end(), target),
+                     allMemrefs.end());
+  }
 }
 
 LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {

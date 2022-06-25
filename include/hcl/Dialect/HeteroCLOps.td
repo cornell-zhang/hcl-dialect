@@ -395,6 +395,23 @@ def HeteroCL_OutlineOp : HeteroCL_Op<"outline">
     }];
 }
 
+def HeteroCL_LayoutOp : HeteroCL_Op<"layout"> 
+{
+    let summary = "layout";
+    let description = [{
+        hcl.layout(target)
+
+        Change the layout of the target tensor
+        Need to pass in AffineMapAttr as layout
+    }];
+
+    let arguments = (ins AnyMemRef:$target);
+    let results = (outs AnyMemRef:$result);
+    let assemblyFormat = [{
+        `(` $target `:` type($target) `)` attr-dict `->` type($result)
+    }];
+}
+
 // Fixed-point operators
 def AnyFixed : Type<CPred<"$_self.isa<hcl::FixedType>() || $_self.isa<hcl::UFixedType>()">, "fixed-point",
                     "hcl::AnyFixedType">;

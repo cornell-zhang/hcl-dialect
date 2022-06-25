@@ -2335,10 +2335,58 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   return success();
 }
 
+template <class T>
+void updateMemrefAccess(Operation *&user, SmallVector<AffineExpr> &dimExprs) {
+  SmallVector<AffineExpr> symExprs;
+  if (auto op = dyn_cast<T>(user)) {
+    auto oldAffineMap = op.getAffineMap();
+    auto newAffineMap = oldAffineMap.replaceDimsAndSymbols(
+        dimExprs, symExprs, oldAffineMap.getNumDims(),
+        oldAffineMap.getNumSymbols());
+    op->setAttr("map", AffineMapAttr::get(newAffineMap));
+  }
+}
+
+LogicalResult runLayout(FuncOp &f, LayoutOp &layoutOp, Value &array) {
+  // 1) Get the schedule
+  auto oldType = array.getType().dyn_cast<MemRefType>();
+  auto oldShape = oldType.getShape();
+  auto layoutMap =
+      layoutOp->getAttr("layout").template cast<AffineMapAttr>().getValue();
+
+  // 2) Get new shape
+  SmallVector<int64_t> newShape;
+  SmallVector<AffineExpr> dimExprs;
+  for (auto dim : layoutMap.getResults()) {
+    newShape.push_back(oldShape[dim.cast<AffineDimExpr>().getPosition()]);
+    dimExprs.push_back(dim);
+  }
+
+  // 3) Set new type
+  mlir::Type elementType = oldType.getElementType();
+  auto newType = MemRefType::get(newShape, elementType);
+  array.setType(newType);
+
+  // 4) Update memory access
+  for (auto user : array.getUsers()) {
+    updateMemrefAccess<AffineLoadOp>(user, dimExprs);
+    updateMemrefAccess<AffineStoreOp>(user, dimExprs);
+  }
+
+  // 5) update function signature
+  auto builder = Builder(array.getContext());
+  auto resultTypes = f.front().getTerminator()->getOperandTypes();
+  auto inputTypes = f.front().getArgumentTypes();
+  f.setType(builder.getFunctionType(inputTypes, resultTypes));
+
+  return success();
+}
+
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   OutlineOp, ReshapeOp, ThreadBindOp, InterKernelToOp>(op);
+                   OutlineOp, ReshapeOp, LayoutOp, ThreadBindOp,
+                   InterKernelToOp>(op);
 }
 
 template <class HCLOp>
@@ -2418,6 +2466,14 @@ bool applyLoopTransformationOnSingleFunction(ModuleOp &mod, FuncOp &f) {
         Value array;
         if (findArray(f, new_op.target(), array)) {
           if (failed(runReshape(f, new_op, array)))
+            return false;
+        } else {
+          return false;
+        }
+      } else if (auto new_op = dyn_cast<LayoutOp>(op)) {
+        Value array;
+        if (findArray(f, new_op.target(), array)) {
+          if (failed(runLayout(f, new_op, array)))
             return false;
         } else {
           return false;

@@ -2337,12 +2337,16 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
 
 template <class T>
 void updateMemrefAccess(Operation *&user, SmallVector<AffineExpr> &dimExprs) {
-  SmallVector<AffineExpr> symExprs;
   if (auto op = dyn_cast<T>(user)) {
     auto oldAffineMap = op.getAffineMap();
-    auto newAffineMap = oldAffineMap.replaceDimsAndSymbols(
-        dimExprs, symExprs, oldAffineMap.getNumDims(),
-        oldAffineMap.getNumSymbols());
+    SmallVector<AffineExpr> memAffineIndices;
+    for (auto dim : dimExprs) {
+      auto pos = dim.cast<AffineDimExpr>().getPosition();
+      memAffineIndices.push_back(oldAffineMap.getResult(pos));
+    }
+    auto newAffineMap =
+        AffineMap::get(oldAffineMap.getNumDims(), 0 /* symbols */,
+                       memAffineIndices, op->getContext());
     op->setAttr("map", AffineMapAttr::get(newAffineMap));
   }
 }

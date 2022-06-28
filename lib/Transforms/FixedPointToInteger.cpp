@@ -1011,7 +1011,6 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateAffineLoad(func);
     updateReturnOp(func);
     func.setType(newFuncType);
-    llvm::outs() << func << "\n";
   }
 
   return true;

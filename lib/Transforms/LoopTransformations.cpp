@@ -2253,8 +2253,10 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
     } else {
       if (allMemrefs.size() == 1)
         return WalkResult::advance();
-      memrefToRemove.push_back(target);
-      allocToMove.insert(dyn_cast<memref::AllocOp>(target.getDefiningOp()));
+      if (target.getDefiningOp()) {
+        memrefToRemove.push_back(target);
+        allocToMove.insert(dyn_cast<memref::AllocOp>(target.getDefiningOp()));
+      }
     }
     return WalkResult::advance();
   });

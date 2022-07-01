@@ -339,7 +339,7 @@ def cast_types(lhs, rhs):
     else:
         raise RuntimeError("Type conversion failed")
     warnings.warn(
-        "Warning: Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
+        "Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
             lhs, ltype, rhs, rtype, rtype, res_type
         ),
         RuntimeWarning,
@@ -1541,10 +1541,11 @@ class GetBitOp(ExprOp):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
         if not isinstance(self.index.dtype, IndexType):
-            print(
-                "Warning: GetBitOp's input is not an index. Cast from {} to {}.".format(
+            warnings.warn(
+                "GetBitOp's input is not an index. Cast from {} to {}.".format(
                     self.index.dtype, IndexType.get()
-                )
+                ),
+                RuntimeWarning,
             )
             self.index = CastOp(self.index, IndexType.get())
         if flags.BUILD_INPLACE:
@@ -1603,10 +1604,11 @@ class SetBitOp(ExprOp):
             )
         self.val = val
         if not isinstance(self.index.dtype, IndexType):
-            print(
-                "Warning: SetBitOp's input is not an index. Cast from {} to {}.".format(
+            warnings.warn(
+                "SetBitOp's input is not an index. Cast from {} to {}.".format(
                     self.index.dtype, IndexType.get()
-                )
+                ),
+                RuntimeWarning,
             )
             self.index = CastOp(self.index, IndexType.get())
         if flags.BUILD_INPLACE:
@@ -1636,10 +1638,11 @@ class GetSliceOp(ExprOp):
             if isinstance(index, int):
                 index = ConstantOp(IndexType.get(), index)
             if not isinstance(index.dtype, IndexType):
-                print(
-                    "Warning: GetSliceOp's input is not an index. Cast from {} to {}.".format(
+                warnings.warn(
+                    "GetSliceOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    )
+                    ),
+                    RuntimeWarning,
                 )
                 index = CastOp(index, IndexType.get())
             return index
@@ -1676,10 +1679,11 @@ class SetSliceOp(ExprOp):
             if isinstance(index, int):
                 index = ConstantOp(IndexType.get(), index)
             if not isinstance(index.dtype, IndexType):
-                print(
-                    "Warning: SetSliceOp's input is not an index. Cast from {} to {}.".format(
+                warnings.warn(
+                    "SetSliceOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    )
+                    ),
+                    RuntimeWarning,
                 )
                 index = CastOp(index, IndexType.get())
             return index
@@ -1715,10 +1719,11 @@ class LoadOp(ExprOp):
         self.indices = []
         for index in indices:
             if not isinstance(get_mlir_type(index.dtype), IndexType):
-                print(
-                    "Warning: LoadOp's input is not an index. Cast from {} to {}.".format(
+                warnings.warn(
+                    "LoadOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    )
+                    ),
+                    RuntimeWarning,
                 )
                 index = CastOp(index, IndexType.get())
             self.indices.append(index)
@@ -1770,10 +1775,11 @@ class StoreOp(ExprOp):
         super().__init__(affine.AffineStoreOp)
         val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
-            print(
-                "Warning: store operation has different input types. Cast from {} to {}.".format(
+            warnings.warn(
+                "StoreOp has different input types. Cast from {} to {}.".format(
                     val.dtype, to_tensor.dtype
-                )
+                ),
+                RuntimeWarning,
             )
             val = CastOp(val, to_tensor.dtype)
         self.val = val
@@ -1781,10 +1787,11 @@ class StoreOp(ExprOp):
         self.indices = []
         for index in indices:
             if not isinstance(get_mlir_type(index.dtype), IndexType):
-                print(
-                    "Warning: StoreOp's input is not an index. Cast from {} to {}.".format(
+                warnings.warn(
+                    "StoreOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    )
+                    ),
+                    RuntimeWarning,
                 )
                 index = CastOp(index, IndexType.get())
             self.indices.append(index)
@@ -2349,10 +2356,11 @@ class ASTVisitor:
         if "unsigned" in data.attributes:
             data_type = IntegerType.get_unsigned(data_type.width)
         if dtype != data_type:
-            print(
-                "Warning: Reduction variable should have the same type with the data. Got {0} and {1}. Do type casting from {1} to {0}".format(
+            warnings.warn(
+                "Reduction variable should have the same type with the data. Got {0} and {1}. Do type casting from {1} to {0}".format(
                     dtype, data_type
-                )
+                ),
+                RuntimeWarning,
             )
             placeholder = ExprOp(None, dtype=data_type)
             placeholder.built_op = data

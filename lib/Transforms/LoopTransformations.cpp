@@ -942,10 +942,8 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   // last N : physical index
   unsigned rank = arrayType.getRank();
   if (layout.getNumResults() != rank) {
-    // TODO: not sure why warning does not work (no output)
-    // partitionOp.emitWarning
-    partitionOp.emitError("Partition on the array partitioned before. "
-                          "The original layout map will be rewritten!");
+    partitionOp.emitWarning("Partition on the array partitioned before. "
+                            "The original layout map will be rewritten!");
   }
   for (int64_t dim = 0; dim < rank; ++dim) {
     if (target_dim == 0 || (target_dim > 0 && dim == target_dim - 1)) {

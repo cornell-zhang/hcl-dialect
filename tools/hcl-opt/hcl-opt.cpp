@@ -86,6 +86,10 @@ static llvm::cl::opt<bool> lowerBitOps("lower-bitops",
                                        llvm::cl::desc("Lower bitops"),
                                        llvm::cl::init(false));
 
+static llvm::cl::opt<bool> legalizeCast("legalize-cast",
+                                        llvm::cl::desc("Legalize cast"),
+                                        llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -200,6 +204,10 @@ int main(int argc, char **argv) {
 
   if (lowerBitOps) {
     pm.addPass(mlir::hcl::createLowerBitOpsPass());
+  }
+
+  if (legalizeCast) {
+    pm.addPass(mlir::hcl::createLegalizeCastPass());
   }
 
   if (enableNormalize) {

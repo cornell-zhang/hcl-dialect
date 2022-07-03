@@ -128,6 +128,11 @@ static bool lowerBitOps(MlirModule &mlir_mod) {
   return applyLowerBitOps(mod);
 }
 
+static bool legalizeCast(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLegalizeCast(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -172,4 +177,5 @@ PYBIND11_MODULE(_hcl, m) {
   // Lowering APIs.
   hcl_m.def("lower_composite_type", &lowerCompositeType);
   hcl_m.def("lower_bit_ops", &lowerBitOps);
+  hcl_m.def("legalize_cast", &legalizeCast);
 }

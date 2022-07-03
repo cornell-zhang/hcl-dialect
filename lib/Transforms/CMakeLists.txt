@@ -6,6 +6,7 @@ add_mlir_library(MLIRHCLPasses
     LowerCompositeType.cpp
     LowerBitOps.cpp
     Passes.cpp
+    LegalizeCast.cpp
 
     ADDITIONAL_HEADER_DIRS
     ${PROJECT_SOURCE_DIR}/include/hcl

@@ -42,4 +42,9 @@ def LowerBitOps : Pass<"lower-bit-ops", "ModuleOp"> {
   let constructor = "mlir::hcl::createLowerBitOpsPass()";
 }
 
+def LegalizeCast : Pass<"legalize-cast", "ModuleOp"> {
+  let summary = "Legalize cast operations";
+  let constructor = "mlir::hcl::createLegalizeCastPass()";
+}
+
 #endif // HCL_MLIR_PASSES

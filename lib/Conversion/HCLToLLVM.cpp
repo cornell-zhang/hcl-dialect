@@ -96,13 +96,38 @@ private:
   static Value castToF64(ConversionPatternRewriter &rewriter, const Value &src,
                          bool hasUnsignedAttr) {
     Type t = src.getType();
+    size_t iwidth = t.getIntOrFloatBitWidth(); // input bitwidth
     Type F64Type = rewriter.getF64Type();
     Value casted;
     if (t.isa<IntegerType>()) {
       if (t.isUnsignedInteger() or hasUnsignedAttr) {
-        casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type, src);
+        Value widthAdjusted;
+        Type targetIntType = rewriter.getIntegerType(64);
+        if (iwidth < 64) {
+          widthAdjusted =
+              rewriter.create<arith::ExtUIOp>(src.getLoc(), targetIntType, src);
+        } else if (iwidth > 64) {
+          widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
+                                                           targetIntType, src);
+        } else {
+          widthAdjusted = src;
+        }
+        casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type,
+                                                  widthAdjusted);
       } else { // signed and signless integer
-        casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type, src);
+        Value widthAdjusted;
+        Type targetIntType = rewriter.getIntegerType(64);
+        if (iwidth < 64) {
+          widthAdjusted =
+              rewriter.create<arith::ExtSIOp>(src.getLoc(), targetIntType, src);
+        } else if (iwidth > 64) {
+          widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
+                                                           targetIntType, src);
+        } else {
+          widthAdjusted = src;
+        }
+        casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type,
+                                                  widthAdjusted);
       }
     } else if (t.isa<FloatType>()) {
       unsigned width = t.cast<FloatType>().getWidth();

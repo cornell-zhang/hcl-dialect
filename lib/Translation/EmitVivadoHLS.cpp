@@ -1669,6 +1669,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
         }
       } else { // fully partitioned
         emitPragmaFlag = true;
+        if (memref.getType().cast<ShapedType>().getShape()[dim] == 1)
+          continue;
 
         indent();
         os << "#pragma HLS array_partition";

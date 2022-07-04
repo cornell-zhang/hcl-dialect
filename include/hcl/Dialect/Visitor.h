@@ -67,7 +67,8 @@ public:
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
             arith::ExtFOp, arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
             arith::FPToSIOp, arith::FPToUIOp, arith::BitcastOp,
-            UnrealizedConversionCastOp,
+            hcl::FixedToFloatOp, hcl::FloatToFixedOp, hcl::IntToFixedOp,
+            hcl::FixedToIntOp, hcl::FixedToFixedOp, UnrealizedConversionCastOp,
             // HCL operations.
             hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
             hcl::SubFixedOp, hcl::MulFixedOp, hcl::DivFixedOp, hcl::CmpFixedOp,
@@ -188,6 +189,11 @@ public:
   HANDLE(hcl::GetIntSliceOp);
   HANDLE(hcl::SetIntSliceOp);
   HANDLE(hcl::BitReverseOp);
+  HANDLE(hcl::FixedToFloatOp);
+  HANDLE(hcl::FloatToFixedOp);
+  HANDLE(hcl::IntToFixedOp);
+  HANDLE(hcl::FixedToIntOp);
+  HANDLE(hcl::FixedToFixedOp);
   // Logical operations
   HANDLE(hcl::LogicalAndOp);
   HANDLE(hcl::LogicalOrOp);

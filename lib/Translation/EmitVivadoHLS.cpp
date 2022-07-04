@@ -423,6 +423,21 @@ public:
   bool visitOp(arith::ExtFOp op) {
     return emitter.emitCast<arith::ExtFOp>(op), true;
   }
+  bool visitOp(hcl::FixedToFloatOp op) {
+    return emitter.emitCast<hcl::FixedToFloatOp>(op), true;
+  }
+  bool visitOp(hcl::FloatToFixedOp op) {
+    return emitter.emitCast<hcl::FloatToFixedOp>(op), true;
+  }
+  bool visitOp(hcl::IntToFixedOp op) {
+    return emitter.emitCast<hcl::IntToFixedOp>(op), true;
+  }
+  bool visitOp(hcl::FixedToIntOp op) {
+    return emitter.emitCast<hcl::FixedToIntOp>(op), true;
+  }
+  bool visitOp(hcl::FixedToFixedOp op) {
+    return emitter.emitCast<hcl::FixedToFixedOp>(op), true;
+  }
   bool visitOp(arith::BitcastOp op) { return emitter.emitBitcast(op), true; }
   bool visitOp(UnrealizedConversionCastOp op) {
     return emitter.emitGeneralCast(op), true;

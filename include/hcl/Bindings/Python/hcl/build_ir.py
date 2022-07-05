@@ -2019,6 +2019,8 @@ class ASTVisitor:
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
+        if self.mode == "build" and expr.built_op is not None:
+            return expr.built_op
 
         if isinstance(expr, UnaryOp):
             return self.visit_unary_op(expr)
@@ -2096,6 +2098,7 @@ class ASTVisitor:
     def erase_op(self, expr):
         try:
             expr.built_op.operation.erase()
+            expr.built_op = None
         except:
             pass
 

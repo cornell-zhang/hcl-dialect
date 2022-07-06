@@ -902,9 +902,9 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   if (dst_frac > src_frac) {
     // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, srcType, rewriter.getIntegerAttr(srcType, dst_frac - src_frac));
+        loc, dstType, rewriter.getIntegerAttr(dstType, dst_frac - src_frac));
     shifted_src =
-        rewriter.create<arith::ShLIOp>(loc, srcType, matched_src, frac);
+        rewriter.create<arith::ShLIOp>(loc, dstType, matched_src, frac);
   } else if (dst_frac < src_frac) {
     // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
     auto frac = rewriter.create<arith::ConstantOp>(

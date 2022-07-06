@@ -263,7 +263,10 @@ def get_hcl_op(expr, dtype=None):
     if isinstance(expr, (int, float)):
         if dtype == None:
             if isinstance(expr, int):
-                return ConstantOp(IntegerType.get_signless(32), expr)
+                if expr < 0xFFFFFFFF:
+                    return ConstantOp(IntegerType.get_signless(32), expr)
+                else:
+                    return ConstantOp(IntegerType.get_signless(64), expr)
             elif isinstance(expr, float):
                 return ConstantOp(F32Type.get(), expr)
         else:
@@ -837,9 +840,12 @@ class ConstantOp(ExprOp):
                     if self.dtype.width == 1:
                         value_attr = BoolAttr.get(self.val)
                     else:
-                        value_attr = IntegerAttr.get(
-                            IntegerType.get_signless(self.dtype.width), self.val
-                        )
+                        if self.val == 0xFFFFFFFFFFFFFFFF:
+                            attr_type = IntegerType.get_signless(self.dtype.width)
+                            self.val = -1
+                        else:
+                            attr_type = IntegerType.get_signless(self.dtype.width)
+                        value_attr = IntegerAttr.get(attr_type, self.val)
                 elif isinstance(self.dtype, F16Type):
                     value_attr = FloatAttr.get(F16Type.get(), self.val)
                 elif isinstance(self.dtype, F32Type):
@@ -1457,7 +1463,7 @@ class CastOp(ExprOp):
                 op = None
             else:
                 if (
-                    isinstance(self.val, (GetBitOp, GetSliceOp))
+                    isinstance(self.val, (GetBitOp, GetSliceOp, LeftShiftOp))
                     or self.val.dtype.width == 1
                 ):
                     op = arith.ExtUIOp
@@ -2019,6 +2025,8 @@ class ASTVisitor:
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
+        if self.mode == "build" and expr.built_op is not None:
+            return expr.built_op
 
         if isinstance(expr, UnaryOp):
             return self.visit_unary_op(expr)
@@ -2096,6 +2104,7 @@ class ASTVisitor:
     def erase_op(self, expr):
         try:
             expr.built_op.operation.erase()
+            expr.built_op = None
         except:
             pass
 

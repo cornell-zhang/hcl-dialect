@@ -275,6 +275,13 @@ def get_hcl_op(expr, dtype=None):
 
 
 def get_type_rank(dtype):
+    """
+    We always cast lower rank types to higher rank types.
+    Base rank 1 (lowest): integer and fixed point types
+    Base rank 2: index type
+    Base rank 3 (highest): float types
+    Types with larger dynamic range should have higher ranks.
+    """
     if is_integer_type(dtype):
         base = 0
         width = dtype.width
@@ -282,14 +289,13 @@ def get_type_rank(dtype):
             raise RuntimeError("Cannot support integer width larger than 2048")
         base += width
         return base
-    elif is_index_type(dtype):  # width 32
-        base = 2049
-        return base
     elif is_fixed_type(dtype):
-        base = 3000
+        base = 0
         width = dtype.width
         frac = dtype.frac
-        base += width
+        return base + (width - frac)
+    elif is_index_type(dtype):  # width 32
+        base = 2049
         return base
     elif is_floating_point_type(dtype):
         base = 10000

@@ -880,10 +880,12 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
 
   // Step1: match bitwidth to max(src_width, dst_width)
   bool truncate_dst = false;
+  bool match_to_dst = false;
   Value matched_src;
   if (dst_width > src_width) {
     // if (dst_width > src_width), no need to truncate dst_base at step3
     truncate_dst = false;
+    match_to_dst = true;
     // extend src_base to dst_width
     if (isSignedSrc) {
       matched_src = rewriter.create<arith::ExtSIOp>(loc, dstType, src);
@@ -892,10 +894,12 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     }
   } else if (dst_width == src_width)  {
     truncate_dst = false;    
+    match_to_dst = false;
     matched_src = src;
   } else {
     // if (dst_width < src_width), truncate dst_base at step3
     truncate_dst = true;
+    match_to_dst = false;
     matched_src = src;
   }
 
@@ -903,14 +907,14 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   Value shifted_src;
   if (dst_frac > src_frac) {
     // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
-    Type shiftType = matched_src.getType();
+    Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
         loc, shiftType, rewriter.getIntegerAttr(shiftType, dst_frac - src_frac));
     shifted_src =
         rewriter.create<arith::ShLIOp>(loc, shiftType, matched_src, frac);
   } else if (dst_frac < src_frac) {
     // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
-    Type shiftType = matched_src.getType();
+    Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
         loc, shiftType, rewriter.getIntegerAttr(shiftType, src_frac - dst_frac));
     if (isSignedSrc) {
@@ -969,9 +973,10 @@ void visitOperation(Operation &op) {
   } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
+    llvm::outs() << *op.getParentOp() << "\n";
     lowerFixedToFixed(new_op);
     // debug output
-    // llvm::outs() << *op.getParentOp() << "\n";
+    llvm::outs() << *op.getParentOp() << "\n";
   }
 
   for (auto &region : op.getRegions()) {

@@ -903,20 +903,22 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   Value shifted_src;
   if (dst_frac > src_frac) {
     // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
+    Type shiftType = matched_src.getType();
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, dstType, rewriter.getIntegerAttr(dstType, dst_frac - src_frac));
+        loc, shiftType, rewriter.getIntegerAttr(shiftType, dst_frac - src_frac));
     shifted_src =
-        rewriter.create<arith::ShLIOp>(loc, dstType, matched_src, frac);
+        rewriter.create<arith::ShLIOp>(loc, shiftType, matched_src, frac);
   } else if (dst_frac < src_frac) {
     // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
+    Type shiftType = matched_src.getType();
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, srcType, rewriter.getIntegerAttr(srcType, src_frac - dst_frac));
+        loc, shiftType, rewriter.getIntegerAttr(shiftType, src_frac - dst_frac));
     if (isSignedSrc) {
       shifted_src =
-          rewriter.create<arith::ShRSIOp>(loc, srcType, matched_src, frac);
+          rewriter.create<arith::ShRSIOp>(loc, shiftType, matched_src, frac);
     } else {
       shifted_src =
-          rewriter.create<arith::ShRUIOp>(loc, srcType, matched_src, frac);
+          rewriter.create<arith::ShRUIOp>(loc, shiftType, matched_src, frac);
     }
   } else {
     shifted_src = matched_src;
@@ -968,6 +970,8 @@ void visitOperation(Operation &op) {
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
     lowerFixedToFixed(new_op);
+    // debug output
+    // llvm::outs() << *op.getParentOp() << "\n";
   }
 
   for (auto &region : op.getRegions()) {

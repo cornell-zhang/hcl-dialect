@@ -377,7 +377,7 @@ def cast_types(lhs, rhs):
     # )
     # return lhs, CastOp(rhs, res_type)
 
-
+# TODO(Niansong): this should be covered by cast_types, double-check before removing
 def regularize_fixed_type(lhs, rhs):
     if not is_fixed_type(lhs.dtype) or not is_fixed_type(rhs.dtype):
         raise RuntimeError("Should be all fixed types")
@@ -1515,6 +1515,7 @@ class CastOp(ExprOp):
             if (
                 res_type.width == self.val.dtype.width
                 and res_type.frac == self.val.dtype.frac
+                and is_signed_fixed_type(res_type) == is_signed_fixed_type(self.val.dtype)
             ):
                 op = None
             else:

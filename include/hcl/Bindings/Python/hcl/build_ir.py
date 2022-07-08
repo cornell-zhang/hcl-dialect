@@ -431,9 +431,10 @@ class ExprOp(object):
             lrank = get_type_rank(lhs.dtype)
             rrank = get_type_rank(rhs.dtype)
             # always ensure the first op has higher ranking
-            higher_rank = lhs if lrank > rrank else rhs
-            lower_rank = rhs if lrank > rrank else lhs
-            lhs, rhs = cast_types(higher_rank, lower_rank)
+            if lrank > rrank:
+                lhs, rhs = cast_types(lhs, rhs)
+            else:
+                rhs, lhs = cast_types(rhs, lhs)
             if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
                 lhs, rhs = regularize_fixed_type(lhs, rhs)
 

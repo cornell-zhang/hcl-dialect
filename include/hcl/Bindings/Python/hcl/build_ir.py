@@ -352,7 +352,7 @@ def cast_types(lhs, rhs):
         # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
         # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
         elif is_unsigned_fixed_type(rtype):
-            res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
+            res_type = hcl_d.UFixedType.get(ltype.width + rtype.frac, rtype.frac)
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
             # unexpected type

@@ -2047,7 +2047,8 @@ class ASTVisitor:
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
-        if self.mode == "build" and expr.built_op is not None:
+        if self.mode == "build" and not isinstance(expr, tuple) \
+                and expr.built_op is not None:
             return expr.built_op
 
         if isinstance(expr, UnaryOp):

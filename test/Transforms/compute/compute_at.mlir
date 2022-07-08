@@ -70,4 +70,30 @@ module {
         hcl.compute_at (%s1, %s2, %l6)
         return
     }
+    func @no_load() -> (memref<10x10xi32>, memref<10x10xi32>) {
+        %0 = hcl.create_loop_handle "y" : !hcl.LoopHandle
+        %1 = hcl.create_loop_handle "x" : !hcl.LoopHandle
+        %2 = memref.alloc() {name = "A"} : memref<10x10xi32>
+        affine.for %arg0 = 0 to 10 {
+            affine.for %arg1 = 0 to 10 {
+                %8 = arith.addi %arg0, %arg1 : index
+                %9 = arith.index_cast %8 : index to i32
+                affine.store %9, %2[%arg0, %arg1] {to = "A"} : memref<10x10xi32>
+            } {loop_name = "x"}
+        } {loop_name = "y", stage_name = "A"}
+        %3 = hcl.create_stage_handle "A" : !hcl.StageHandle
+        %4 = hcl.create_loop_handle "y" : !hcl.LoopHandle
+        %5 = hcl.create_loop_handle "x" : !hcl.LoopHandle
+        %6 = memref.alloc() {name = "B"} : memref<10x10xi32>
+        affine.for %arg0 = 0 to 10 {
+            affine.for %arg1 = 0 to 10 {
+                %8 = arith.subi %arg0, %arg1 : index
+                %9 = arith.index_cast %8 : index to i32
+                affine.store %9, %6[%arg0, %arg1] {to = "B"} : memref<10x10xi32>
+            } {loop_name = "x"}
+        } {loop_name = "y", stage_name = "B"}
+        %7 = hcl.create_stage_handle "B" : !hcl.StageHandle
+        hcl.compute_at(%3, %7, %5)
+        return %2, %6 : memref<10x10xi32>, memref<10x10xi32>
+    }
 }

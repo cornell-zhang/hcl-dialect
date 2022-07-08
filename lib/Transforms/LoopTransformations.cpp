@@ -838,13 +838,21 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   // 3) Find the requested loops
   int cnt_depth = 0;
   int requested_depth = 0;
+  SmallVector<Value> consumerIVs;
+  SmallVector<Value> producerIVs;
   consumerFor.walk([&](AffineForOp forOp) {
     cnt_depth++;
     Attribute attr = forOp->getAttr("loop_name");
     if (loop_name == attr.cast<StringAttr>().getValue()) {
       requested_depth = cnt_depth;
     }
+    consumerIVs.push_back(forOp.getInductionVar());
   });
+  producerFor.walk([&](AffineForOp forOp) {
+    producerIVs.push_back(forOp.getInductionVar());
+  });
+  std::reverse(consumerIVs.begin(), consumerIVs.end());
+  std::reverse(producerIVs.begin(), producerIVs.end());
   requested_depth = cnt_depth - requested_depth + 1;
 
   // 4) Try to merge two loops
@@ -866,7 +874,31 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
       strategy = FusionStrategy::Generic;
     }
   } else {
-    strategy = FusionStrategy::Sibling;
+    // strategy = FusionStrategy::Sibling;
+    computeAtOp.emitWarning(
+        "MLIR loop fusion pass failed. Attempt using HCL's loop fusion pass.");
+    // get inner loops
+    AffineForOp secondForOp = consumerFor;
+    getLoop(secondForOp, loop_name);
+    int curr_depth = 0;
+    AffineForOp firstForOp;
+    producerFor.walk([&](AffineForOp forOp) {
+      if (curr_depth++ == cnt_depth - requested_depth) {
+        firstForOp = forOp;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    auto &firstBody = firstForOp.getBody()->getOperations();
+    auto &secondBody = secondForOp.getBody()->getOperations();
+    // do not need affine.yield op, so that's why using std::prev
+    secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+                      std::prev(firstBody.end()));
+    // update references
+    for (int i = 0; i < requested_depth; ++i)
+      producerIVs[i].replaceAllUsesWith(consumerIVs[i]);
+    producerFor.erase();
+    return success();
   }
 
   ComputationSliceState sliceUnion;

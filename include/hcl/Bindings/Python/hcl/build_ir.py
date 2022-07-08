@@ -427,17 +427,15 @@ class ExprOp(object):
         # get_type_rank has the valid type checking
         lhs.dtype = get_mlir_type(lhs.dtype)
         rhs.dtype = get_mlir_type(rhs.dtype)
-        lrank = get_type_rank(lhs.dtype)
-        rrank = get_type_rank(rhs.dtype)
-        # types are the same, no need to cast
-        if lrank == rrank:
-            pass
-        # always ensure the first op has higher ranking
-        higher_rank = lhs if lrank > rrank else rhs
-        lower_rank = rhs if lrank > rrank else lhs
-        lhs, rhs = cast_types(higher_rank, lower_rank)
-        if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
-            lhs, rhs = regularize_fixed_type(lhs, rhs)
+        if lhs.dtype != rhs.dtype:
+            lrank = get_type_rank(lhs.dtype)
+            rrank = get_type_rank(rhs.dtype)
+            # always ensure the first op has higher ranking
+            higher_rank = lhs if lrank > rrank else rhs
+            lower_rank = rhs if lrank > rrank else lhs
+            lhs, rhs = cast_types(higher_rank, lower_rank)
+            if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
+                lhs, rhs = regularize_fixed_type(lhs, rhs)
 
         # create AST node based on different types
         dtype = lhs.dtype
@@ -1559,6 +1557,8 @@ class CastOp(ExprOp):
                     self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
                 )
         elif self.op == None:
+            if self.val.built_op is None:
+                self.val.build()
             self.built_op = self.val.built_op
         else:  # builtin.UnrealizedConversionCastOp
             self.built_op = self.op(

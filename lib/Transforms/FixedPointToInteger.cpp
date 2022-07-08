@@ -362,6 +362,7 @@ void markFixedCastOps(FuncOp &f) {
     if (opr.getType().isa<FixedType>()) {
       FixedType srcType = opr.getType().cast<FixedType>();
       size_t width = srcType.getWidth();
+      if (auto blockArgv = opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>()) width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -370,6 +371,7 @@ void markFixedCastOps(FuncOp &f) {
     } else if (opr.getType().isa<UFixedType>()) {
       UFixedType srcType = opr.getType().cast<UFixedType>();
       size_t width = srcType.getWidth();
+      if (auto blockArgv = opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>()) width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -878,10 +880,12 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
 
   // Step1: match bitwidth to max(src_width, dst_width)
   bool truncate_dst = false;
+  bool match_to_dst = false;
   Value matched_src;
   if (dst_width > src_width) {
     // if (dst_width > src_width), no need to truncate dst_base at step3
     truncate_dst = false;
+    match_to_dst = true;
     // extend src_base to dst_width
     if (isSignedSrc) {
       matched_src = rewriter.create<arith::ExtSIOp>(loc, dstType, src);
@@ -890,10 +894,12 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     }
   } else if (dst_width == src_width)  {
     truncate_dst = false;    
+    match_to_dst = false;
     matched_src = src;
   } else {
     // if (dst_width < src_width), truncate dst_base at step3
     truncate_dst = true;
+    match_to_dst = false;
     matched_src = src;
   }
 
@@ -901,24 +907,29 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   Value shifted_src;
   if (dst_frac > src_frac) {
     // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
+    Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, srcType, rewriter.getIntegerAttr(srcType, dst_frac - src_frac));
+        loc, shiftType, rewriter.getIntegerAttr(shiftType, dst_frac - src_frac));
     shifted_src =
-        rewriter.create<arith::ShLIOp>(loc, srcType, matched_src, frac);
+        rewriter.create<arith::ShLIOp>(loc, shiftType, matched_src, frac);
   } else if (dst_frac < src_frac) {
     // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
+    Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, srcType, rewriter.getIntegerAttr(srcType, src_frac - dst_frac));
+        loc, shiftType, rewriter.getIntegerAttr(shiftType, src_frac - dst_frac));
     if (isSignedSrc) {
       shifted_src =
-          rewriter.create<arith::ShRSIOp>(loc, srcType, matched_src, frac);
+          rewriter.create<arith::ShRSIOp>(loc, shiftType, matched_src, frac);
     } else {
       shifted_src =
-          rewriter.create<arith::ShRUIOp>(loc, srcType, matched_src, frac);
+          rewriter.create<arith::ShRUIOp>(loc, shiftType, matched_src, frac);
     }
   } else {
     shifted_src = matched_src;
   }
+
+  // debug output
+  // llvm::outs() << shifted_src << "\n";
 
   // Step3 (optional): truncate dst_base
   if (truncate_dst) {
@@ -962,7 +973,10 @@ void visitOperation(Operation &op) {
   } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
+    llvm::outs() << *op.getParentOp() << "\n";
     lowerFixedToFixed(new_op);
+    // debug output
+    llvm::outs() << *op.getParentOp() << "\n";
   }
 
   for (auto &region : op.getRegions()) {

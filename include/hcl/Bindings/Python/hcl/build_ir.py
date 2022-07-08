@@ -278,6 +278,13 @@ def get_hcl_op(expr, dtype=None):
 
 
 def get_type_rank(dtype):
+    """
+    We always cast lower rank types to higher rank types.
+    Base rank 1 (lowest): integer and fixed point types
+    Base rank 2: index type
+    Base rank 3 (highest): float types
+    Types with larger dynamic range should have higher ranks.
+    """
     if is_integer_type(dtype):
         base = 0
         width = dtype.width
@@ -285,14 +292,13 @@ def get_type_rank(dtype):
             raise RuntimeError("Cannot support integer width larger than 2048")
         base += width
         return base
-    elif is_index_type(dtype):  # width 32
-        base = 2049
-        return base
     elif is_fixed_type(dtype):
-        base = 3000
+        base = 0
         width = dtype.width
         frac = dtype.frac
-        base += width
+        return base + (width - frac)
+    elif is_index_type(dtype):  # width 32
+        base = 2049
         return base
     elif is_floating_point_type(dtype):
         base = 10000
@@ -311,45 +317,67 @@ def get_type_rank(dtype):
 
 def cast_types(lhs, rhs):
     """
+    Cast types for binary operations
+    lhs always has higher rank than rhs
     Implementation based on
     https://en.cppreference.com/w/c/language/conversion
     """
     ltype = lhs.dtype
     rtype = rhs.dtype
     # 1) If one operand is long double (omitted)
-    # 2) Otherwise, if one operand is double
+    # 2) Otherwise, if lhs is double
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
         res_type = F64Type.get()
-    # 3) Otherwise, if one operand is float
+        return lhs, CastOp(rhs, res_type)
+    # 3) Otherwise, if lhs is float
     elif isinstance(ltype, F32Type):
-        # integer type to float (the only real type possible is float, which remains as-is)
+        # integer type to float
         res_type = F32Type.get()
-    # 4) Otherwise, both operands are integers. Both operands undergo integer promotions (see below); then, after integer promotion, one of the following cases applies:
+        return lhs, CastOp(rhs, res_type)
+    # 4) Otherwise, if lhs is integer.
     elif isinstance(ltype, (IntegerType, IndexType)):
-        res_type = ltype
-    # 5) Fixed types
-    elif is_fixed_type(ltype):
-        if is_integer_type(rtype):
-            res_type = hcl_d.FixedType.get(rtype.width + ltype.frac, ltype.frac)
+        # 4.1) lhs is int or index, rhs is int of lower rank, rhs gets promoted
+        if isinstance(rtype, IntegerType):
+            res_type = ltype
+            return lhs, CastOp(rhs, res_type)
+        # 4.2) lhs is index, rhs is also index, nothing to do
+        elif isinstance(rtype, IndexType):
+            return lhs, rhs
+        # 4.3) lhs is int or index, rhs is fixed point of lower rank
+        # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2) 
+        elif is_signed_fixed_type(rtype):
+            res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
+            return CastOp(lhs, res_type), CastOp(rhs, res_type)
+        # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
+        # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
+        elif is_unsigned_fixed_type(rtype):
+            res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
+            return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
-            if is_signed_fixed_type(rtype):
-                # TODO: Fixed<8, 2> <- Fixed<5,3>
-                res_type = hcl_d.FixedType.get(ltype.width, ltype.frac)
-            else:
-                # TODO: UFixed type
-                raise RuntimeError("Type conversion not implemented")
+            # unexpected type
+            raise RuntimeError("Unexpected type: {}".format(rtype))
+    # 5) Otherwise, if lhs is fixed type.
+    elif is_fixed_type(ltype):
+        # 5.1) lhs is fixed point, rhs is integer or fixed point of lower rank, cast rhs to lhs
+        if is_integer_type(rtype) or is_fixed_type(rtype):
+            res_type = ltype
+            return lhs, CastOp(rhs, res_type)
+        else:
+            # unexpected type
+            raise RuntimeError("Unexpected type: {}".format(rtype))
     else:
         raise RuntimeError("Type conversion failed")
-    warnings.warn(
-        "Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
-            lhs, ltype, rhs, rtype, rtype, res_type
-        ),
-        RuntimeWarning,
-    )
-    return CastOp(rhs, res_type)
+    # TODO(Niansong): add back warning for type casts
+    # warnings.warn(
+    #     "Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
+    #         lhs, ltype, rhs, rtype, rtype, res_type
+    #     ),
+    #     RuntimeWarning,
+    # )
+    # return lhs, CastOp(rhs, res_type)
 
-
+# TODO(Niansong): this should be covered by cast_types, double-check before removing
 def regularize_fixed_type(lhs, rhs):
     if not is_fixed_type(lhs.dtype) or not is_fixed_type(rhs.dtype):
         raise RuntimeError("Should be all fixed types")
@@ -399,18 +427,15 @@ class ExprOp(object):
         # get_type_rank has the valid type checking
         lhs.dtype = get_mlir_type(lhs.dtype)
         rhs.dtype = get_mlir_type(rhs.dtype)
-        lrank = get_type_rank(lhs.dtype)
-        rrank = get_type_rank(rhs.dtype)
-        # types are the same, no need to cast
-        if lrank == rrank:
-            pass
-        # always ensure the first op has higher ranking
-        elif lrank < rrank:
-            lhs = cast_types(rhs, lhs)
-        else:  # lrank > rrank
-            rhs = cast_types(lhs, rhs)
-        if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
-            lhs, rhs = regularize_fixed_type(lhs, rhs)
+        if lhs.dtype != rhs.dtype:
+            lrank = get_type_rank(lhs.dtype)
+            rrank = get_type_rank(rhs.dtype)
+            # always ensure the first op has higher ranking
+            higher_rank = lhs if lrank > rrank else rhs
+            lower_rank = rhs if lrank > rrank else lhs
+            lhs, rhs = cast_types(higher_rank, lower_rank)
+            if is_fixed_type(lhs.dtype) or is_fixed_type(rhs.dtype):
+                lhs, rhs = regularize_fixed_type(lhs, rhs)
 
         # create AST node based on different types
         dtype = lhs.dtype
@@ -1488,6 +1513,7 @@ class CastOp(ExprOp):
             if (
                 res_type.width == self.val.dtype.width
                 and res_type.frac == self.val.dtype.frac
+                and is_signed_fixed_type(res_type) == is_signed_fixed_type(self.val.dtype)
             ):
                 op = None
             else:
@@ -1531,6 +1557,8 @@ class CastOp(ExprOp):
                     self.dtype, self.val.result, ip=GlobalInsertionPoint.get()
                 )
         elif self.op == None:
+            if self.val.built_op is None:
+                self.val.build()
             self.built_op = self.val.built_op
         else:  # builtin.UnrealizedConversionCastOp
             self.built_op = self.op(

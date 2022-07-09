@@ -873,6 +873,29 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     } else {
       strategy = FusionStrategy::Generic;
     }
+    // use existing MLIR pass
+    ComputationSliceState sliceUnion;
+    FusionResult result = canFuseLoops(producerFor, consumerFor,
+                                       requested_depth, &sliceUnion, strategy);
+    std::string err_msg;
+    if (result.value == FusionResult::Success) {
+      fuseLoops(producerFor, consumerFor, sliceUnion);
+      producerFor.erase();
+    } else if (result.value == FusionResult::FailPrecondition) {
+      err_msg = "failed precondition for fusion (e.g. same block)";
+    } else if (result.value == FusionResult::FailBlockDependence) {
+      err_msg = "fusion would violate another dependence in block";
+    } else if (result.value == FusionResult::FailFusionDependence) {
+      err_msg = "fusion would reverse dependences between loops";
+    } else if (result.value == FusionResult::FailComputationSlice) {
+      err_msg = "unable to compute src loop computation slice";
+    } else if (result.value == FusionResult::FailIncorrectSlice) {
+      err_msg = "slice is computed, but it is incorrect";
+    }
+    if (result.value != FusionResult::Success) {
+      computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
+      return failure();
+    }
   } else {
     // strategy = FusionStrategy::Sibling;
     computeAtOp.emitWarning(
@@ -901,28 +924,42 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     return success();
   }
 
-  ComputationSliceState sliceUnion;
-  FusionResult result = canFuseLoops(producerFor, consumerFor, requested_depth,
-                                     &sliceUnion, strategy);
-  std::string err_msg;
-  if (result.value == FusionResult::Success) {
-    fuseLoops(producerFor, consumerFor, sliceUnion);
-    producerFor.erase();
-    return success();
-  } else if (result.value == FusionResult::FailPrecondition) {
-    err_msg = "failed precondition for fusion (e.g. same block)";
-  } else if (result.value == FusionResult::FailBlockDependence) {
-    err_msg = "fusion would violate another dependence in block";
-  } else if (result.value == FusionResult::FailFusionDependence) {
-    err_msg = "fusion would reverse dependences between loops";
-  } else if (result.value == FusionResult::FailComputationSlice) {
-    err_msg = "unable to compute src loop computation slice";
-  } else if (result.value == FusionResult::FailIncorrectSlice) {
-    err_msg = "slice is computed, but it is incorrect";
+  // 5) remove intermediate buffers & loads/stores
+  SmallVector<Operation *, 10> opToRemove;
+  memref::AllocOp alloc;
+  AffineStoreOp targetStore;
+  consumerFor.walk([&](AffineStoreOp store) {
+    if (!store.getOperand(1).getDefiningOp())
+      return WalkResult::advance();
+    auto buf = dyn_cast<memref::AllocOp>(store.getOperand(1).getDefiningOp());
+    if (buf->hasAttr("name") &&
+        buf->getAttr("name").cast<StringAttr>().getValue().str() ==
+            producer_name) {
+      alloc = buf;
+      targetStore = store;
+      opToRemove.push_back(store);
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  consumerFor.walk([&](AffineLoadOp load) {
+    if (load->hasAttr("from") &&
+        load->getAttr("from").cast<StringAttr>().getValue().str() ==
+            producer_name) {
+      replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
+                                 consumerFor.region());
+      opToRemove.push_back(load);
+    }
+    return WalkResult::advance();
+  });
+  if (alloc && alloc.getResult().use_empty()) {
+    opToRemove.push_back(alloc);
   }
-  computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
+  for (Operation *op : opToRemove) {
+    op->erase();
+  }
 
-  return failure();
+  return success();
 }
 
 bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
@@ -2260,18 +2297,24 @@ LogicalResult runInterKernelDataPlacementSingleFunction(Value &arrayToStream,
 }
 
 template <class T, int opId>
-void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
+void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
+                     std::set<Operation *> &opToMove) {
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
         allMemrefs.end())
       allMemrefs.push_back(target);
+    for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e; ++argIdx) {
+      auto operand = op.getOperand(argIdx);
+      if (operand.getDefiningOp())
+        opToMove.insert(operand.getDefiningOp());
+    }
   });
 }
 
 template <class T, int opId>
 void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
-                      std::set<memref::AllocOp> &allocToMove) {
+                      std::set<Operation *> &opToMove) {
   SmallVector<Value> memrefToRemove;
   const auto stage_name =
       stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
@@ -2285,7 +2328,7 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
         return WalkResult::advance();
       if (target.getDefiningOp()) {
         memrefToRemove.push_back(target);
-        allocToMove.insert(dyn_cast<memref::AllocOp>(target.getDefiningOp()));
+        opToMove.insert(target.getDefiningOp());
       }
     }
     return WalkResult::advance();
@@ -2302,6 +2345,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<AffineForOp> rootForOps;
   SmallVector<Value> allMemrefs;
   std::vector<std::string> stageNames;
+  std::set<Operation *> opToMove;
   for (auto stage : stages) {
     const auto stage_name =
         dyn_cast<CreateStageHandleOp>(stage.getDefiningOp()).stage_name();
@@ -2316,15 +2360,14 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     rootForOps.push_back(rootForOp);
 
     // 3) Find all load memrefs (inputs)
-    getInputMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
-    getInputMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
+    getInputMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs, opToMove);
+    getInputMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs, opToMove);
   }
 
   // 4) Find all store memrefs (outputs)
-  std::set<memref::AllocOp> allocToMove;
   for (auto rootForOp : rootForOps) {
-    getOutputMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs, allocToMove);
-    getOutputMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs, allocToMove);
+    getOutputMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs, opToMove);
+    getOutputMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs, opToMove);
   }
   SmallVector<Value> newMemrefs(allMemrefs);
 
@@ -2352,8 +2395,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   for (auto rootForOp : rootForOps) {
     rootForOp->moveBefore(ret);
   }
-  for (auto alloc : allocToMove) {
-    alloc->moveBefore(rootForOps[0]);
+  for (auto *op : opToMove) {
+    op->moveBefore(rootForOps[0]);
   }
 
   // 8) Update memrefs

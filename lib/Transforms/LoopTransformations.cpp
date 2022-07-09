@@ -873,6 +873,28 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     } else {
       strategy = FusionStrategy::Generic;
     }
+    ComputationSliceState sliceUnion;
+    FusionResult result = canFuseLoops(producerFor, consumerFor,
+                                       requested_depth, &sliceUnion, strategy);
+    std::string err_msg;
+    if (result.value == FusionResult::Success) {
+      fuseLoops(producerFor, consumerFor, sliceUnion);
+      producerFor.erase();
+    } else if (result.value == FusionResult::FailPrecondition) {
+      err_msg = "failed precondition for fusion (e.g. same block)";
+    } else if (result.value == FusionResult::FailBlockDependence) {
+      err_msg = "fusion would violate another dependence in block";
+    } else if (result.value == FusionResult::FailFusionDependence) {
+      err_msg = "fusion would reverse dependences between loops";
+    } else if (result.value == FusionResult::FailComputationSlice) {
+      err_msg = "unable to compute src loop computation slice";
+    } else if (result.value == FusionResult::FailIncorrectSlice) {
+      err_msg = "slice is computed, but it is incorrect";
+    }
+    if (result.value != FusionResult::Success) {
+      computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
+      return failure();
+    }
   } else {
     // strategy = FusionStrategy::Sibling;
     computeAtOp.emitWarning(
@@ -901,28 +923,39 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     return success();
   }
 
-  ComputationSliceState sliceUnion;
-  FusionResult result = canFuseLoops(producerFor, consumerFor, requested_depth,
-                                     &sliceUnion, strategy);
-  std::string err_msg;
-  if (result.value == FusionResult::Success) {
-    fuseLoops(producerFor, consumerFor, sliceUnion);
-    producerFor.erase();
-    return success();
-  } else if (result.value == FusionResult::FailPrecondition) {
-    err_msg = "failed precondition for fusion (e.g. same block)";
-  } else if (result.value == FusionResult::FailBlockDependence) {
-    err_msg = "fusion would violate another dependence in block";
-  } else if (result.value == FusionResult::FailFusionDependence) {
-    err_msg = "fusion would reverse dependences between loops";
-  } else if (result.value == FusionResult::FailComputationSlice) {
-    err_msg = "unable to compute src loop computation slice";
-  } else if (result.value == FusionResult::FailIncorrectSlice) {
-    err_msg = "slice is computed, but it is incorrect";
+  // remove intermediate buffers & loads/stores
+  SmallVector<Operation *, 10> opToRemove;
+  memref::AllocOp alloc;
+  AffineStoreOp targetStore;
+  consumerFor.walk([&](AffineStoreOp store) {
+    auto buf = dyn_cast<memref::AllocOp>(store.getOperand(1).getDefiningOp());
+    if (buf->hasAttr("name") &&
+        buf->getAttr("name").cast<StringAttr>().getValue().str() ==
+            producer_name) {
+      alloc = buf;
+      targetStore = store;
+      opToRemove.push_back(store);
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  consumerFor.walk([&](AffineLoadOp load) {
+    if (load->hasAttr("from") &&
+        load->getAttr("from").cast<StringAttr>().getValue().str() ==
+            producer_name) {
+      load.getResult().replaceAllUsesWith(targetStore.getOperand(0));
+      opToRemove.push_back(load);
+    }
+    return WalkResult::advance();
+  });
+  if (alloc.getResult().use_empty()) {
+    opToRemove.push_back(alloc);
   }
-  computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
+  for (Operation *op : opToRemove) {
+    op->erase();
+  }
 
-  return failure();
+  return success();
 }
 
 bool findArray(FuncOp &f, const Value &target, Value &ret_array) {

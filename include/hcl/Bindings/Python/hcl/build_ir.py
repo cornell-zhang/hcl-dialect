@@ -345,7 +345,7 @@ def cast_types(lhs, rhs):
         elif isinstance(rtype, IndexType):
             return lhs, rhs
         # 4.3) lhs is int or index, rhs is fixed point of lower rank
-        # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2) 
+        # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2)
         elif is_signed_fixed_type(rtype):
             res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
@@ -376,6 +376,7 @@ def cast_types(lhs, rhs):
     #     RuntimeWarning,
     # )
     # return lhs, CastOp(rhs, res_type)
+
 
 # TODO(Niansong): this should be covered by cast_types, double-check before removing
 def regularize_fixed_type(lhs, rhs):
@@ -1514,7 +1515,8 @@ class CastOp(ExprOp):
             if (
                 res_type.width == self.val.dtype.width
                 and res_type.frac == self.val.dtype.frac
-                and is_signed_fixed_type(res_type) == is_signed_fixed_type(self.val.dtype)
+                and is_signed_fixed_type(res_type)
+                == is_signed_fixed_type(self.val.dtype)
             ):
                 op = None
             else:
@@ -2048,8 +2050,11 @@ class ASTVisitor:
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
-        if self.mode == "build" and not isinstance(expr, tuple) \
-                and expr.built_op is not None:
+        if (
+            self.mode == "build"
+            and not isinstance(expr, tuple)
+            and expr.built_op is not None
+        ):
             return expr.built_op
 
         if isinstance(expr, UnaryOp):
@@ -2126,11 +2131,8 @@ class ASTVisitor:
             raise RuntimeError("Not an affine index!")
 
     def erase_op(self, expr):
-        try:
-            expr.built_op.operation.erase()
-            expr.built_op = None
-        except:
-            pass
+        expr.built_op.operation.erase()
+        expr.built_op = None
 
     def visit_unary_op(self, expr):
         if self.mode == "build":
@@ -2581,6 +2583,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
 
             if cond.built_op is not None:
                 cond.built_op.operation.erase()
+                cond.built_op = None
             else:
                 built_flag = False
 

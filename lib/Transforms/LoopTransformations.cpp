@@ -946,7 +946,8 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     if (load->hasAttr("from") &&
         load->getAttr("from").cast<StringAttr>().getValue().str() ==
             producer_name) {
-      load.getResult().replaceAllUsesWith(targetStore.getOperand(0));
+      replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
+                                 consumerFor.region());
       opToRemove.push_back(load);
     }
     return WalkResult::advance();

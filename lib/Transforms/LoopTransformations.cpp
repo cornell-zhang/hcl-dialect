@@ -2297,18 +2297,24 @@ LogicalResult runInterKernelDataPlacementSingleFunction(Value &arrayToStream,
 }
 
 template <class T, int opId>
-void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs) {
+void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
+                     std::set<Operation *> &opToMove) {
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
         allMemrefs.end())
       allMemrefs.push_back(target);
+    for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e; ++argIdx) {
+      auto operand = op.getOperand(argIdx);
+      if (operand.getDefiningOp())
+        opToMove.insert(operand.getDefiningOp());
+    }
   });
 }
 
 template <class T, int opId>
 void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
-                      std::set<memref::AllocOp> &allocToMove) {
+                      std::set<Operation *> &opToMove) {
   SmallVector<Value> memrefToRemove;
   const auto stage_name =
       stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
@@ -2322,7 +2328,7 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
         return WalkResult::advance();
       if (target.getDefiningOp()) {
         memrefToRemove.push_back(target);
-        allocToMove.insert(dyn_cast<memref::AllocOp>(target.getDefiningOp()));
+        opToMove.insert(target.getDefiningOp());
       }
     }
     return WalkResult::advance();
@@ -2339,6 +2345,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<AffineForOp> rootForOps;
   SmallVector<Value> allMemrefs;
   std::vector<std::string> stageNames;
+  std::set<Operation *> opToMove;
   for (auto stage : stages) {
     const auto stage_name =
         dyn_cast<CreateStageHandleOp>(stage.getDefiningOp()).stage_name();
@@ -2353,15 +2360,14 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     rootForOps.push_back(rootForOp);
 
     // 3) Find all load memrefs (inputs)
-    getInputMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs);
-    getInputMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs);
+    getInputMemRefs<AffineLoadOp, 0>(rootForOp, allMemrefs, opToMove);
+    getInputMemRefs<memref::LoadOp, 0>(rootForOp, allMemrefs, opToMove);
   }
 
   // 4) Find all store memrefs (outputs)
-  std::set<memref::AllocOp> allocToMove;
   for (auto rootForOp : rootForOps) {
-    getOutputMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs, allocToMove);
-    getOutputMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs, allocToMove);
+    getOutputMemRefs<AffineStoreOp, 1>(rootForOp, allMemrefs, opToMove);
+    getOutputMemRefs<memref::StoreOp, 1>(rootForOp, allMemrefs, opToMove);
   }
   SmallVector<Value> newMemrefs(allMemrefs);
 
@@ -2389,8 +2395,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   for (auto rootForOp : rootForOps) {
     rootForOp->moveBefore(ret);
   }
-  for (auto alloc : allocToMove) {
-    alloc->moveBefore(rootForOps[0]);
+  for (auto *op : opToMove) {
+    op->moveBefore(rootForOps[0]);
   }
 
   // 8) Update memrefs

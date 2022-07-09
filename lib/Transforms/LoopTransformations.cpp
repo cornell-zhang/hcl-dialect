@@ -873,6 +873,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     } else {
       strategy = FusionStrategy::Generic;
     }
+    // use existing MLIR pass
     ComputationSliceState sliceUnion;
     FusionResult result = canFuseLoops(producerFor, consumerFor,
                                        requested_depth, &sliceUnion, strategy);
@@ -923,11 +924,13 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     return success();
   }
 
-  // remove intermediate buffers & loads/stores
+  // 5) remove intermediate buffers & loads/stores
   SmallVector<Operation *, 10> opToRemove;
   memref::AllocOp alloc;
   AffineStoreOp targetStore;
   consumerFor.walk([&](AffineStoreOp store) {
+    if (!store.getOperand(1).getDefiningOp())
+      return WalkResult::advance();
     auto buf = dyn_cast<memref::AllocOp>(store.getOperand(1).getDefiningOp());
     if (buf->hasAttr("name") &&
         buf->getAttr("name").cast<StringAttr>().getValue().str() ==
@@ -948,7 +951,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
     }
     return WalkResult::advance();
   });
-  if (alloc.getResult().use_empty()) {
+  if (alloc && alloc.getResult().use_empty()) {
     opToRemove.push_back(alloc);
   }
   for (Operation *op : opToRemove) {

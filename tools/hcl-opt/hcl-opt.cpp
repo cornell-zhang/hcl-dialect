@@ -89,6 +89,9 @@ static llvm::cl::opt<bool> lowerBitOps("lower-bitops",
 static llvm::cl::opt<bool> legalizeCast("legalize-cast",
                                         llvm::cl::desc("Legalize cast"),
                                         llvm::cl::init(false));
+static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
+                                        llvm::cl::desc("Remove stride map"),
+                                        llvm::cl::init(false));
 
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
@@ -210,6 +213,10 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::hcl::createLegalizeCastPass());
   }
 
+  if (removeStrideMap) {
+    pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  }
+
   if (enableNormalize) {
     // To make all loop steps to 1.
     optPM.addPass(mlir::createAffineLoopNormalizePass());
@@ -229,6 +236,9 @@ int main(int argc, char **argv) {
   }
 
   if (runJiT || lowerToLLVM) {
+    if (!removeStrideMap) {
+      pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+    }
     pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
   }
 

@@ -13,7 +13,6 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
-
 using namespace mlir;
 using namespace hcl;
 
@@ -32,33 +31,49 @@ void removeStrideMap(FuncOp &func) {
     auto allocOp = dyn_cast<memref::AllocOp>(op);
     MemRefType memRefType = allocOp.getType().cast<MemRefType>();
     auto memRefMaps = memRefType.getLayout();
-    if (memRefMaps.getAffineMap().isIdentity() || memRefMaps.getAffineMap().isEmpty()) {
+    if (memRefMaps.getAffineMap().isIdentity() ||
+        memRefMaps.getAffineMap().isEmpty()) {
       continue;
     }
-    auto newMemRefType = MemRefType::get(
-        memRefType.getShape(), memRefType.getElementType());
+    auto newMemRefType =
+        MemRefType::get(memRefType.getShape(), memRefType.getElementType());
     op->getResult(0).setType(newMemRefType);
   }
 
-
-  FunctionType functionType = funcOp.getType();
+  FunctionType functionType = func.getType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
   SmallVector<Type, 8> arg_types;
-  for (const auto &argEn : llvm::enumerate(funcOp.getArguments()))
+  for (const auto &argEn : llvm::enumerate(func.getArguments()))
     arg_types.push_back(argEn.value().getType());
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;
   for (auto result_type : result_types) {
     if (result_type.isa<MemRefType>()) {
-       MemRefType new_result_type = memRefType::get(
-           result_type.cast<MemRefType>().getShape(),
-           result_type.cast<MemRefType>().getElementType());
+      MemRefType new_result_type =
+          MemRefType::get(result_type.cast<MemRefType>().getShape(),
+                          result_type.cast<MemRefType>().getElementType());
+      new_result_types.push_back(new_result_type);
+    } else {
       new_result_types.push_back(result_type);
     }
   }
+  for (auto arg_type : arg_types) {
+    if (arg_type.isa<MemRefType>()) {
+      MemRefType new_arg_type =
+          MemRefType::get(arg_type.cast<MemRefType>().getShape(),
+                          arg_type.cast<MemRefType>().getElementType());
+      new_arg_types.push_back(new_arg_type);
+    } else {
+      new_arg_types.push_back(arg_type);
+    }
+  }
+
+  FunctionType new_function_type =
+      FunctionType::get(func.getContext(), new_arg_types, new_result_types);
+  func.setType(new_function_type);
 }
-   
+
 /// Pass entry point
 bool applyRemoveStrideMap(ModuleOp &module) {
   for (FuncOp func : module.getOps<FuncOp>()) {
@@ -71,11 +86,12 @@ bool applyRemoveStrideMap(ModuleOp &module) {
 } // namespace mlir
 
 namespace {
-struct HCLRemoveStrideMapTransformation : public RemoveStrideMapBase<HCLRemoveStrideMapTransformation> {
+struct HCLRemoveStrideMapTransformation
+    : public RemoveStrideMapBase<HCLRemoveStrideMapTransformation> {
   void runOnOperation() override {
     auto mod = getOperation();
     if (!applyRemoveStrideMap(mod)) {
-        signalPassFailure();
+      signalPassFailure();
     }
   }
 };

@@ -69,6 +69,12 @@ void removeStrideMap(FuncOp &func) {
     }
   }
 
+  for (Block &block : func.getBlocks()) {
+    for (unsigned i = 0; i < block.getNumArguments(); i++) {
+      block.getArgument(i).setType(new_arg_types[i]);
+    }
+  }
+
   FunctionType new_function_type =
       FunctionType::get(func.getContext(), new_arg_types, new_result_types);
   func.setType(new_function_type);

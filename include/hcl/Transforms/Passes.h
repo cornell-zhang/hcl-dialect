@@ -19,6 +19,7 @@ std::unique_ptr<OperationPass<ModuleOp>> createMoveReturnToInputPass();
 std::unique_ptr<OperationPass<ModuleOp>> createLowerCompositeTypePass();
 std::unique_ptr<OperationPass<ModuleOp>> createLowerBitOpsPass();
 std::unique_ptr<OperationPass<ModuleOp>> createLegalizeCastPass();
+std::unique_ptr<OperationPass<ModuleOp>> createRemoveStrideMapPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 
@@ -28,6 +29,7 @@ bool applyMoveReturnToInput(ModuleOp &module);
 bool applyLowerCompositeType(ModuleOp &module);
 bool applyLowerBitOps(ModuleOp &module);
 bool applyLegalizeCast(ModuleOp &module);
+bool applyRemoveStrideMap(ModuleOp &module);
 
 /// Registers all HCL transformation passes
 void registerHCLPasses();

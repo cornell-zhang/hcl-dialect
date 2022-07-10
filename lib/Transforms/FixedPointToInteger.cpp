@@ -362,7 +362,9 @@ void markFixedCastOps(FuncOp &f) {
     if (opr.getType().isa<FixedType>()) {
       FixedType srcType = opr.getType().cast<FixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv = opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>()) width = 64;
+      if (auto blockArgv =
+              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
+        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -371,7 +373,9 @@ void markFixedCastOps(FuncOp &f) {
     } else if (opr.getType().isa<UFixedType>()) {
       UFixedType srcType = opr.getType().cast<UFixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv = opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>()) width = 64;
+      if (auto blockArgv =
+              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
+        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -461,9 +465,9 @@ void lowerFixedAdd(AddFixedOp &op) {
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(0), width, isSigned);
+                         op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width, isSigned);
+                         op->getOperand(1), width, isSigned);
 
   arith::AddIOp newOp = rewriter.create<arith::AddIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);
@@ -695,7 +699,8 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
     return;
   }
   auto castedMemRefType =
-      oldType.clone(IntegerType::get(op.getContext(), bitwidth)).cast<MemRefType>();
+      oldType.clone(IntegerType::get(op.getContext(), bitwidth))
+          .cast<MemRefType>();
   auto castedMemRef = rewriter.create<memref::AllocOp>(loc, castedMemRefType);
   SmallVector<int64_t, 4> lbs(oldType.getRank(), 0);
   SmallVector<int64_t, 4> steps(oldType.getRank(), 1);
@@ -709,6 +714,17 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
       });
 
   op->replaceAllUsesWith(castedMemRef);
+  // update affine.load operations res type to be consistent with castedMemRef's
+  // element type
+  for (auto &use : castedMemRef.getResult().getUses()) {
+    if (auto loadOp = dyn_cast<AffineLoadOp>(use.getOwner())) {
+      for (auto v : llvm::enumerate(loadOp->getResults())) {
+        Type newType =
+            loadOp->getOperand(0).getType().cast<MemRefType>().getElementType();
+        loadOp->getResult(v.index()).setType(newType);
+      }
+    }
+  }
 }
 
 void lowerFixedToFloat(FixedToFloatOp &op) {
@@ -892,8 +908,8 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     } else {
       matched_src = rewriter.create<arith::ExtUIOp>(loc, dstType, src);
     }
-  } else if (dst_width == src_width)  {
-    truncate_dst = false;    
+  } else if (dst_width == src_width) {
+    truncate_dst = false;
     match_to_dst = false;
     matched_src = src;
   } else {
@@ -909,14 +925,16 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
     // if (dst_frac > src_frac), left shift (dst_frac - src_frac)
     Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, shiftType, rewriter.getIntegerAttr(shiftType, dst_frac - src_frac));
+        loc, shiftType,
+        rewriter.getIntegerAttr(shiftType, dst_frac - src_frac));
     shifted_src =
         rewriter.create<arith::ShLIOp>(loc, shiftType, matched_src, frac);
   } else if (dst_frac < src_frac) {
     // if (dst_frac < src_frac), right shift (src_frac - dst_frac)
     Type shiftType = match_to_dst ? dstType : srcType;
     auto frac = rewriter.create<arith::ConstantOp>(
-        loc, shiftType, rewriter.getIntegerAttr(shiftType, src_frac - dst_frac));
+        loc, shiftType,
+        rewriter.getIntegerAttr(shiftType, src_frac - dst_frac));
     if (isSignedSrc) {
       shifted_src =
           rewriter.create<arith::ShRSIOp>(loc, shiftType, matched_src, frac);
@@ -973,10 +991,10 @@ void visitOperation(Operation &op) {
   } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
-    llvm::outs() << *op.getParentOp() << "\n";
+    // llvm::outs() << *op.getParentOp() << "\n";
     lowerFixedToFixed(new_op);
     // debug output
-    llvm::outs() << *op.getParentOp() << "\n";
+    // llvm::outs() << *op.getParentOp() << "\n";
   }
 
   for (auto &region : op.getRegions()) {
@@ -1026,6 +1044,8 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateReturnOp(func);
     func.setType(newFuncType);
   }
+
+  // llvm::outs() << mod << "\n";
 
   return true;
 }

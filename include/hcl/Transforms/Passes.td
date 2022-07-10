@@ -47,4 +47,9 @@ def LegalizeCast : Pass<"legalize-cast", "ModuleOp"> {
   let constructor = "mlir::hcl::createLegalizeCastPass()";
 }
 
+def RemoveStrideMap : Pass<"remove-stride-map", "ModuleOp"> {
+  let summary = "Remove stride map from partitioned memref";
+  let constructor = "mlir::hcl::createRemoveStrideMapPass()";
+}
+
 #endif // HCL_MLIR_PASSES

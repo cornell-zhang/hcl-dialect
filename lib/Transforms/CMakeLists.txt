@@ -7,6 +7,7 @@ add_mlir_library(MLIRHCLPasses
     LowerBitOps.cpp
     Passes.cpp
     LegalizeCast.cpp
+    RemoveStrideMap.cpp
 
     ADDITIONAL_HEADER_DIRS
     ${PROJECT_SOURCE_DIR}/include/hcl

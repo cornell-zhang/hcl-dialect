@@ -827,7 +827,8 @@ class ConstantOp(ExprOp):
                 self.tensor = tensor_wrapper
                 fixed_memref_type = MemRefType.get(self.val.shape, self.dtype)
                 store = hcl_d.GetGlobalFixedOp(
-                    fixed_memref_type, FlatSymbolRefAttr.get(self.name)
+                    fixed_memref_type, FlatSymbolRefAttr.get(self.name),
+                    ip=GlobalInsertionPoint.get(),
                 )
             else:
                 tensor_wrapper = TensorOp(

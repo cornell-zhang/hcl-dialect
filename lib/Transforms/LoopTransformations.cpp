@@ -866,13 +866,9 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   }
 
   FusionStrategy strategy(FusionStrategy::Generic);
-  if (dependency.size() > 0) {
-    if (std::find(dependency.begin(), dependency.end(), Dependency::RAW) !=
-        dependency.end()) {
-      strategy = FusionStrategy::ProducerConsumer;
-    } else {
-      strategy = FusionStrategy::Generic;
-    }
+  if (dependency.size() > 0 && std::find(dependency.begin(), dependency.end(),
+                                         Dependency::RAW) != dependency.end()) {
+    strategy = FusionStrategy::ProducerConsumer;
     // use existing MLIR pass
     ComputationSliceState sliceUnion;
     FusionResult result = canFuseLoops(producerFor, consumerFor,
@@ -896,6 +892,8 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
       computeAtOp.emitError("Cannot merge these two loops because ") << err_msg;
       return failure();
     }
+    if (requested_depth < cnt_depth - 1)
+      return success();
   } else {
     // strategy = FusionStrategy::Sibling;
     computeAtOp.emitWarning(

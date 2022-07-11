@@ -489,6 +489,9 @@ void lowerFixedAdd(AddFixedOp &op) {
   bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
+  // llvm::outs() << "lhs: " << op->getOperand(0).getType() << "\n";
+  llvm::outs() << "lhs" << op->getOperand(0) << "\n";
+  llvm::outs() << "rhs: " << op->getOperand(1) << "\n";
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
@@ -538,6 +541,7 @@ void lowerFixedMul(MulFixedOp &op) {
   // Right shift needs to consider signed/unsigned
   Type opTy = op->getOperand(0).getType();
   IntegerType intTy = IntegerType::get(op->getContext(), width);
+  IntegerType truncTy = IntegerType::get(op->getContext(), width / 2);
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
@@ -546,12 +550,14 @@ void lowerFixedMul(MulFixedOp &op) {
     // use signed right shift
     arith::ShRSIOp res =
         rewriter.create<arith::ShRSIOp>(op->getLoc(), newOp, fracCstOp);
-    op->replaceAllUsesWith(res);
+    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    op->replaceAllUsesWith(truncated);
   } else {
     // use unsigned right shift
     arith::ShRUIOp res =
         rewriter.create<arith::ShRUIOp>(op->getLoc(), newOp, fracCstOp);
-    op->replaceAllUsesWith(res);
+    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    op->replaceAllUsesWith(truncated);
   }
 }
 

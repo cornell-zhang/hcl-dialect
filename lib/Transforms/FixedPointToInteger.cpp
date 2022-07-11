@@ -507,7 +507,7 @@ void updateSCFIfOp(mlir::scf::IfOp &op) {
       res.setType(memRefType.clone(eleTyp));
     }
   }
-  llvm::outs() << op << "\n";
+  // llvm::outs() << op << "\n";
 }
 
 // Lower AddFixedOp to AddIOp
@@ -518,9 +518,8 @@ void lowerFixedAdd(AddFixedOp &op) {
   bool isSigned = sign == "signed";
   OpBuilder rewriter(op);
 
-  // llvm::outs() << "lhs: " << op->getOperand(0).getType() << "\n";
-  llvm::outs() << "lhs" << op->getOperand(0) << "\n";
-  llvm::outs() << "rhs: " << op->getOperand(1) << "\n";
+  // llvm::outs() << "lhs" << op->getOperand(0) << "\n";
+  // llvm::outs() << "rhs: " << op->getOperand(1) << "\n";
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
@@ -687,7 +686,7 @@ void lowerFixedCmp(CmpFixedOp &op) {
     llvm::errs() << "unknown predicate code in CmpFixedOp\n";
   }
 
-  llvm::outs() << "newOp: " << newOp << "\n";
+  // llvm::outs() << "newOp: " << newOp << "\n";
 
   op->replaceAllUsesWith(newOp);
 }
@@ -1037,53 +1036,53 @@ void visitBlock(Block &block);
 
 void visitOperation(Operation &op) {
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
-    llvm::outs() << "AddFixedOp\n";
+    // llvm::outs() << "AddFixedOp\n";
     lowerFixedAdd(new_op);
   } else if (auto new_op = dyn_cast<SubFixedOp>(op)) {
-    llvm::outs() << "SubFixedOp\n";
+    // llvm::outs() << "SubFixedOp\n";
     lowerFixedSub(new_op);
   } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
-    llvm::outs() << "MulFixedOp\n";
+    // llvm::outs() << "MulFixedOp\n";
     lowerFixedMul(new_op);
   } else if (auto new_op = dyn_cast<DivFixedOp>(op)) {
-    llvm::outs() << "DivFixedOp\n";
+    // llvm::outs() << "DivFixedOp\n";
     lowerFixedDiv(new_op);
   } else if (auto new_op = dyn_cast<CmpFixedOp>(op)) {
-    llvm::outs() << "CmpFixedOp\n";
+    // llvm::outs() << "CmpFixedOp\n";
     lowerFixedCmp(new_op);
   } else if (auto new_op = dyn_cast<MinFixedOp>(op)) {
-    llvm::outs() << "MinFixedOp\n";
+    // llvm::outs() << "MinFixedOp\n";
     lowerFixedMin(new_op);
   } else if (auto new_op = dyn_cast<MaxFixedOp>(op)) {
-    llvm::outs() << "MaxFixedOp\n";
+    // llvm::outs() << "MaxFixedOp\n";
     lowerFixedMax(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
-    llvm::outs() << "AffineStoreOp\n";
+    // llvm::outs() << "AffineStoreOp\n";
     updateAffineStore(new_op);
   } else if (auto new_op = dyn_cast<GetGlobalFixedOp>(op)) {
-    llvm::outs() << "GetGlobalFixedOp\n";
+    // llvm::outs() << "GetGlobalFixedOp\n";
     lowerGetGlobalFixedOp(new_op);
   } else if (auto new_op = dyn_cast<FixedToFloatOp>(op)) {
-    llvm::outs() << "FixedToFloatOp\n";
+    // llvm::outs() << "FixedToFloatOp\n";
     lowerFixedToFloat(new_op);
   } else if (auto new_op = dyn_cast<FloatToFixedOp>(op)) {
-    llvm::outs() << "FloatToFixedOp\n";
+    // llvm::outs() << "FloatToFixedOp\n";
     lowerFloatToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToIntOp>(op)) {
-    llvm::outs() << "FixedToIntOp\n";
+    // llvm::outs() << "FixedToIntOp\n";
     lowerFixedToInt(new_op);
   } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
-    llvm::outs() << "IntToFixedOp\n";
+    // llvm::outs() << "IntToFixedOp\n";
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
-    llvm::outs() << "FixedToFixedOp\n";
+    // llvm::outs() << "FixedToFixedOp\n";
     // llvm::outs() << *op.getParentOp() << "\n";
     lowerFixedToFixed(new_op);
     // debug output
     // llvm::outs() << *op.getParentOp() << "\n";
   }
    else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
-    llvm::outs() << "IfOp\n";
+    // llvm::outs() << "IfOp\n";
     updateSCFIfOp(new_op);
   }
 
@@ -1125,21 +1124,21 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     lowerPrintOp(func);
     markFixedArithOps(func);
     markFixedCastOps(func);
-    llvm::outs() << "markFixedCastOps done\n";
+    // llvm::outs() << "markFixedCastOps done\n";
     FunctionType newFuncType = updateFunctionSignature(func);
-    llvm::outs() << "updateFunctionSignature done\n";
+    // llvm::outs() << "updateFunctionSignature done\n";
     updateAffineLoad(func);
-    llvm::outs() << "updateAffineLoad done\n";
+    // llvm::outs() << "updateAffineLoad done\n";
     updateAlloc(func);
-    llvm::outs() << "updateAlloc done\n";
+    // llvm::outs() << "updateAlloc done\n";
     updateAffineLoad(func);
-    llvm::outs() << "updateAffineLoad done\n";
+    // llvm::outs() << "updateAffineLoad done\n";
     visitRegion(func.getBody());
     // llvm::outs() << "visitRegion done\n";
     updateAffineLoad(func);
-    llvm::outs() << "updateAffineLoad done\n";
+    // llvm::outs() << "updateAffineLoad done\n";
     updateReturnOp(func);
-    llvm::outs() << "updateReturnOp done\n";
+    // llvm::outs() << "updateReturnOp done\n";
     func.setType(newFuncType);
   }
 

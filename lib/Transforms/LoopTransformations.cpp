@@ -842,11 +842,14 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   SmallVector<Value> producerIVs;
   consumerFor.walk([&](AffineForOp forOp) {
     cnt_depth++;
+    if (!forOp->hasAttr("loop_name"))
+      return WalkResult::advance();
     Attribute attr = forOp->getAttr("loop_name");
     if (loop_name == attr.cast<StringAttr>().getValue()) {
       requested_depth = cnt_depth;
     }
     consumerIVs.push_back(forOp.getInductionVar());
+    return WalkResult::advance();
   });
   producerFor.walk([&](AffineForOp forOp) {
     producerIVs.push_back(forOp.getInductionVar());

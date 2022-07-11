@@ -295,44 +295,50 @@ void markFixedArithOps(FuncOp &f) {
     // The operands are either fixed-point or unsigned fixed-point
     if (opr_l.getType().isa<FixedType>()) { // fixed
       // check that opr_r, res are fixed-point
-      if (!opr_r.getType().isa<FixedType>() ||
-          !res.getType().isa<FixedType>()) {
-        llvm::errs() << "Error: operands and result are not fixed-point: "
+      if (!opr_r.getType().isa<FixedType>()) {
+        llvm::errs() << "Error: lhs or rhs are not fixed-point: "
                      << "operation: " << *op << "\n"
-                     << "rhs type" << opr_l.getType() << "lhs type"
-                     << opr_r.getType() << "result type" << res.getType()
+                     << "lhs type: " << opr_l.getType() << ", rhs type: "
+                     << opr_r.getType() << ", result type: " << res.getType()
                      << "\n";
         assert(false);
       }
       FixedType ltype = opr_l.getType().cast<FixedType>();
       FixedType rtype = opr_r.getType().cast<FixedType>();
-      FixedType restype = res.getType().cast<FixedType>();
       lwidth = ltype.getWidth();
       lfrac = ltype.getFrac();
       rwidth = rtype.getWidth();
       rfrac = rtype.getFrac();
-      reswidth = restype.getWidth();
-      resfrac = restype.getFrac();
+      if (auto resType = res.getType().dyn_cast<FixedType>()) {
+        reswidth = resType.getWidth();
+        resfrac = resType.getFrac();
+      } else {
+        reswidth = res.getType().getIntOrFloatBitWidth();
+        resfrac = 0;
+      }
     } else if (opr_l.getType().isa<UFixedType>()) { // ufixed
       // check that opr_r, res are unsigned fixed-point
-      if (!opr_r.getType().isa<UFixedType>() ||
-          !res.getType().isa<UFixedType>()) {
-        llvm::errs()
-            << "Error: operands and result are not unsigned fixed-point: "
-            << "operation: " << *op << "\n"
-            << "rhs type" << opr_l.getType() << "lhs type" << opr_r.getType()
-            << "result type" << res.getType() << "\n";
+      if (!opr_r.getType().isa<UFixedType>()) {
+        llvm::errs() << "Error: lhs or rhs are not unsigned fixed-point: "
+                     << "operation: " << *op << "\n"
+                     << "lhs type: " << opr_l.getType() << ", rhs type: "
+                     << opr_r.getType() << ", result type: " << res.getType()
+                     << "\n";
         assert(false);
       }
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
       UFixedType rtype = opr_r.getType().cast<UFixedType>();
-      UFixedType restype = res.getType().cast<UFixedType>();
       lwidth = ltype.getWidth();
       lfrac = ltype.getFrac();
       rwidth = rtype.getWidth();
       rfrac = rtype.getFrac();
-      reswidth = restype.getWidth();
-      resfrac = restype.getFrac();
+      if (auto resType = res.getType().dyn_cast<UFixedType>()) {
+        reswidth = resType.getWidth();
+        resfrac = resType.getFrac();
+      } else {
+        reswidth = res.getType().getIntOrFloatBitWidth();
+        resfrac = 0;
+      }
     }
     // if op is MulFixedOp/DivFixedOp, double lwidth, rwidth, and reswidth
     if (llvm::isa<MulFixedOp>(op) || llvm::isa<DivFixedOp>(op)) {
@@ -1065,7 +1071,7 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     func.setType(newFuncType);
   }
 
-  // llvm::outs() << mod << "\n";
+  llvm::outs() << mod << "\n";
 
   return true;
 }

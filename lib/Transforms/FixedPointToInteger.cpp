@@ -294,6 +294,16 @@ void markFixedArithOps(FuncOp &f) {
     size_t lwidth, lfrac, rwidth, rfrac, reswidth, resfrac;
     // The operands are either fixed-point or unsigned fixed-point
     if (opr_l.getType().isa<FixedType>()) { // fixed
+      // check that opr_r, res are fixed-point
+      if (!opr_r.getType().isa<FixedType>() ||
+          !res.getType().isa<FixedType>()) {
+        llvm::errs() << "Error: operands and result are not fixed-point: "
+                     << "operation: " << *op << "\n"
+                     << "rhs type" << opr_l.getType() << "lhs type"
+                     << opr_r.getType() << "result type" << res.getType()
+                     << "\n";
+        assert(false);
+      }
       FixedType ltype = opr_l.getType().cast<FixedType>();
       FixedType rtype = opr_r.getType().cast<FixedType>();
       FixedType restype = res.getType().cast<FixedType>();
@@ -304,6 +314,16 @@ void markFixedArithOps(FuncOp &f) {
       reswidth = restype.getWidth();
       resfrac = restype.getFrac();
     } else if (opr_l.getType().isa<UFixedType>()) { // ufixed
+      // check that opr_r, res are unsigned fixed-point
+      if (!opr_r.getType().isa<UFixedType>() ||
+          !res.getType().isa<UFixedType>()) {
+        llvm::errs()
+            << "Error: operands and result are not unsigned fixed-point: "
+            << "operation: " << *op << "\n"
+            << "rhs type" << opr_l.getType() << "lhs type" << opr_r.getType()
+            << "result type" << res.getType() << "\n";
+        assert(false);
+      }
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
       UFixedType rtype = opr_r.getType().cast<UFixedType>();
       UFixedType restype = res.getType().cast<UFixedType>();
@@ -465,9 +485,9 @@ void lowerFixedAdd(AddFixedOp &op) {
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                         op->getOperand(0), width, isSigned);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                         op->getOperand(1), width, isSigned);
+                               op->getOperand(1), width, isSigned);
 
   arith::AddIOp newOp = rewriter.create<arith::AddIOp>(op->getLoc(), lhs, rhs);
   op->replaceAllUsesWith(newOp);

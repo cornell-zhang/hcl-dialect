@@ -865,13 +865,12 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   if (!analyzeDependency(producerFor, consumerFor, dependency)) {
     std::string err_msg =
         "Does not support compute_at of stage with if operation.";
-    computeAtOp.emitError("analyzeDependency Failed: ") << err_msg;
+    computeAtOp.emitWarning("analyzeDependency Failed: ") << err_msg;
   }
 
-  FusionStrategy strategy(FusionStrategy::Generic);
   if (dependency.size() > 0 && std::find(dependency.begin(), dependency.end(),
                                          Dependency::RAW) != dependency.end()) {
-    strategy = FusionStrategy::ProducerConsumer;
+    FusionStrategy strategy(FusionStrategy::ProducerConsumer);
     // use existing MLIR pass
     ComputationSliceState sliceUnion;
     FusionResult result = canFuseLoops(producerFor, consumerFor,

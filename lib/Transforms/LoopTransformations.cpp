@@ -1130,7 +1130,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   std::reverse(nonReductionLoops.begin(), nonReductionLoops.end());
   AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
 
-  // 5) Get span of each dimension
+  // 5) Get span of each dimension (also stride)
   //    e.g. d0, d0+1, d0+2, span is 2
   //         d0+d1, d1\in[0,2], span is 2
   SmallVector<SmallVector<AffineExpr>> originalLoadExprs;
@@ -1154,6 +1154,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return WalkResult::advance();
   });
   SmallVector<int> spans;
+  int stride = 1;
   for (int i = 0; i < (int)rank; ++i) {
     int span = 0;
     // TODO: require strict load order
@@ -1188,25 +1189,27 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       }
     } else { // AffineBinaryOpExpr, reduction
       auto binaryExpr = baseExpr.cast<AffineBinaryOpExpr>();
-      int cntDim = 0;
-      binaryExpr.walk([&](AffineExpr expr) {
-        // d0 + d1, d1 is the reduction variable
-        if (expr.isa<AffineDimExpr>()) {
-          auto dimExpr = expr.cast<AffineDimExpr>();
-          if (cntDim == 1) {
-            if (reductionVars.count(dim2iv[dimExpr]) > 0) {
-              span = reductionVars[dim2iv[dimExpr]];
-            }
-          }
-        } else if (expr.isa<AffineConstantExpr>()) {
-          int cst = expr.cast<AffineConstantExpr>().getValue();
-          if (baseCst == 0)
-            baseCst = cst;
-          span = std::max(span, cst - baseCst + 1);
+      auto lhs = binaryExpr.getLHS();
+      auto rhs = binaryExpr.getRHS();
+      // d0 * s + d1, d1 is the reduction variable
+      if (rhs.isa<AffineDimExpr>()) {
+        auto dimExpr = rhs.cast<AffineDimExpr>();
+        if (reductionVars.count(dim2iv[dimExpr]) > 0) {
+          span = reductionVars[dim2iv[dimExpr]];
         }
-        cntDim++;
-        return WalkResult::advance();
-      });
+      } else if (rhs.isa<AffineConstantExpr>()) {
+        int cst = rhs.cast<AffineConstantExpr>().getValue();
+        if (baseCst == 0)
+          baseCst = cst;
+        span = std::max(span, cst - baseCst + 1);
+      }
+      if (lhs.isa<AffineBinaryOpExpr>()) {
+        auto binLHS = lhs.cast<AffineBinaryOpExpr>();
+        if (binLHS.getRHS().isa<AffineConstantExpr>())
+          stride = binLHS.getRHS().cast<AffineConstantExpr>().getValue();
+        else
+          assert(1 == 0 && "Unsupported memref format");
+      }
     }
     assert(span != 0 && "Span should not be 0");
     spans.push_back(span);
@@ -1496,7 +1499,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       AffineExpr idx;
       if ((int)i == loopAxis)
         // the iteration space now is related to the input tensor
-        idx = oldAffineMap.getResult(i) - distance;
+        if (stride != 1) {
+          auto strideCst = rewriter.getAffineConstantExpr(stride);
+          idx = (oldAffineMap.getResult(i) - distance).floorDiv(strideCst);
+        } else {
+          idx = oldAffineMap.getResult(i) - distance;
+        }
       else
         idx = oldAffineMap.getResult(i);
       memAffineIndices.push_back(idx);
@@ -1594,7 +1602,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           if (expr.isa<AffineBinaryOpExpr>()) {
             auto dim0 = rewriter.getAffineDimExpr(loadRank++);
             auto dim1 = rewriter.getAffineDimExpr(loadRank++);
-            loadAffineExpr.push_back(dim0 + dim1);
+            if (stride != 1) {
+              auto strideCst = rewriter.getAffineConstantExpr(stride);
+              loadAffineExpr.push_back(dim0 * strideCst + dim1);
+            } else {
+              loadAffineExpr.push_back(dim0 + dim1);
+            }
             memAffineIndices.push_back(operands[operandIdx++]);
             memAffineIndices.push_back(operands[operandIdx++]);
           } else if (expr.isa<AffineDimExpr>()) {
@@ -1635,6 +1648,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     //                                d1 - 10 >= 0, s0 - d1 - 9 >= 0)>
     SmallVector<AffineExpr> constraints{builder.getAffineDimExpr(0) - distance};
     SmallVector<bool> eqFlags{false};
+    if (stride != 1) {
+      auto strideCst = builder.getAffineConstantExpr(stride);
+      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      eqFlags.push_back(true);
+    }
     auto ifCondSet = IntegerSet::get(
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
@@ -1656,6 +1674,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto loc = outerIfOp.getThenBlock()->getOperations().begin()->getLoc();
     SmallVector<AffineExpr> constraints{builder.getAffineDimExpr(0) - distance};
     SmallVector<bool> eqFlags{false};
+    if (stride != 1) {
+      auto strideCst = builder.getAffineConstantExpr(stride);
+      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      eqFlags.push_back(true);
+    }
     auto ifCondSet = IntegerSet::get(
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);

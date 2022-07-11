@@ -2334,8 +2334,8 @@ class ASTVisitor:
             zero_value = arith.ConstantOp(
                 IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get()
             )
-            zero_value = builtin.UnrealizedConversionCastOp(
-                [dtype], [zero_value.result], ip=GlobalInsertionPoint.get()
+            zero_value = hcl_d.IntToFixedOp(
+                dtype, zero_value.result, ip=GlobalInsertionPoint.get()
             )
         else:
             raise RuntimeError("Unrecognized data type in reduction op")

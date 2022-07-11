@@ -29,6 +29,11 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
                        Value v, size_t target_width, bool is_signed) {
   Value result;
   Type newType = IntegerType::get(ctx, target_width);
+  if (!v.getType().isa<IntegerType>()) {
+    llvm::errs() << "castIntegerWidth: input is not integer type, input value is: "
+                 << v << "\n";
+    assert (false);
+  }
   if (v.getType().cast<IntegerType>().getWidth() < target_width) {
     // extend bits
     if (is_signed) {

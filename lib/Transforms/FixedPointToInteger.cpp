@@ -580,6 +580,7 @@ void lowerFixedDiv(DivFixedOp &op) {
   // lhs<width, 2 * frac> / rhs<width, frac> -> res<width, frac>
   Type opTy = op->getOperand(0).getType();
   IntegerType intTy = IntegerType::get(op->getContext(), width);
+  IntegerType truncTy = IntegerType::get(op->getContext(), width / 2);
   auto fracAttr = rewriter.getIntegerAttr(intTy, frac);
   auto fracCstOp =
       rewriter.create<arith::ConstantOp>(op->getLoc(), intTy, fracAttr);
@@ -588,11 +589,13 @@ void lowerFixedDiv(DivFixedOp &op) {
   if (opTy.isa<FixedType>()) { // fixed
     arith::DivSIOp res =
         rewriter.create<arith::DivSIOp>(op->getLoc(), lhs_shifted, rhs);
-    op->replaceAllUsesWith(res);
+    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    op->replaceAllUsesWith(truncated);
   } else { // ufixed
     arith::DivUIOp res =
         rewriter.create<arith::DivUIOp>(op->getLoc(), lhs_shifted, rhs);
-    op->replaceAllUsesWith(res);
+    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    op->replaceAllUsesWith(truncated);
   }
 }
 

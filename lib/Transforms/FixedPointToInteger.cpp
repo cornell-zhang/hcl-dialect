@@ -16,6 +16,7 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/SCF/SCF.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -486,6 +487,29 @@ void updateAffineStore(AffineStoreOp &op) {
   }
 }
 
+void updateSCFIfOp(mlir::scf::IfOp &op) {
+  for (auto res : op.getResults()) {
+    if (res.getType().isa<FixedType>()) {
+      res.setType(IntegerType::get(res.getContext(),
+                                   res.getType().cast<FixedType>().getWidth()));
+    } else if (res.getType().isa<UFixedType>()) {
+      res.setType(IntegerType::get(res.getContext(),
+                                   res.getType().cast<UFixedType>().getWidth()));
+    } else if (auto memRefType = res.getType().dyn_cast<MemRefType>()) {
+      Type eleTyp = memRefType.getElementType();
+      if (eleTyp.isa<FixedType>()) {
+        eleTyp = IntegerType::get(res.getContext(),
+                                  eleTyp.cast<FixedType>().getWidth());
+      } else if (eleTyp.isa<UFixedType>()) {
+        eleTyp = IntegerType::get(res.getContext(),
+                                  eleTyp.cast<UFixedType>().getWidth());
+      }
+      res.setType(memRefType.clone(eleTyp));
+    }
+  }
+  llvm::outs() << op << "\n";
+}
+
 // Lower AddFixedOp to AddIOp
 void lowerFixedAdd(AddFixedOp &op) {
   size_t width =
@@ -606,13 +630,13 @@ void lowerFixedDiv(DivFixedOp &op) {
 
 // Lower CmpFixedOp to CmpIOp
 void lowerFixedCmp(CmpFixedOp &op) {
-  llvm::outs() << op << "\n";
+  // llvm::outs() << op << "\n";
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
   std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
-  llvm::outs() << "width: " << width << "\n";
-  llvm::outs() << "sign: " << sign << "\n";
+  // llvm::outs() << "width: " << width << "\n";
+  // llvm::outs() << "sign: " << sign << "\n";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
@@ -620,8 +644,8 @@ void lowerFixedCmp(CmpFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width, isSigned);
 
-  llvm::outs() << "lhs: " << lhs << "\n";
-  llvm::outs() << "rhs: " << rhs << "\n";
+  // llvm::outs() << "lhs: " << lhs << "\n";
+  // llvm::outs() << "rhs: " << rhs << "\n";
 
   // auto prednum =
       // op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
@@ -1057,6 +1081,10 @@ void visitOperation(Operation &op) {
     lowerFixedToFixed(new_op);
     // debug output
     // llvm::outs() << *op.getParentOp() << "\n";
+  }
+   else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
+    llvm::outs() << "IfOp\n";
+    updateSCFIfOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {

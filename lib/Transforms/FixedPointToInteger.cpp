@@ -437,7 +437,6 @@ void updateAlloc(FuncOp &f) {
       allocOps.push_back(op);
     }
   });
-  // llvm::outs() << "length of allocOps: " << allocOps.size() << "\n";
 
   for (auto op : allocOps) {
     auto allocOp = dyn_cast<memref::AllocOp>(op);
@@ -593,10 +592,13 @@ void lowerFixedDiv(DivFixedOp &op) {
 
 // Lower CmpFixedOp to CmpIOp
 void lowerFixedCmp(CmpFixedOp &op) {
+  llvm::outs() << op << "\n";
   size_t width =
       op->getAttr("lwidth").cast<IntegerAttr>().getValue().getSExtValue();
   std::string sign = op->getAttr("sign").cast<StringAttr>().getValue().str();
   bool isSigned = sign == "signed";
+  llvm::outs() << "width: " << width << "\n";
+  llvm::outs() << "sign: " << sign << "\n";
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
@@ -604,44 +606,50 @@ void lowerFixedCmp(CmpFixedOp &op) {
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
                                op->getOperand(1), width, isSigned);
 
-  auto prednum =
-      op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
+  llvm::outs() << "lhs: " << lhs << "\n";
+  llvm::outs() << "rhs: " << rhs << "\n";
+
+  // auto prednum =
+      // op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
+  auto prednum = op.getPredicate();
   auto loc = op->getLoc();
   arith::CmpIOp newOp;
   switch (prednum) {
-  case 0:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
+  case hcl::CmpFixedPredicate::eq:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
     break;
-  case 1:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
+  case hcl::CmpFixedPredicate::ne:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
     break;
-  case 2:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);
+  case hcl::CmpFixedPredicate::slt:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);
     break;
-  case 3:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);
+  case hcl::CmpFixedPredicate::sle:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);
     break;
-  case 4:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);
+  case hcl::CmpFixedPredicate::sgt:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);
     break;
-  case 5:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);
+  case hcl::CmpFixedPredicate::sge:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);
     break;
-  case 6:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);
+  case hcl::CmpFixedPredicate::ult:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);
     break;
-  case 7:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);
+  case hcl::CmpFixedPredicate::ule:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);
     break;
-  case 8:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);
+  case hcl::CmpFixedPredicate::ugt:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);
     break;
-  case 9:
-    rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);
+  case hcl::CmpFixedPredicate::uge:
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);
     break;
   default:
     llvm::errs() << "unknown predicate code in CmpFixedOp\n";
   }
+
+  llvm::outs() << "newOp: " << newOp << "\n";
 
   op->replaceAllUsesWith(newOp);
 }
@@ -991,32 +999,46 @@ void visitBlock(Block &block);
 
 void visitOperation(Operation &op) {
   if (auto new_op = dyn_cast<AddFixedOp>(op)) {
+    llvm::outs() << "AddFixedOp\n";
     lowerFixedAdd(new_op);
   } else if (auto new_op = dyn_cast<SubFixedOp>(op)) {
+    llvm::outs() << "SubFixedOp\n";
     lowerFixedSub(new_op);
   } else if (auto new_op = dyn_cast<MulFixedOp>(op)) {
+    llvm::outs() << "MulFixedOp\n";
     lowerFixedMul(new_op);
   } else if (auto new_op = dyn_cast<DivFixedOp>(op)) {
+    llvm::outs() << "DivFixedOp\n";
     lowerFixedDiv(new_op);
   } else if (auto new_op = dyn_cast<CmpFixedOp>(op)) {
+    llvm::outs() << "CmpFixedOp\n";
     lowerFixedCmp(new_op);
   } else if (auto new_op = dyn_cast<MinFixedOp>(op)) {
+    llvm::outs() << "MinFixedOp\n";
     lowerFixedMin(new_op);
   } else if (auto new_op = dyn_cast<MaxFixedOp>(op)) {
+    llvm::outs() << "MaxFixedOp\n";
     lowerFixedMax(new_op);
   } else if (auto new_op = dyn_cast<AffineStoreOp>(op)) {
+    llvm::outs() << "AffineStoreOp\n";
     updateAffineStore(new_op);
   } else if (auto new_op = dyn_cast<GetGlobalFixedOp>(op)) {
+    llvm::outs() << "GetGlobalFixedOp\n";
     lowerGetGlobalFixedOp(new_op);
   } else if (auto new_op = dyn_cast<FixedToFloatOp>(op)) {
+    llvm::outs() << "FixedToFloatOp\n";
     lowerFixedToFloat(new_op);
   } else if (auto new_op = dyn_cast<FloatToFixedOp>(op)) {
+    llvm::outs() << "FloatToFixedOp\n";
     lowerFloatToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToIntOp>(op)) {
+    llvm::outs() << "FixedToIntOp\n";
     lowerFixedToInt(new_op);
   } else if (auto new_op = dyn_cast<IntToFixedOp>(op)) {
+    llvm::outs() << "IntToFixedOp\n";
     lowerIntToFixed(new_op);
   } else if (auto new_op = dyn_cast<FixedToFixedOp>(op)) {
+    llvm::outs() << "FixedToFixedOp\n";
     // llvm::outs() << *op.getParentOp() << "\n";
     lowerFixedToFixed(new_op);
     // debug output
@@ -1061,17 +1083,25 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     lowerPrintOp(func);
     markFixedArithOps(func);
     markFixedCastOps(func);
+    llvm::outs() << "markFixedCastOps done\n";
     FunctionType newFuncType = updateFunctionSignature(func);
+    llvm::outs() << "updateFunctionSignature done\n";
     updateAffineLoad(func);
+    llvm::outs() << "updateAffineLoad done\n";
     updateAlloc(func);
+    llvm::outs() << "updateAlloc done\n";
     updateAffineLoad(func);
+    llvm::outs() << "updateAffineLoad done\n";
     visitRegion(func.getBody());
+    // llvm::outs() << "visitRegion done\n";
     updateAffineLoad(func);
+    llvm::outs() << "updateAffineLoad done\n";
     updateReturnOp(func);
+    llvm::outs() << "updateReturnOp done\n";
     func.setType(newFuncType);
   }
 
-  llvm::outs() << mod << "\n";
+  // llvm::outs() << mod << "\n";
 
   return true;
 }

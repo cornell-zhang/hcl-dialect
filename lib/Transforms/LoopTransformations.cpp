@@ -2394,6 +2394,26 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   }
   SmallVector<Value> newMemrefs(allMemrefs);
 
+  // 5.0) If the function has been built, directly call it
+  if (outlineOp->hasAttr("merge")) {
+    FuncOp targetFunc;
+    auto preFuncName =
+        outlineOp->getAttr("merge").cast<StringAttr>().getValue();
+    for (FuncOp func : mod.getOps<FuncOp>()) {
+      if (func.getName() == preFuncName) {
+        targetFunc = func;
+        break;
+      }
+    }
+    OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+    call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
+                                targetFunc, allMemrefs);
+    for (auto rootForOp : rootForOps) {
+      rootForOp.erase();
+    }
+    return success();
+  }
+
   // 5) Create a new function
   auto builder = OpBuilder::atBlockBegin(mod.getBody());
   TypeRange argTypes = ValueRange(newMemrefs).getTypes();

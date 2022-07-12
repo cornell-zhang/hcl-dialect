@@ -31,10 +31,8 @@ using namespace hcl;
 // used for determine whether to generate C++ default types or ap_(u)int
 static bool BIT_FLAG = false;
 
-static SmallString<16> getTypeName(Value val) {
-  // Handle memref, tensor, and vector types.
-  auto valType = val.getType();
-  if (auto arrayType = val.getType().dyn_cast<ShapedType>())
+static SmallString<16> getTypeName(Type valType) {
+  if (auto arrayType = valType.dyn_cast<ShapedType>())
     valType = arrayType.getElementType();
 
   // Handle float types.
@@ -86,9 +84,15 @@ static SmallString<16> getTypeName(Value val) {
         "ap_ufixed<" + std::to_string(ufixedType.getWidth()) + ", " +
         std::to_string(ufixedType.getWidth() - ufixedType.getFrac()) + ">");
   else
-    val.getDefiningOp()->emitError("has unsupported type.");
+    assert(1 == 0 && "Got unsupported type.");
 
   return SmallString<16>();
+}
+
+static SmallString<16> getTypeName(Value val) {
+  // Handle memref, tensor, and vector types.
+  auto valType = val.getType();
+  return getTypeName(valType);
 }
 
 //===----------------------------------------------------------------------===//
@@ -121,6 +125,8 @@ public:
   template <typename OpType> void emitAlloc(OpType op);
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
+  void emitGetGlobal(memref::GetGlobalOp op);
+  void emitGlobal(memref::GlobalOp op);
 
   /// Tensor-related statement emitters.
   void emitTensorExtract(tensor::ExtractOp op);
@@ -297,6 +303,10 @@ public:
   }
   bool visitOp(memref::LoadOp op) { return emitter.emitLoad(op), true; }
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
+  bool visitOp(memref::GetGlobalOp op) {
+    return emitter.emitGetGlobal(op), true;
+  }
+  bool visitOp(memref::GlobalOp op) { return emitter.emitGlobal(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
 
   /// Tensor-related statements.
@@ -1110,6 +1120,68 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   emitValue(op.getValueToStore());
   os << ";";
   emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
+  indent();
+  os << "// placeholder for const ";
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, 0, false /*isPtr*/, op.name().str());
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
+  auto init_val = op.initial_value();
+  if (!init_val.hasValue())
+    return;
+  auto attr = init_val.getValue();
+  if (auto denseAttr = attr.dyn_cast<DenseElementsAttr>()) {
+    os << "\n";
+    indent();
+    auto arrayType = op.type().cast<ShapedType>();
+    auto type = arrayType.getElementType();
+    os << "const ";
+    os << getTypeName(type);
+    os << " " << op.sym_name();
+    for (auto &shape : arrayType.getShape())
+      os << "[" << shape << "]";
+    os << " = {";
+
+    unsigned elementIdx = 0;
+    for (auto element : denseAttr.getValues<Attribute>()) {
+      if (type.isF32()) {
+        auto value = element.cast<FloatAttr>().getValue().convertToFloat();
+        if (std::isfinite(value))
+          os << value;
+        else if (value > 0)
+          os << "INFINITY";
+        else
+          os << "-INFINITY";
+
+      } else if (type.isF64()) {
+        auto value = element.cast<FloatAttr>().getValue().convertToDouble();
+        if (std::isfinite(value))
+          os << value;
+        else if (value > 0)
+          os << "INFINITY";
+        else
+          os << "-INFINITY";
+
+      } else if (type.isInteger(1))
+        os << element.cast<BoolAttr>().getValue();
+      else if (type.isIntOrIndex())
+        os << element.cast<IntegerAttr>().getValue();
+      else
+        emitError(op, "array has unsupported element type.");
+
+      if (elementIdx++ != denseAttr.getNumElements() - 1)
+        os << ", ";
+    }
+    os << "};";
+    emitInfoAndNewLine(op);
+    os << "\n";
+  }
 }
 
 void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {
@@ -2003,6 +2075,8 @@ using namespace std;
     for (auto &op : *module.getBody()) {
       if (auto func = dyn_cast<FuncOp>(op))
         emitFunction(func);
+      else if (auto cst = dyn_cast<memref::GlobalOp>(op))
+        emitGlobal(cst);
       else
         emitError(&op, "is unsupported operation.");
     }

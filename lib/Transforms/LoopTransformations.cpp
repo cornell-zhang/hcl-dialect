@@ -2415,7 +2415,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   }
 
   // 5) Create a new function
-  auto builder = OpBuilder::atBlockBegin(mod.getBody());
+  auto builder = OpBuilder(f);
   TypeRange argTypes = ValueRange(newMemrefs).getTypes();
   FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
   std::string func_name = "Stage";
@@ -2423,7 +2423,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     func_name += "_" + stage_name;
   }
   auto func =
-      builder.create<FuncOp>(mod.getLoc(), StringRef(func_name), funcType);
+      builder.create<FuncOp>(f.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
   // used for generating HLS ap_int/fixed types
   func->setAttr("bit", builder.getUnitAttr());

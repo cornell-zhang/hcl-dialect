@@ -42,9 +42,9 @@ public:
             AffineDmaStartOp, AffineDmaWaitOp,
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
-            memref::GetGlobalOp, memref::GlobalOp, memref::DeallocOp,
-            memref::DmaStartOp, memref::DmaWaitOp, memref::ViewOp,
-            memref::SubViewOp, memref::AtomicRMWOp,
+            memref::GetGlobalOp, hcl::GetGlobalFixedOp, memref::GlobalOp,
+            memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
+            memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
             // Tensor-related statements.
             tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp, SplatOp,
             memref::DimOp, memref::RankOp,
@@ -128,6 +128,7 @@ public:
   HANDLE(memref::LoadOp);
   HANDLE(memref::StoreOp);
   HANDLE(memref::GetGlobalOp);
+  HANDLE(hcl::GetGlobalFixedOp);
   HANDLE(memref::GlobalOp);
   HANDLE(memref::DeallocOp);
   HANDLE(memref::DmaStartOp);

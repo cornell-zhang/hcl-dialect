@@ -757,7 +757,7 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
     isSigned = false;
   }
   auto memRefType = oldType.clone(IntegerType::get(op.getContext(), 64));
-  auto symbolName = op.global();
+  auto symbolName = op.name();
   auto res = rewriter.create<memref::GetGlobalOp>(loc, memRefType, symbolName);
   // Truncate or Extend I64 memref to the width of the fixed-point
   size_t bitwidth;

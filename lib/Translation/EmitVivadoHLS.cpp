@@ -126,6 +126,7 @@ public:
   void emitLoad(memref::LoadOp op);
   void emitStore(memref::StoreOp op);
   void emitGetGlobal(memref::GetGlobalOp op);
+  void emitGetGlobalFixed(hcl::GetGlobalFixedOp op);
   void emitGlobal(memref::GlobalOp op);
 
   /// Tensor-related statement emitters.
@@ -305,6 +306,9 @@ public:
   bool visitOp(memref::StoreOp op) { return emitter.emitStore(op), true; }
   bool visitOp(memref::GetGlobalOp op) {
     return emitter.emitGetGlobal(op), true;
+  }
+  bool visitOp(hcl::GetGlobalFixedOp op) {
+    return emitter.emitGetGlobalFixed(op), true;
   }
   bool visitOp(memref::GlobalOp op) { return emitter.emitGlobal(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
@@ -1123,6 +1127,15 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
 }
 
 void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
+  indent();
+  os << "// placeholder for const ";
+  Value result = op.getResult();
+  fixUnsignedType(result, op->hasAttr("unsigned"));
+  emitValue(result, 0, false /*isPtr*/, op.name().str());
+  emitInfoAndNewLine(op);
+}
+
+void ModuleEmitter::emitGetGlobalFixed(hcl::GetGlobalFixedOp op) {
   indent();
   os << "// placeholder for const ";
   Value result = op.getResult();

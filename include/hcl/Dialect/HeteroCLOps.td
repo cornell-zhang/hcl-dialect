@@ -481,12 +481,12 @@ def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
   let summary = "fixed point maximum operation";
 }
 
-def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed"> {
+def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed", [NoSideEffect]> {
     let summary = "generates a fixed point memref from a int global memref";
-    let arguments = (ins FlatSymbolRefAttr:$global);
+    let arguments = (ins FlatSymbolRefAttr:$name);
     let results = (outs AnyStaticShapeMemRef:$result);
     let assemblyFormat = [{
-        $global `:` type($result) attr-dict
+        $name `:` type($result) attr-dict
     }];
 }
 

@@ -2427,6 +2427,33 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   func.setPrivate();
   // used for generating HLS ap_int/fixed types
   func->setAttr("bit", builder.getUnitAttr());
+  // fix unsigned types
+  std::string itypes = "";
+  for (auto memref : allMemrefs) {
+    if (memref.getDefiningOp()) {
+      auto op = memref.getDefiningOp();
+      if (op->hasAttr("unsigned"))
+        itypes += "u";
+      else
+        itypes += "_";
+    } else {
+      if (f->hasAttr("itypes")) {
+        auto top_itypes =
+            f->getAttr("itypes").cast<StringAttr>().getValue().str();
+        int argIdx = 0;
+        for (auto arg : f.getArguments()) {
+          if (arg == memref) {
+            break;
+          }
+          argIdx++;
+        }
+        itypes += top_itypes[argIdx];
+      } else {
+        itypes += "_";
+      }
+    }
+  }
+  func->setAttr("itypes", StringAttr::get(func.getContext(), itypes));
   Block *entryBlock = func.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());

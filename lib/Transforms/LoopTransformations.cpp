@@ -2425,6 +2425,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   auto func =
       builder.create<FuncOp>(mod.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
+  // used for generating HLS ap_int/fixed types
+  func->setAttr("bit", builder.getUnitAttr());
   Block *entryBlock = func.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());

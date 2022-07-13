@@ -865,13 +865,12 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   if (!analyzeDependency(producerFor, consumerFor, dependency)) {
     std::string err_msg =
         "Does not support compute_at of stage with if operation.";
-    computeAtOp.emitError("analyzeDependency Failed: ") << err_msg;
+    computeAtOp.emitWarning("analyzeDependency Failed: ") << err_msg;
   }
 
-  FusionStrategy strategy(FusionStrategy::Generic);
   if (dependency.size() > 0 && std::find(dependency.begin(), dependency.end(),
                                          Dependency::RAW) != dependency.end()) {
-    strategy = FusionStrategy::ProducerConsumer;
+    FusionStrategy strategy(FusionStrategy::ProducerConsumer);
     // use existing MLIR pass
     ComputationSliceState sliceUnion;
     FusionResult result = canFuseLoops(producerFor, consumerFor,
@@ -1131,7 +1130,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   std::reverse(nonReductionLoops.begin(), nonReductionLoops.end());
   AffineForOp innerMostForOp = nonReductionLoops[nonReductionLoops.size() - 1];
 
-  // 5) Get span of each dimension
+  // 5) Get span of each dimension (also stride)
   //    e.g. d0, d0+1, d0+2, span is 2
   //         d0+d1, d1\in[0,2], span is 2
   SmallVector<SmallVector<AffineExpr>> originalLoadExprs;
@@ -1155,6 +1154,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     return WalkResult::advance();
   });
   SmallVector<int> spans;
+  int stride = 1;
   for (int i = 0; i < (int)rank; ++i) {
     int span = 0;
     // TODO: require strict load order
@@ -1189,25 +1189,27 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       }
     } else { // AffineBinaryOpExpr, reduction
       auto binaryExpr = baseExpr.cast<AffineBinaryOpExpr>();
-      int cntDim = 0;
-      binaryExpr.walk([&](AffineExpr expr) {
-        // d0 + d1, d1 is the reduction variable
-        if (expr.isa<AffineDimExpr>()) {
-          auto dimExpr = expr.cast<AffineDimExpr>();
-          if (cntDim == 1) {
-            if (reductionVars.count(dim2iv[dimExpr]) > 0) {
-              span = reductionVars[dim2iv[dimExpr]];
-            }
-          }
-        } else if (expr.isa<AffineConstantExpr>()) {
-          int cst = expr.cast<AffineConstantExpr>().getValue();
-          if (baseCst == 0)
-            baseCst = cst;
-          span = std::max(span, cst - baseCst + 1);
+      auto lhs = binaryExpr.getLHS();
+      auto rhs = binaryExpr.getRHS();
+      // d0 * s + d1, d1 is the reduction variable
+      if (rhs.isa<AffineDimExpr>()) {
+        auto dimExpr = rhs.cast<AffineDimExpr>();
+        if (reductionVars.count(dim2iv[dimExpr]) > 0) {
+          span = reductionVars[dim2iv[dimExpr]];
         }
-        cntDim++;
-        return WalkResult::advance();
-      });
+      } else if (rhs.isa<AffineConstantExpr>()) {
+        int cst = rhs.cast<AffineConstantExpr>().getValue();
+        if (baseCst == 0)
+          baseCst = cst;
+        span = std::max(span, cst - baseCst + 1);
+      }
+      if (lhs.isa<AffineBinaryOpExpr>()) {
+        auto binLHS = lhs.cast<AffineBinaryOpExpr>();
+        if (binLHS.getRHS().isa<AffineConstantExpr>())
+          stride = binLHS.getRHS().cast<AffineConstantExpr>().getValue();
+        else
+          assert(1 == 0 && "Unsupported memref format");
+      }
     }
     assert(span != 0 && "Span should not be 0");
     spans.push_back(span);
@@ -1497,7 +1499,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       AffineExpr idx;
       if ((int)i == loopAxis)
         // the iteration space now is related to the input tensor
-        idx = oldAffineMap.getResult(i) - distance;
+        if (stride != 1) {
+          auto strideCst = rewriter.getAffineConstantExpr(stride);
+          idx = (oldAffineMap.getResult(i) - distance).floorDiv(strideCst);
+        } else {
+          idx = oldAffineMap.getResult(i) - distance;
+        }
       else
         idx = oldAffineMap.getResult(i);
       memAffineIndices.push_back(idx);
@@ -1595,7 +1602,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           if (expr.isa<AffineBinaryOpExpr>()) {
             auto dim0 = rewriter.getAffineDimExpr(loadRank++);
             auto dim1 = rewriter.getAffineDimExpr(loadRank++);
-            loadAffineExpr.push_back(dim0 + dim1);
+            if (stride != 1) {
+              auto strideCst = rewriter.getAffineConstantExpr(stride);
+              loadAffineExpr.push_back(dim0 * strideCst + dim1);
+            } else {
+              loadAffineExpr.push_back(dim0 + dim1);
+            }
             memAffineIndices.push_back(operands[operandIdx++]);
             memAffineIndices.push_back(operands[operandIdx++]);
           } else if (expr.isa<AffineDimExpr>()) {
@@ -1636,6 +1648,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     //                                d1 - 10 >= 0, s0 - d1 - 9 >= 0)>
     SmallVector<AffineExpr> constraints{builder.getAffineDimExpr(0) - distance};
     SmallVector<bool> eqFlags{false};
+    if (stride != 1) {
+      auto strideCst = builder.getAffineConstantExpr(stride);
+      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      eqFlags.push_back(true);
+    }
     auto ifCondSet = IntegerSet::get(
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
@@ -1657,6 +1674,11 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto loc = outerIfOp.getThenBlock()->getOperations().begin()->getLoc();
     SmallVector<AffineExpr> constraints{builder.getAffineDimExpr(0) - distance};
     SmallVector<bool> eqFlags{false};
+    if (stride != 1) {
+      auto strideCst = builder.getAffineConstantExpr(stride);
+      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      eqFlags.push_back(true);
+    }
     auto ifCondSet = IntegerSet::get(
         1 /*dimCount*/, 0 /*symbolCount*/,
         constraints /*ArrayRef<AffineExpr> constraints*/, eqFlags);
@@ -2372,6 +2394,26 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   }
   SmallVector<Value> newMemrefs(allMemrefs);
 
+  // 5.0) If the function has been built, directly call it
+  if (outlineOp->hasAttr("merge")) {
+    FuncOp targetFunc;
+    auto preFuncName =
+        outlineOp->getAttr("merge").cast<StringAttr>().getValue();
+    for (FuncOp func : mod.getOps<FuncOp>()) {
+      if (func.getName() == preFuncName) {
+        targetFunc = func;
+        break;
+      }
+    }
+    OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+    call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
+                                targetFunc, allMemrefs);
+    for (auto rootForOp : rootForOps) {
+      rootForOp.erase();
+    }
+    return success();
+  }
+
   // 5) Create a new function
   auto builder = OpBuilder::atBlockBegin(mod.getBody());
   TypeRange argTypes = ValueRange(newMemrefs).getTypes();
@@ -2383,6 +2425,35 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   auto func =
       builder.create<FuncOp>(mod.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
+  // used for generating HLS ap_int/fixed types
+  func->setAttr("bit", builder.getUnitAttr());
+  // fix unsigned types
+  std::string itypes = "";
+  for (auto memref : allMemrefs) {
+    if (memref.getDefiningOp()) {
+      auto op = memref.getDefiningOp();
+      if (op->hasAttr("unsigned"))
+        itypes += "u";
+      else
+        itypes += "_";
+    } else {
+      if (f->hasAttr("itypes")) {
+        auto top_itypes =
+            f->getAttr("itypes").cast<StringAttr>().getValue().str();
+        int argIdx = 0;
+        for (auto arg : f.getArguments()) {
+          if (arg == memref) {
+            break;
+          }
+          argIdx++;
+        }
+        itypes += top_itypes[argIdx];
+      } else {
+        itypes += "_";
+      }
+    }
+  }
+  func->setAttr("itypes", StringAttr::get(func.getContext(), itypes));
   Block *entryBlock = func.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());

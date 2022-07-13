@@ -243,6 +243,11 @@ class HCLMLIRInsertionPoint(object):
     def get_global(self):
         return self.ip_stack[0]
 
+    def update_front(self, ip):
+        if not isinstance(ip, InsertionPoint):
+            ip = InsertionPoint(ip)
+        self.ip_stack.insert(0, ip)
+
     def save(self, ip):
         if not isinstance(ip, InsertionPoint):
             ip = InsertionPoint(ip)
@@ -816,6 +821,7 @@ class ConstantOp(ExprOp):
                 alignment=None,
                 ip=GlobalInsertionPoint.get_global(),
             )
+            const_tensor.attributes["constant"] = UnitAttr.get()
             if is_unsigned_type(self.dtype):
                 const_tensor.attributes["unsigned"] = UnitAttr.get()
 

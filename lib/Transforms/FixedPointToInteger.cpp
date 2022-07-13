@@ -428,9 +428,6 @@ void markFixedCastOps(FuncOp &f) {
     if (opr.getType().isa<FixedType>()) {
       FixedType srcType = opr.getType().cast<FixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv =
-              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
-        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -439,9 +436,6 @@ void markFixedCastOps(FuncOp &f) {
     } else if (opr.getType().isa<UFixedType>()) {
       UFixedType srcType = opr.getType().cast<UFixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv =
-              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
-        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));

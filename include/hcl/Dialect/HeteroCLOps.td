@@ -14,8 +14,11 @@ include "hcl/Dialect/HeteroCLTypes.td"
 include "hcl/Dialect/HeteroCLAttrs.td"
 
 include "mlir/IR/BuiltinTypes.td"
+include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/IR/FunctionInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
 
 def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
 {
@@ -49,6 +52,133 @@ def HeteroCL_CreateStageHandleOp : HeteroCL_Op<"create_stage_handle">
     let assemblyFormat = [{
        $stage_name attr-dict `:` type($result)
     }];
+}
+
+def CustomizationOp : HeteroCL_Op<"customization", [
+    FunctionOpInterface, IsolatedFromAbove, Symbol
+  ]> {
+  let summary = "user defined customization";
+  let description = [{
+    The "hcl.customization" operation represents a user defined customization.
+    These are callable SSA-region operations that contain optimization primitives.
+
+    Example:
+
+    ```mlir
+    hcl.customization @opt() {
+        // optimizations
+    }
+    ```
+  }];
+
+  let arguments = (ins
+    SymbolNameAttr:$sym_name,
+    TypeAttr:$type
+  );
+  let regions = (region AnyRegion:$body);
+
+  let builders = [OpBuilder<(ins
+    "StringRef":$name, "FunctionType":$type,
+    CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)
+  >];
+  let extraClassDeclaration = [{
+    /// Returns the type of this function.
+    /// FIXME: We should drive this via the ODS `type` param.
+    FunctionType getType() { 
+      return getTypeAttr().getValue().cast<FunctionType>();
+    }
+
+    //===------------------------------------------------------------------===//
+    // FunctionOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    /// Returns the argument types of this function.
+    ArrayRef<Type> getArgumentTypes() { return getType().getInputs(); }
+
+    /// Returns the result types of this function.
+    ArrayRef<Type> getResultTypes() { return getType().getResults(); }
+
+    /// Verify the type attribute of this function. Returns failure and emits
+    /// an error if the attribute is invalid.
+    LogicalResult verifyType() {
+      auto type = getTypeAttr().getValue();
+      if (!type.isa<FunctionType>())
+        return emitOpError("requires '" + getTypeAttrName() +
+                           "' attribute of function type");
+      return success();
+    }
+
+    //===------------------------------------------------------------------===//
+    // SymbolOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    bool isDeclaration() { return isExternal(); }
+  }];
+  let parser = [{ return mlir::hcl::parseCustomizationOp(parser, result); }];
+  let printer = [{ return mlir::hcl::print(*this, p); }];
+  let verifier = [{ return mlir::hcl::verify(*this); }];
+  let skipDefaultBuilders = 1;
+}
+
+def EndOp : HeteroCL_Op<"end", [NoSideEffect, HasParent<"CustomizationOp">, Terminator]> {
+  let summary = "end operation";
+  let description = [{
+    The "end" operation represents a return operation within a customization.
+  }];
+
+  // The end operation takes an optional input operand to return. This
+  // value must match the return type of the enclosing function.
+  let arguments = (ins Variadic<AnyType>:$input);
+
+  // The end operation only emits the input in the format if it is present.
+  let assemblyFormat = "($input^ `:` type($input))? attr-dict ";
+
+  // Provide extra utility definitions on the c++ operation class definition.
+  let extraClassDeclaration = [{
+    bool hasOperand() { return getNumOperands() != 0; }
+  }];
+}
+
+def ApplyOp : HeteroCL_Op<"apply", [CallOpInterface,
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "apply customizations";
+  let description = [{
+    Apply predefined customizations to a function.
+  }];
+
+  // The apply operation takes a symbol reference attribute as the
+  // callee, and inputs for the call.
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$inputs);
+
+  // The apply operation has no results, just a placeholder below.
+  let results = (outs Variadic<AnyType>);
+
+  // Specialize assembly printing and parsing using a declarative format.
+  let assemblyFormat = [{
+    $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
+  }];
+
+  // Add custom build methods for the apply operation.
+  let builders = [
+    OpBuilder<(ins "StringRef":$callee, "ArrayRef<Value>":$arguments)>
+  ];
+
+  let extraClassDeclaration = [{
+    FunctionType getCalleeType();
+
+    /// Get the argument operands to the called function.
+    operand_range getArgOperands() {
+      return {arg_operand_begin(), arg_operand_end()};
+    }
+
+    operand_iterator arg_operand_begin() { return operand_begin(); }
+    operand_iterator arg_operand_end() { return operand_end(); }
+
+    /// Return the callee of this operation.
+    CallInterfaceCallable getCallableForCallee() {
+      return (*this)->getAttrOfType<SymbolRefAttr>("callee");
+    }
+  }];
 }
 
 def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">

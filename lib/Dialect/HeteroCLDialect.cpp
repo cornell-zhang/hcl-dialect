@@ -53,3 +53,43 @@ void HeteroCLDialect::initialize() {
 #include "hcl/Dialect/HeteroCLAttrs.cpp.inc"
       >();
 }
+
+//===----------------------------------------------------------------------===//
+// Extra methods
+//===----------------------------------------------------------------------===//
+
+LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
+  // Check that the callee attribute was specified.
+  auto fnAttr = (*this)->getAttrOfType<FlatSymbolRefAttr>("callee");
+  if (!fnAttr)
+    return emitOpError("requires a 'callee' symbol reference attribute");
+  CustomizationOp fn =
+      symbolTable.lookupNearestSymbolFrom<CustomizationOp>(*this, fnAttr);
+  if (!fn)
+    return emitOpError() << "'" << fnAttr.getValue()
+                         << "' does not reference a valid customization";
+
+  // Verify that the operand and result types match the callee.
+  auto fnType = fn.getType();
+  if (fnType.getNumInputs() != getNumOperands())
+    return emitOpError("incorrect number of operands for callee");
+
+  // for (unsigned i = 0, e = fnType.getNumInputs(); i != e; ++i)
+  //   if (getOperand(i).getType() != fnType.getInput(i))
+  //     return emitOpError("operand type mismatch: expected operand type ")
+  //            << fnType.getInput(i) << ", but provided "
+  //            << getOperand(i).getType() << " for operand number " << i;
+
+  if (fnType.getNumResults() != getNumResults())
+    return emitOpError("incorrect number of results for callee");
+
+  // for (unsigned i = 0, e = fnType.getNumResults(); i != e; ++i)
+  //   if (getResult(i).getType() != fnType.getResult(i)) {
+  //     auto diag = emitOpError("result type mismatch at index ") << i;
+  //     diag.attachNote() << "      op result types: " << getResultTypes();
+  //     diag.attachNote() << "function result types: " << fnType.getResults();
+  //     return diag;
+  //   }
+
+  return success();
+}

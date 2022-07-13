@@ -31,9 +31,10 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
   Value result;
   Type newType = IntegerType::get(ctx, target_width);
   if (!v.getType().isa<IntegerType>()) {
-    llvm::errs() << "castIntegerWidth: input is not integer type, input value is: "
-                 << v << "\n";
-    assert (false);
+    llvm::errs()
+        << "castIntegerWidth: input is not integer type, input value is: " << v
+        << "\n";
+    assert(false);
   }
   if (v.getType().cast<IntegerType>().getWidth() < target_width) {
     // extend bits
@@ -59,6 +60,7 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
  * to 64-bit signless integer type. When the input memref
  */
 FunctionType updateFunctionSignature(FuncOp &funcOp) {
+  bool isTop = funcOp.getName() == "top";
   FunctionType functionType = funcOp.getType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
@@ -86,13 +88,16 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
       // If result memref element type is fixed
       // change it to i64 to be compatible with numpy
       if (et.isa<FixedType, UFixedType>()) {
-        size_t width = 64;
+        size_t real_width = et.isa<FixedType>()
+                                ? et.cast<FixedType>().getWidth()
+                                : et.cast<UFixedType>().getWidth();
+        size_t width = isTop ? 64 : real_width;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_result_types.push_back(memrefType.clone(newElementType));
         // update the otypes
-        if (et.isa<FixedType>() and v.index() < otypes.length()) {
+        if (et.isa<FixedType>() && v.index() < otypes.length()) {
           otypes[v.index()] = 's';
-        } else if (et.isa<UFixedType>() and v.index() < otypes.length()) {
+        } else if (et.isa<UFixedType>() && v.index() < otypes.length()) {
           otypes[v.index()] = 'u';
         }
       } else {
@@ -110,7 +115,10 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
       // If argument memref element type is fixed
       // change it to i64 to be compatible with numpy
       if (et.isa<FixedType, UFixedType>()) {
-        size_t width = 64;
+        size_t real_width = et.isa<FixedType>()
+                                ? et.cast<FixedType>().getWidth()
+                                : et.cast<UFixedType>().getWidth();
+        size_t width = isTop ? 64 : real_width;
         Type newElementType = IntegerType::get(funcOp.getContext(), width);
         new_arg_types.push_back(memrefType.clone(newElementType));
         // update the itypes
@@ -137,10 +145,36 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
       if (MemRefType memrefType = argType.dyn_cast<MemRefType>()) {
         Type et = memrefType.getElementType();
         if (et.isa<FixedType, UFixedType>()) {
-          size_t width = 64;
+          size_t real_width = et.isa<FixedType>()
+                                  ? et.cast<FixedType>().getWidth()
+                                  : et.cast<UFixedType>().getWidth();
+          size_t width = isTop ? 64 : real_width;
           Type newType = IntegerType::get(funcOp.getContext(), width);
           Type newMemRefType = memrefType.clone(newType);
+          // Set block argument type to new memref type
           block.getArgument(i).setType(newMemRefType);
+          // Truncate the memref type to real_width
+          if (isTop && real_width != 64) {
+            OpBuilder rewriter(funcOp.getBody());
+            Type truncType = IntegerType::get(funcOp.getContext(), real_width);
+            Value truncMemRef = rewriter.create<memref::AllocOp>(
+                block.getArgument(i).getLoc(),
+                memrefType.clone(truncType).cast<MemRefType>());
+            block.getArgument(i).replaceAllUsesWith(truncMemRef);
+            SmallVector<int64_t, 4> lbs(memrefType.getRank(), 0);
+            SmallVector<int64_t, 4> steps(memrefType.getRank(), 1);
+            buildAffineLoopNest(
+                rewriter, block.getArgument(i).getLoc(), lbs,
+                memrefType.getShape(), steps,
+                [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+                  Value v = nestedBuilder.create<AffineLoadOp>(
+                      loc, block.getArgument(i), ivs);
+                  Value truncated =
+                      nestedBuilder.create<arith::TruncIOp>(loc, v, truncType);
+                  nestedBuilder.create<AffineStoreOp>(loc, truncated,
+                                                      truncMemRef, ivs);
+                });
+          }
         }
       }
     }
@@ -181,6 +215,8 @@ void updateAffineLoad(FuncOp &f) {
  * it's type is not i64 memref, update it to be i64 memeref
  */
 void updateReturnOp(FuncOp &funcOp) {
+  bool isTop = funcOp.getName() == "top";
+  if (!isTop) return; // Only update top function
   // Update FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
   funcOp.walk([&](Operation *op) {
@@ -304,9 +340,9 @@ void markFixedArithOps(FuncOp &f) {
       if (!opr_r.getType().isa<FixedType>()) {
         llvm::errs() << "Error: lhs or rhs are not fixed-point: "
                      << "operation: " << *op << "\n"
-                     << "lhs type: " << opr_l.getType() << ", rhs type: "
-                     << opr_r.getType() << ", result type: " << res.getType()
-                     << "\n";
+                     << "lhs type: " << opr_l.getType()
+                     << ", rhs type: " << opr_r.getType()
+                     << ", result type: " << res.getType() << "\n";
         assert(false);
       }
       FixedType ltype = opr_l.getType().cast<FixedType>();
@@ -327,9 +363,9 @@ void markFixedArithOps(FuncOp &f) {
       if (!opr_r.getType().isa<UFixedType>()) {
         llvm::errs() << "Error: lhs or rhs are not unsigned fixed-point: "
                      << "operation: " << *op << "\n"
-                     << "lhs type: " << opr_l.getType() << ", rhs type: "
-                     << opr_r.getType() << ", result type: " << res.getType()
-                     << "\n";
+                     << "lhs type: " << opr_l.getType()
+                     << ", rhs type: " << opr_r.getType()
+                     << ", result type: " << res.getType() << "\n";
         assert(false);
       }
       UFixedType ltype = opr_l.getType().cast<UFixedType>();
@@ -394,9 +430,6 @@ void markFixedCastOps(FuncOp &f) {
     if (opr.getType().isa<FixedType>()) {
       FixedType srcType = opr.getType().cast<FixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv =
-              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
-        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -405,9 +438,6 @@ void markFixedCastOps(FuncOp &f) {
     } else if (opr.getType().isa<UFixedType>()) {
       UFixedType srcType = opr.getType().cast<UFixedType>();
       size_t width = srcType.getWidth();
-      if (auto blockArgv =
-              opr.getDefiningOp()->getOperand(0).dyn_cast<BlockArgument>())
-        width = 64;
       size_t frac = srcType.getFrac();
       IntegerType targetType = builder.getIntegerType(32);
       op->setAttr("src_width", builder.getIntegerAttr(targetType, width));
@@ -493,8 +523,8 @@ void updateSCFIfOp(mlir::scf::IfOp &op) {
       res.setType(IntegerType::get(res.getContext(),
                                    res.getType().cast<FixedType>().getWidth()));
     } else if (res.getType().isa<UFixedType>()) {
-      res.setType(IntegerType::get(res.getContext(),
-                                   res.getType().cast<UFixedType>().getWidth()));
+      res.setType(IntegerType::get(
+          res.getContext(), res.getType().cast<UFixedType>().getWidth()));
     } else if (auto memRefType = res.getType().dyn_cast<MemRefType>()) {
       Type eleTyp = memRefType.getElementType();
       if (eleTyp.isa<FixedType>()) {
@@ -578,13 +608,15 @@ void lowerFixedMul(MulFixedOp &op) {
     // use signed right shift
     arith::ShRSIOp res =
         rewriter.create<arith::ShRSIOp>(op->getLoc(), newOp, fracCstOp);
-    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    auto truncated =
+        rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
     op->replaceAllUsesWith(truncated);
   } else {
     // use unsigned right shift
     arith::ShRUIOp res =
         rewriter.create<arith::ShRUIOp>(op->getLoc(), newOp, fracCstOp);
-    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    auto truncated =
+        rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
     op->replaceAllUsesWith(truncated);
   }
 }
@@ -617,12 +649,14 @@ void lowerFixedDiv(DivFixedOp &op) {
   if (opTy.isa<FixedType>()) { // fixed
     arith::DivSIOp res =
         rewriter.create<arith::DivSIOp>(op->getLoc(), lhs_shifted, rhs);
-    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    auto truncated =
+        rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
     op->replaceAllUsesWith(truncated);
   } else { // ufixed
     arith::DivUIOp res =
         rewriter.create<arith::DivUIOp>(op->getLoc(), lhs_shifted, rhs);
-    auto truncated = rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
+    auto truncated =
+        rewriter.create<arith::TruncIOp>(op->getLoc(), truncTy, res);
     op->replaceAllUsesWith(truncated);
   }
 }
@@ -647,40 +681,50 @@ void lowerFixedCmp(CmpFixedOp &op) {
   // llvm::outs() << "rhs: " << rhs << "\n";
 
   // auto prednum =
-      // op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
+  // op->getAttr("predicate").cast<IntegerAttr>().getValue().getSExtValue();
   auto prednum = op.getPredicate();
   auto loc = op->getLoc();
   arith::CmpIOp newOp;
   switch (prednum) {
   case hcl::CmpFixedPredicate::eq:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
+    newOp =
+        rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, lhs, rhs);
     break;
   case hcl::CmpFixedPredicate::ne:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
+    newOp =
+        rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne, lhs, rhs);
     break;
   case hcl::CmpFixedPredicate::slt:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::sle:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::sgt:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::sge:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::ult:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::ule:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ule, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::ugt:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt, lhs,
+                                           rhs);
     break;
   case hcl::CmpFixedPredicate::uge:
-    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs, rhs);
+    newOp = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::uge, lhs,
+                                           rhs);
     break;
   default:
     llvm::errs() << "unknown predicate code in CmpFixedOp\n";
@@ -1080,8 +1124,7 @@ void visitOperation(Operation &op) {
     lowerFixedToFixed(new_op);
     // debug output
     // llvm::outs() << *op.getParentOp() << "\n";
-  }
-   else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
+  } else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
     // llvm::outs() << "IfOp\n";
     updateSCFIfOp(new_op);
   }

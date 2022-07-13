@@ -146,12 +146,35 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
         Type et = memrefType.getElementType();
         if (et.isa<FixedType, UFixedType>()) {
           size_t real_width = et.isa<FixedType>()
-                                ? et.cast<FixedType>().getWidth()
-                                : et.cast<UFixedType>().getWidth();
+                                  ? et.cast<FixedType>().getWidth()
+                                  : et.cast<UFixedType>().getWidth();
           size_t width = isTop ? 64 : real_width;
           Type newType = IntegerType::get(funcOp.getContext(), width);
           Type newMemRefType = memrefType.clone(newType);
+          // Set block argument type to new memref type
           block.getArgument(i).setType(newMemRefType);
+          // Truncate the memref type to real_width
+          if (isTop && real_width != 64) {
+            OpBuilder rewriter(funcOp.getBody());
+            Type truncType = IntegerType::get(funcOp.getContext(), real_width);
+            Value truncMemRef = rewriter.create<memref::AllocOp>(
+                block.getArgument(i).getLoc(),
+                memrefType.clone(truncType).cast<MemRefType>());
+            block.getArgument(i).replaceAllUsesWith(truncMemRef);
+            SmallVector<int64_t, 4> lbs(memrefType.getRank(), 0);
+            SmallVector<int64_t, 4> steps(memrefType.getRank(), 1);
+            buildAffineLoopNest(
+                rewriter, block.getArgument(i).getLoc(), lbs,
+                memrefType.getShape(), steps,
+                [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+                  Value v = nestedBuilder.create<AffineLoadOp>(
+                      loc, block.getArgument(i), ivs);
+                  Value truncated =
+                      nestedBuilder.create<arith::TruncIOp>(loc, v, truncType);
+                  nestedBuilder.create<AffineStoreOp>(loc, truncated,
+                                                      truncMemRef, ivs);
+                });
+          }
         }
       }
     }

@@ -215,6 +215,8 @@ void updateAffineLoad(FuncOp &f) {
  * it's type is not i64 memref, update it to be i64 memeref
  */
 void updateReturnOp(FuncOp &funcOp) {
+  bool isTop = funcOp.getName() == "top";
+  if (!isTop) return; // Only update top function
   // Update FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
   funcOp.walk([&](Operation *op) {

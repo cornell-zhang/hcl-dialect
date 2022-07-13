@@ -1137,10 +1137,11 @@ void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
 
 void ModuleEmitter::emitGetGlobalFixed(hcl::GetGlobalFixedOp op) {
   indent();
-  os << "// placeholder for const ";
+  os << "// const ";
   Value result = op.getResult();
   fixUnsignedType(result, op->hasAttr("unsigned"));
   emitValue(result, 0, false /*isPtr*/, op.name().str());
+  os << "; /* placeholder */ ";
   emitInfoAndNewLine(op);
 }
 

@@ -2324,13 +2324,20 @@ void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
                      std::set<Operation *> &opToMove) {
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
-    if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
-        allMemrefs.end())
-      allMemrefs.push_back(target);
-    for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e; ++argIdx) {
-      auto operand = op.getOperand(argIdx);
-      if (operand.getDefiningOp())
-        opToMove.insert(operand.getDefiningOp());
+    auto defOp = target.getDefiningOp();
+    if (defOp && (llvm::isa<memref::GetGlobalOp>(defOp) ||
+                  llvm::isa<hcl::GetGlobalFixedOp>(defOp))) {
+      opToMove.insert(defOp);
+    } else {
+      if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
+          allMemrefs.end())
+        allMemrefs.push_back(target);
+      for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e;
+           ++argIdx) {
+        auto operand = op.getOperand(argIdx);
+        if (operand.getDefiningOp())
+          opToMove.insert(operand.getDefiningOp());
+      }
     }
   });
 }

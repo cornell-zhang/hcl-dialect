@@ -18,6 +18,7 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IntegerSet.h"
@@ -2573,8 +2574,40 @@ void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   }
 }
 
-bool applyLoopTransformationOnSingleFunction(ModuleOp &mod, FuncOp &f) {
+void applyCustomization(
+    FuncOp &top_func,
+    std::map<std::string, hcl::CustomizationOp> &customizationMap,
+    SmallVector<Operation *, 10> &opToRemove) {
+  auto builder = OpBuilder::atBlockTerminator(&(top_func.getBody().front()));
+  for (auto applyOp : top_func.getOps<hcl::ApplyOp>()) {
+    auto c = customizationMap[applyOp.callee().str()];
+    DenseMap<Value, Value> arg2operand;
+    for (auto item : llvm::enumerate(c.getArguments())) {
+      arg2operand[item.value()] = applyOp.getOperand(item.index());
+    }
+    for (Operation &op : c.getOps()) {
+      if (llvm::isa<hcl::EndOp>(op))
+        continue;
+      BlockAndValueMapping mapping;
+      for (auto item : llvm::enumerate(op.getOperands())) {
+        if (arg2operand.count(item.value()) > 0) {
+          mapping.map(item.value(), arg2operand[item.value()]);
+        }
+      }
+      builder.clone(op, mapping);
+    }
+    opToRemove.push_back(applyOp);
+  }
+  for (auto c : customizationMap) {
+    opToRemove.push_back(c.second);
+  }
+}
+
+bool applyLoopTransformationOnSingleFunction(
+    ModuleOp &mod, FuncOp &f,
+    std::map<std::string, hcl::CustomizationOp> &customizationMap) {
   SmallVector<Operation *, 10> opToRemove;
+  applyCustomization(f, customizationMap, opToRemove);
   // schedule should preverse orders, thus traverse one by one
   // the following shows the dispatching logic
   for (Operation &op : f.getOps()) {
@@ -2675,11 +2708,15 @@ bool applyLoopTransformation(ModuleOp &mod) {
       break;
     }
   }
+  std::map<std::string, hcl::CustomizationOp> customizationMap;
+  for (auto c : mod.getOps<hcl::CustomizationOp>()) {
+    customizationMap[c.getName().str()] = c;
+  }
 
   // apply schedule
   if (!isFoundTopFunc || !funcMap["top"]->hasAttr("top")) { // fallback
     for (FuncOp f : mod.getOps<FuncOp>()) {
-      applyLoopTransformationOnSingleFunction(mod, f);
+      applyLoopTransformationOnSingleFunction(mod, f, customizationMap);
     }
   } else {
     for (FuncOp func : mod.getOps<FuncOp>()) {
@@ -2688,6 +2725,9 @@ bool applyLoopTransformation(ModuleOp &mod) {
     }
     FuncOp top_func = funcMap["top"];
     SmallVector<Operation *, 10> opToRemove;
+    // first apply customizations
+    applyCustomization(top_func, customizationMap, opToRemove);
+    // then apply primitives
     for (Operation &op : top_func.getOps()) {
       if (isHCLOp(op)) {
         if (auto new_op = dyn_cast<SplitOp>(op)) {

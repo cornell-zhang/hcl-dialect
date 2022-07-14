@@ -2133,6 +2133,15 @@ class ASTVisitor:
             raise RuntimeError("Not an affine index!")
 
     def erase_op(self, expr):
+        # If expr is a "pass-through" op,
+        # i.e. the op is not a real op, its `op` is None,
+        # remove its built_op without erasing
+        # its built_op. An example is the ConstantOp,
+        # whose op can be set to None representing 
+        # a pass-through op.
+        if expr.op is None:
+            expr.built_op = None
+            return
         expr.built_op.operation.erase()
         expr.built_op = None
 

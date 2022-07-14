@@ -1049,7 +1049,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
         addressIndices.push_back(builder.getAffineDimExpr(dim));
       } else { // already had one layout map before
         partitionIndices.push_back(layout.getResult(dim));
-        addressIndices.push_back(layout.getResult(dim));
+        addressIndices.push_back(layout.getResult(dim + rank));
       }
     }
   }

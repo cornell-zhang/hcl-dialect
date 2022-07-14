@@ -12,6 +12,11 @@
 include "hcl/Dialect/HeteroCLDialect.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
 
+def Type : HeteroCL_Type<"Type", [MemRefElementTypeInterface]> {
+  let summary = "generic type";
+  let mnemonic = "Type";
+}
+
 // // https://mlir.llvm.org/docs/Tutorials/DefiningAttributesAndTypes/#defining-custom-parsers-and-printers-using-assembly-formats
 // https://github.com/llvm/torch-mlir/blob/main/include/torch-mlir/Dialect/Torch/IR/TorchTypes.td#L50
 def LoopHandle : HeteroCL_Type<"LoopHandle"> {

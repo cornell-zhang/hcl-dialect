@@ -161,3 +161,20 @@ class MLIRLimitationError(HCLError):
     def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[MLIR Limitation]" + bcolors.ENDC
         HCLError.__init__(self, msg, line, category_str)
+
+
+""" New Warning subclasses """
+class DTypeWarning(HCLWarning):
+    """A subclass for specifying data type related warning"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.WARNING + "[Data Type]" + bcolors.ENDC
+        HCLWarning.__init__(self, msg, line, category_str, RuntimeWarning)
+
+
+class DeprecationWarning(HCLWarning):
+    """A subclass for specifying deprecation warning"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.WARNING + "[Deprecation]" + bcolors.ENDC
+        HCLWarning.__init__(self, msg, line, category_str, DeprecationWarning)

@@ -97,50 +97,67 @@ class HCLError(HCLException):
     def error(self):
         raise self.message
 
+""" Inherited Error subclasses """
 
 class DTypeError(HCLError):
     """A subclass for specifying data type related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[Data Type]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
 
 
 class APIError(HCLError):
     """A subclass for specifying API related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[API]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
 
 
 class DSLError(HCLError):
     """A subclass for specifying imperative DSL related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[Imperative]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
 
 
 class TensorError(HCLError):
     """A subclass for specifying tensor related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line):
         category_str = bcolors.FAIL + "[Tensor]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
 
 
 class DeviceError(HCLError):
     """A subclass for specifying device related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[Device]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
 
 
 class AssertError(HCLError):
     """A subclass for specifying assert related exception"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[Assert]" + bcolors.ENDC
-        HCLError.__init__(self, msg, category_str)
+        HCLError.__init__(self, msg, line, category_str)
+
+""" New Error subclasses """
+
+class NotImpelementedError(HCLError):
+    """A subclass for specifying not implemented exception"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.FAIL + "[Not Implemented]" + bcolors.ENDC
+        HCLError.__init__(self, msg, line, category_str)
+
+class MLIRLimitationError(HCLError):
+    """A subclass for specifying MLIR limitation exception"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.FAIL + "[MLIR Limitation]" + bcolors.ENDC
+        HCLError.__init__(self, msg, line, category_str)

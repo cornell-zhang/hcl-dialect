@@ -1,6 +1,12 @@
 import warnings
+# By default, Python ignores deprecation warnings.
+# we have to enable it to see the warning.
+warnings.simplefilter('always', DeprecationWarning)
+
 
 class bcolors:
+    """ANSI color escape codes for terminal output.
+    """
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -24,6 +30,7 @@ class HCLException(Exception):
     """
     def __init__(self, message):
         Exception.__init__(self, message)
+        self.message = message
 
 
 class HCLWarning(HCLException):
@@ -36,9 +43,21 @@ class HCLWarning(HCLException):
     ----------
     message : str
         The warning message.
+    
+    category_str : str, optional
+        The warning category string.
+
+    category : Warning, optional
+        The warning category.
     """
-    def __init__(self, message):
+    def __init__(self, message, category_str = None, category=None):
+        if category_str is not None:
+            message = '{} {}'.format(category_str, message)
         HCLException.__init__(self, message)
+        self.category = category
+
+    def warn(self):
+        warnings.warn(self.message, category=self.category)
 
 class HCLError(HCLException):
     """Base class for all HeteroCL errors.
@@ -50,6 +69,51 @@ class HCLError(HCLException):
     ----------
     message : str
         The error message.
+    
+    category_str : str, optional
+        The error category string.
     """
-    def __init__(self, message):
+    def __init__(self, message, category_str=None):
+        if category_str is not None:
+            message = '{} {}'.format(category_str, message)
         HCLException.__init__(self, message)
+
+    def error(self):
+        raise self.message
+
+
+class DTypeError(HCLError):
+    """A subclass for specifying data type related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[Data Type]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)
+
+class APIError(HCLError):
+    """A subclass for specifying API related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[API]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)
+
+class DSLError(HCLError):
+    """A subclass for specifying imperative DSL related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[Imperative]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)
+
+class TensorError(HCLError):
+    """A subclass for specifying tensor related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[Tensor]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)
+
+class DeviceError(HCLError):
+    """A subclass for specifying device related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[Device]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)
+
+class AssertError(HCLError):
+    """A subclass for specifying assert related exception"""
+    def __init__(self, msg):
+        category_str = bcolors.FAIL + '[Assert]' + bcolors.ENDC
+        HCLError.__init__(self, msg, category_str)

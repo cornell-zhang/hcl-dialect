@@ -1363,24 +1363,27 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         // i < axis
         for (int i = 0; i < axis; ++i) {
           auto expr = loadMap.getResult(i);
-          // TODO: only suppose the expr is in the format of d0+d1
+          // TODO: only suppose the expr is in the format of d0*c+d1
           int d = getReductionDim(expr);
-          if (d != -1) {
-            // reduction axis before reuse axis
-            if (std::find(preRDim.begin(), preRDim.end(), d) == preRDim.end()) {
-              preRDim.push_back(d);
-              preRDimAxis.push_back(i);
+          if (spans[i] > 1) {
+            if (d != -1) {
+              // reduction axis before reuse axis
+              if (std::find(preRDim.begin(), preRDim.end(), d) ==
+                  preRDim.end()) {
+                preRDim.push_back(d);
+                preRDimAxis.push_back(i);
+              }
+              singleLoadAffineExpr.push_back(
+                  builder.getAffineDimExpr(loadRank++));
+              operandIdx++;
+              memAffineIndices.push_back(operands[operandIdx++]);
+            } else { // AffineConstantExpr
+              singleLoadAffineExpr.push_back(expr);
             }
-            singleLoadAffineExpr.push_back(
-                builder.getAffineDimExpr(loadRank++));
-            operandIdx++;
-            memAffineIndices.push_back(operands[operandIdx++]);
-          } else if (spans[i] > 1) { // AffineConstantExpr
-            singleLoadAffineExpr.push_back(expr);
           }
         }
         // i = axis
-        // TODO: suppose the expr is d0+d1
+        // TODO: suppose the expr is d0*c+d1
         singleLoadAffineExpr.push_back(builder.getAffineConstantExpr(j));
         operandIdx++;
         // i > axis
@@ -1577,7 +1580,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       int operandIdx = 0;
       for (int i = 0; i < (int)rank; ++i) {
         auto expr = loadMap.getResult(i);
-        // TODO: only suppose the expr is in the format of d0+d1, and d1 is
+        // TODO: only suppose the expr is in the format of d0*c+d1, and d1 is
         // reduction axis
         if (i < axis) {
           if (spans[i] > 1) {
@@ -1592,7 +1595,8 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
             memAffineIndices.push_back(operands[operandIdx++]);
           } else {
             // TODO: suppose no other reduction axis before `axis`
-            operandIdx++;
+            if (!expr.isa<AffineConstantExpr>())
+              operandIdx++;
           }
         } else if (i == axis) {
           loadAffineExpr.push_back(rewriter.getAffineDimExpr(loadRank++));

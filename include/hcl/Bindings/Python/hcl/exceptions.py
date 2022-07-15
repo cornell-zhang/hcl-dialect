@@ -58,8 +58,9 @@ class HCLWarning(HCLException):
     """
 
     def __init__(self, message, line=None, category_str=None, category=None):
+        message = bcolors.OKBLUE + message + bcolors.ENDC
         if category_str is not None:
-            message = "{} {}".format(category_str, message)
+            message = "\n{} {}".format(category_str, message)
         if line is not None:
             message += bcolors.BOLD + " (line {})".format(line) + bcolors.ENDC
         HCLException.__init__(self, message)
@@ -88,6 +89,7 @@ class HCLError(HCLException):
     """
 
     def __init__(self, message, line=None, category_str=None):
+        message = bcolors.OKBLUE + message + bcolors.ENDC
         if category_str is not None:
             message = "{} {}".format(category_str, message)
         if line is not None:
@@ -172,7 +174,7 @@ class DTypeWarning(HCLWarning):
         HCLWarning.__init__(self, msg, line, category_str, RuntimeWarning)
 
 
-class DeprecationWarning(HCLWarning):
+class HCLDeprecationWarning(HCLWarning):
     """A subclass for specifying deprecation warning"""
 
     def __init__(self, msg, line=None):

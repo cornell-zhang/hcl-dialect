@@ -1551,9 +1551,13 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       });
       if (cond.isFunctionOfDim(operandIdx)) {
         if (!sign)
-          newConds.push_back(cond - distanceCst);
+          newConds.push_back(cond - distanceCst -
+                             builder.getAffineConstantExpr(stride - 1) *
+                                 builder.getAffineDimExpr(operandIdx));
         else
-          newConds.push_back(cond + distanceCst);
+          newConds.push_back(cond + distanceCst +
+                             builder.getAffineConstantExpr(stride - 1) *
+                                 builder.getAffineDimExpr(operandIdx));
       } else {
         newConds.push_back(cond);
       }

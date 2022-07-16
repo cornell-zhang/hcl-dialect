@@ -1521,6 +1521,41 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     opToRemove.push_back(op);
     return WalkResult::advance();
   });
+  // also update `if` structure that uses this axis
+  // e.g. #set1 = affine_set<(d0, d1, d2, d3) : (d0 + d1 >= 0,
+  // -(d0 + d1) + 7 >= 0, d2 + d3 >= 0, -(d2 + d3) + 7 >= 0)>
+  nonReductionLoops[loopAxis].walk([&](AffineIfOp ifop) {
+    // get the if condition
+    auto condSet = ifop.getIntegerSet();
+    OpBuilder builder(ifop);
+    auto distanceCst = builder.getAffineConstantExpr(distance);
+    SmallVector<AffineExpr> newConds;
+    for (auto cond : condSet.getConstraints()) {
+      bool sign = false;
+      cond.walk([&](AffineExpr expr) {
+        if (expr.isa<AffineBinaryOpExpr>() &&
+            expr.getKind() == AffineExprKind::Mul) {
+          auto binExpr = expr.cast<AffineBinaryOpExpr>();
+          if (binExpr.getRHS().isa<AffineConstantExpr>() &&
+              binExpr.getRHS().cast<AffineConstantExpr>().getValue() == -1) {
+            sign = true;
+          }
+        }
+      });
+      if (cond.isFunctionOfDim(axis)) {
+        if (!sign)
+          newConds.push_back(cond - distanceCst);
+        else
+          newConds.push_back(cond + distanceCst);
+      } else {
+        newConds.push_back(cond);
+      }
+    }
+    auto newCondSet = IntegerSet::get(
+        condSet.getNumDims() /*dimCount*/, 0 /*symbolCount*/,
+        newConds /*ArrayRef<AffineExpr> constraints*/, condSet.getEqFlags());
+    ifop.setIntegerSet(newCondSet);
+  });
 
   // 13) Rewrite original memref to load from buffer
   // reduction case:
@@ -1834,6 +1869,12 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
         for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
           memAffineIndices[j] =
               shiftForOps[j - size + shiftForOps.size()].getInductionVar();
+        }
+        auto shape = target.getType().dyn_cast<MemRefType>().getShape();
+        for (int i = 0; i < axis; ++i) {
+          if (shape[i] == 1)
+            memAffineIndices[i] =
+                builder.create<arith::ConstantIndexOp>(loc, 0);
         }
         load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
       }

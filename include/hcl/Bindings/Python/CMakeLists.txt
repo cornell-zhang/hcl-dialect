@@ -32,6 +32,7 @@ declare_mlir_dialect_python_bindings(
   SOURCES
     dialects/hcl.py
     build_ir.py
+    exceptions.py
     __init__.py
   DIALECT_NAME hcl
 )

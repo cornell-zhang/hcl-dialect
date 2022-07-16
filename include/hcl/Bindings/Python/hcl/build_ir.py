@@ -12,6 +12,7 @@ from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
 from hcl_mlir.dialects import math, memref, scf, std, tensor
 from hcl_mlir.ir import *
+from hcl_mlir.exceptions import *
 
 
 class HCLFlags(object):
@@ -114,7 +115,7 @@ def get_mlir_type(dtype):
             elif dtype[5:] == "64":
                 return F64Type.get()
             else:
-                raise RuntimeError("Not supported floating point type")
+                raise DTypeError(f"Not supported floating point type: {dtype}")
         elif dtype[0:5] == "fixed":
             strs = dtype[5:].split("_")
             return hcl_d.FixedType.get(int(strs[0]), int(strs[1]))
@@ -122,9 +123,9 @@ def get_mlir_type(dtype):
             strs = dtype[6:].split("_")
             return hcl_d.UFixedType.get(int(strs[0]), int(strs[1]))
         else:
-            raise RuntimeError("Unrecognized data type")
+            raise DTypeError("Unrecognized data type: {}".format(dtype))
     else:
-        raise RuntimeError(
+        raise DTypeError(
             "Unrecognized data type format: {} of Type({})".format(dtype, type(dtype))
         )
 
@@ -145,7 +146,7 @@ def get_concrete_type(dtype):
     elif hcl_d.StructType.isinstance(dtype):
         return hcl_d.StructType(dtype)
     else:
-        raise RuntimeError("Unrecognized data type: {}".format(dtype))
+        raise DTypeError("Unrecognized data type: {}".format(dtype))
 
 
 def get_bitwidth(dtype):
@@ -162,7 +163,7 @@ def get_bitwidth(dtype):
     elif hcl_d.UFixedType.isinstance(dtype):
         return dtype.width
     else:
-        raise RuntimeError("Unrecognized data type")
+        raise DTypeError("Unrecognized data type: {}".format(dtype))
 
 
 def print_mlir_type(dtype):
@@ -172,7 +173,7 @@ def print_mlir_type(dtype):
         elif dtype.width == 64:
             return "double"
         else:
-            raise RuntimeError("Not supported data type")
+            raise DTypeError("Not supported data type: {}".format(dtype))
     elif is_integer_type(dtype):
         if isinstance(dtype, IndexType) or dtype.is_signed or dtype.is_signless:
             if dtype.width == 32:
@@ -198,11 +199,11 @@ def print_mlir_type(dtype):
         elif isinstance(dtype, hcl_d.UFixedType):
             return "ap_ufixed<{}, {}>".format(dtype.width, dtype.frac)
         else:
-            raise RuntimeError("Not supported data type: {}".format(dtype))
+            raise DTypeError("Not supported data type: {}".format(dtype))
     elif is_struct_type(dtype):
-        raise RuntimeError("stuct type printing to be implemented")
+        raise NotImpelementedError("struct type printing to be implemented")
     else:
-        raise RuntimeError("Not supported data type: {}".format(dtype))
+        raise DTypeError("Not supported data type: {}".format(dtype))
 
 
 def mlir_type_to_str(dtype):
@@ -227,7 +228,7 @@ def mlir_type_to_str(dtype):
         type_str = type_str[:-2] + ")"
         return type_str
     else:
-        raise RuntimeError("Unrecognized data type: {}".format(dtype))
+        raise DTypeError("Unrecognized data type: {}".format(dtype))
 
 
 class HCLMLIRInsertionPoint(object):
@@ -256,7 +257,7 @@ GlobalInsertionPoint = HCLMLIRInsertionPoint()
 
 
 def floating_point_error(op_name):
-    return RuntimeError("{} does not support floating point inputs".format(op_name))
+    return DTypeError("{} does not support floating point inputs".format(op_name))
 
 
 def get_hcl_op(expr, dtype=None):
@@ -289,7 +290,7 @@ def get_type_rank(dtype):
         base = 0
         width = dtype.width
         if width > 2048:
-            raise RuntimeError("Cannot support integer width larger than 2048")
+            raise DTypeError("Cannot support integer width larger than 2048")
         base += width
         return base
     elif is_fixed_type(dtype):
@@ -309,10 +310,10 @@ def get_type_rank(dtype):
         elif isinstance(dtype, F64Type):
             base += 3
         else:
-            raise RuntimeError("Type error: {}".format(dtype))
+            raise DTypeError("Unrecognized floating point type: {}".format(dtype))
         return base
     else:
-        raise RuntimeError("Type error: {}".format(dtype))
+        raise DTypeError("Unrecognized type: {}".format(dtype))
 
 
 def cast_types(lhs, rhs):
@@ -329,17 +330,20 @@ def cast_types(lhs, rhs):
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
         res_type = F64Type.get()
+        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
         return lhs, CastOp(rhs, res_type)
     # 3) Otherwise, if lhs is float
     elif isinstance(ltype, F32Type):
         # integer type to float
         res_type = F32Type.get()
+        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
         return lhs, CastOp(rhs, res_type)
     # 4) Otherwise, if lhs is integer.
     elif isinstance(ltype, (IntegerType, IndexType)):
         # 4.1) lhs is int or index, rhs is int of lower rank, rhs gets promoted
         if isinstance(rtype, IntegerType):
             res_type = ltype
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
             return lhs, CastOp(rhs, res_type)
         # 4.2) lhs is index, rhs is also index, nothing to do
         elif isinstance(rtype, IndexType):
@@ -348,34 +352,31 @@ def cast_types(lhs, rhs):
         # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2)
         elif is_signed_fixed_type(rtype):
             res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
+            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
         # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
         elif is_unsigned_fixed_type(rtype):
             res_type = hcl_d.UFixedType.get(ltype.width + rtype.frac, rtype.frac)
+            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
             # unexpected type
-            raise RuntimeError("Unexpected type: {}".format(rtype))
+            raise DTypeError("Unexpected type: {}".format(rtype))
     # 5) Otherwise, if lhs is fixed type.
     elif is_fixed_type(ltype):
         # 5.1) lhs is fixed point, rhs is integer or fixed point of lower rank, cast rhs to lhs
         if is_integer_type(rtype) or is_fixed_type(rtype):
             res_type = ltype
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
             return lhs, CastOp(rhs, res_type)
         else:
             # unexpected type
-            raise RuntimeError("Unexpected type: {}".format(rtype))
+            raise DTypeError("Unexpected type: {}".format(rtype))
     else:
-        raise RuntimeError("Type conversion failed")
-    # TODO(Niansong): add back warning for type casts
-    # warnings.warn(
-    #     "Types of {} ({}) and {} ({}) are different. Implicitly cast {} to {}.".format(
-    #         lhs, ltype, rhs, rtype, rtype, res_type
-    #     ),
-    #     RuntimeWarning,
-    # )
-    # return lhs, CastOp(rhs, res_type)
+        raise DTypeError("Type conversion failed, lhs type: {}, rhs type: {}".format(ltype, rtype))
 
 
 # TODO(Niansong): this should be covered by cast_types, double-check before removing
@@ -2133,6 +2134,15 @@ class ASTVisitor:
             raise RuntimeError("Not an affine index!")
 
     def erase_op(self, expr):
+        # If expr is a "pass-through" op,
+        # i.e. the op is not a real op, its `op` is None,
+        # remove its built_op without erasing
+        # its built_op. An example is the ConstantOp,
+        # whose op can be set to None representing 
+        # a pass-through op.
+        if expr.op is None:
+            expr.built_op = None
+            return
         expr.built_op.operation.erase()
         expr.built_op = None
 

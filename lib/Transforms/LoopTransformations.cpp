@@ -1524,10 +1524,17 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   // also update `if` structure that uses this axis
   // e.g. #set1 = affine_set<(d0, d1, d2, d3) : (d0 + d1 >= 0,
   // -(d0 + d1) + 7 >= 0, d2 + d3 >= 0, -(d2 + d3) + 7 >= 0)>
-  nonReductionLoops[loopAxis].walk([&](AffineIfOp ifop) {
+  nonReductionLoops[loopAxis].walk([&](AffineIfOp ifOp) {
+    int operandIdx = -1;
+    for (auto item : llvm::enumerate(ifOp.getOperands())) {
+      if (item.value() == nonReductionLoops[loopAxis].getInductionVar()) {
+        operandIdx = item.index();
+        break;
+      }
+    }
     // get the if condition
-    auto condSet = ifop.getIntegerSet();
-    OpBuilder builder(ifop);
+    auto condSet = ifOp.getIntegerSet();
+    OpBuilder builder(ifOp);
     auto distanceCst = builder.getAffineConstantExpr(distance);
     SmallVector<AffineExpr> newConds;
     for (auto cond : condSet.getConstraints()) {
@@ -1542,7 +1549,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
           }
         }
       });
-      if (cond.isFunctionOfDim(axis)) {
+      if (cond.isFunctionOfDim(operandIdx)) {
         if (!sign)
           newConds.push_back(cond - distanceCst);
         else
@@ -1554,7 +1561,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     auto newCondSet = IntegerSet::get(
         condSet.getNumDims() /*dimCount*/, 0 /*symbolCount*/,
         newConds /*ArrayRef<AffineExpr> constraints*/, condSet.getEqFlags());
-    ifop.setIntegerSet(newCondSet);
+    ifOp.setIntegerSet(newCondSet);
   });
 
   // 13) Rewrite original memref to load from buffer

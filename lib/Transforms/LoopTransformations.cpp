@@ -1701,7 +1701,9 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     SmallVector<bool> eqFlags{false};
     if (stride != 1) {
       auto strideCst = builder.getAffineConstantExpr(stride);
-      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      auto distanceCst = builder.getAffineConstantExpr(distance);
+      constraints.push_back((builder.getAffineDimExpr(0) - distanceCst) %
+                            strideCst);
       eqFlags.push_back(true);
     }
     auto ifCondSet = IntegerSet::get(
@@ -1727,7 +1729,9 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
     SmallVector<bool> eqFlags{false};
     if (stride != 1) {
       auto strideCst = builder.getAffineConstantExpr(stride);
-      constraints.push_back(builder.getAffineDimExpr(0) % strideCst);
+      auto distanceCst = builder.getAffineConstantExpr(distance);
+      constraints.push_back((builder.getAffineDimExpr(0) - distanceCst) %
+                            strideCst);
       eqFlags.push_back(true);
     }
     auto ifCondSet = IntegerSet::get(

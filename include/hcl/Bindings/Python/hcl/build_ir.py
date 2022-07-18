@@ -329,20 +329,20 @@ def cast_types(lhs, rhs):
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
         res_type = F64Type.get()
-        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
         return lhs, CastOp(rhs, res_type)
     # 3) Otherwise, if lhs is float
     elif isinstance(ltype, F32Type):
         # integer type to float
         res_type = F32Type.get()
-        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
         return lhs, CastOp(rhs, res_type)
     # 4) Otherwise, if lhs is integer.
     elif isinstance(ltype, (IntegerType, IndexType)):
         # 4.1) lhs is int or index, rhs is int of lower rank, rhs gets promoted
         if isinstance(rtype, IntegerType):
             res_type = ltype
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
             return lhs, CastOp(rhs, res_type)
         # 4.2) lhs is index, rhs is also index, nothing to do
         elif isinstance(rtype, IndexType):
@@ -351,15 +351,15 @@ def cast_types(lhs, rhs):
         # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2)
         elif is_signed_fixed_type(rtype):
             res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
-            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type))
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
         # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
         elif is_unsigned_fixed_type(rtype):
             res_type = hcl_d.UFixedType.get(ltype.width + rtype.frac, rtype.frac)
-            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type))
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
             # unexpected type
@@ -369,7 +369,7 @@ def cast_types(lhs, rhs):
         # 5.1) lhs is fixed point, rhs is integer or fixed point of lower rank, cast rhs to lhs
         if is_integer_type(rtype) or is_fixed_type(rtype):
             res_type = ltype
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type))
+            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
             return lhs, CastOp(rhs, res_type)
         else:
             # unexpected type

@@ -4,7 +4,6 @@
 #
 # ===----------------------------------------------------------------------=== #
 
-import warnings
 from typing import List
 
 import numpy as np
@@ -376,15 +375,17 @@ def cast_types(lhs, rhs):
             # unexpected type
             raise DTypeError("Unexpected type: {}".format(rtype))
     else:
-        raise DTypeError("Type conversion failed, lhs type: {}, rhs type: {}".format(ltype, rtype))
+        raise DTypeError(
+            "Type conversion failed, lhs type: {}, rhs type: {}".format(ltype, rtype)
+        )
 
 
 # TODO(Niansong): this should be covered by cast_types, double-check before removing
 def regularize_fixed_type(lhs, rhs):
     if not is_fixed_type(lhs.dtype) or not is_fixed_type(rhs.dtype):
-        raise RuntimeError("Should be all fixed types")
+        raise DTypeError("Should be all fixed types")
     if not lhs.dtype.frac == rhs.dtype.frac:
-        raise RuntimeError("Should have the same frac")
+        raise DTypeError("Should have the same frac")
     lwidth = lhs.dtype.width
     rwidth = rhs.dtype.width
     if lwidth < rwidth:
@@ -417,7 +418,7 @@ class ExprOp(object):
         if (hasattr(lhs, "v") and lhs.v is not None) or (
             hasattr(rhs, "v") and rhs.v is not None
         ):
-            raise RuntimeError(
+            raise APIError(
                 "Cannot use hcl.scalar to construct expression, "
                 + "use hcl.scalar.v instead"
             )
@@ -464,7 +465,7 @@ class ExprOp(object):
     def generic_scalar_tensor_access(scalar):
         # check scalar shape
         if scalar.shape != (1,):
-            raise RuntimeError(
+            raise TensorError(
                 "Scalar should be 1D: got {} instead".format(scalar.shape)
             )
         return scalar[0]
@@ -540,7 +541,7 @@ class ExprOp(object):
         return self.generic_integer_op(XOrOp, self, other)
 
     def __invert__(self):
-        raise RuntimeError("Not implemented")
+        raise NotImpelementedError("__invert__ is not implemented")
 
     def __lt__(self, other):
         return self.generic_op(CmpOp, self, other, arg="lt")
@@ -572,12 +573,12 @@ class ExprOp(object):
 
     def __getitem__(self, indices):
         if not is_integer_type(self.dtype):
-            raise RuntimeError("Only integers can access the bits")
+            raise APIError("Only integers can access the bits")
         if isinstance(indices, slice):
             lo, hi = indices.start, indices.stop
             if isinstance(lo, int) and isinstance(hi, int):
                 if lo > hi:
-                    raise RuntimeError(
+                    raise APIError(
                         "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
                     )
                 elif lo == hi:
@@ -590,23 +591,23 @@ class ExprOp(object):
             if not isinstance(indices, tuple):
                 indices = (indices,)
             if not len(indices) == 1:
-                raise RuntimeError("Can only access one bit of the integer")
+                raise APIError("Can only access one bit of the integer")
             index = indices[0]
             return GetBitOp(self, index)
 
     def __setitem__(self, indices, expr):
         if not is_integer_type(self.dtype):
-            raise RuntimeError("Only integers can access the bits")
+            raise APIError("Only integers can access the bits")
         if isinstance(indices, slice):
             lo, hi = indices.start, indices.stop
             if isinstance(lo, int) and isinstance(hi, int):
                 if lo > hi:
-                    raise RuntimeError(
+                    raise APIError(
                         "Lower bound should be smaller than upper bound. Use `.reverse()` if you want to reverse the bits"
                     )
                 elif lo == hi:  # e.g. [2:2]
                     if not isinstance(expr, LoadOp):
-                        raise RuntimeError(
+                        raise APIError(
                             "Please check the expression to make sure the lower bound not equal to the upper bound"
                         )
                     else:
@@ -619,17 +620,17 @@ class ExprOp(object):
             if not isinstance(indices, tuple):
                 indices = (indices,)
             if not len(indices) == 1:
-                raise RuntimeError("Can only access one bit of the integer")
+                raise APIError("Can only access one bit of the integer")
             indices = indices[0]
             return SetBitOp(self, indices, expr)
 
     def reverse(self):
         if not is_integer_type(self.dtype):
-            raise RuntimeError("Only integers can reverse the bits")
+            raise APIError("Only integers can reverse the bits")
         return BitReverseOp(self)
 
     def __nonzero__(self):
-        raise RuntimeError(
+        raise APIError(
             "1) Cannot use and / or / not operator to Expr, "
             + "2) Cannot compare NumPy numbers with HeteroCL exprs, "
             + "hint: swap the operands"
@@ -666,7 +667,7 @@ class ExprOp(object):
         expr : Expr
             Expression with new type
         """
-        raise RuntimeError("Not implemented")
+        raise NotImpelementedError("astype is not implemented")
 
     def __getattr__(self, key):
         """Access a field from a struct value.
@@ -692,7 +693,7 @@ class ExprOp(object):
             # access a field from a struct tensor
             key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
             if key not in key_list:
-                raise RuntimeError("No such field: " + key)
+                raise HCLValueError("No such field: " + key)
             key_idx = key_list.index(key)
             return StructGetOp(self, key_idx)
         else:
@@ -765,7 +766,7 @@ class ConstantOp(ExprOp):
                 if self.dtype.width <= 64:
                     np_dtype = np.int64
                 else:
-                    raise RuntimeError(
+                    raise DTypeError(
                         "Integer width ({}) too large, not supported by numpy".format(
                             self.dtype
                         )
@@ -778,7 +779,7 @@ class ConstantOp(ExprOp):
                 elif isinstance(self.dtype, F64Type):
                     np_dtype = np.float64
                 else:
-                    raise RuntimeError("Unrecognized data type")
+                    raise DTypeError("Unrecognized data type")
             elif is_fixed_type(self.dtype):  # Fixed point
                 if is_signed_type(self.dtype):
                     sb = 1 << self.dtype.width
@@ -796,7 +797,7 @@ class ConstantOp(ExprOp):
                     self.val = np.fix(self.val) % sb
                 np_dtype = np.int64
             else:
-                raise RuntimeError("Unrecognized data type")
+                raise DTypeError("Unrecognized data type: {}".format(self.dtype))
 
             self.val = np.array(self.val, dtype=np_dtype)
             if is_integer_type(self.dtype) or is_fixed_type(self.dtype):
@@ -829,7 +830,8 @@ class ConstantOp(ExprOp):
                 self.tensor = tensor_wrapper
                 fixed_memref_type = MemRefType.get(self.val.shape, self.dtype)
                 store = hcl_d.GetGlobalFixedOp(
-                    fixed_memref_type, FlatSymbolRefAttr.get(self.name),
+                    fixed_memref_type,
+                    FlatSymbolRefAttr.get(self.name),
                     ip=GlobalInsertionPoint.get(),
                 )
             else:
@@ -879,7 +881,7 @@ class ConstantOp(ExprOp):
                 elif isinstance(self.dtype, IndexType):
                     value_attr = IntegerAttr.get(IndexType.get(), self.val)
                 else:
-                    raise RuntimeError(
+                    raise DTypeError(
                         "Type error: unrecognized type: " + str(self.dtype)
                     )
                 if is_unsigned_type(self.dtype):
@@ -958,14 +960,14 @@ class TensorSlice(ExprOp):
             #     load.build()
             return load
         else:
-            raise RuntimeError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
             # TODO(Niansong): I think this is doable actually
-            raise RuntimeError("Writing to a slice of tensor is not allowed.")
+            raise NotImpelementedError("Writing to a slice of tensor is not allowed.")
         elif len(self.indices + indices) == len(self.shape):
             new_indices = []
             for index in indices:
@@ -974,13 +976,13 @@ class TensorSlice(ExprOp):
                 new_indices.append(index)
             return StoreOp(expr, self.parent, list(self.indices) + new_indices)
         else:
-            raise RuntimeError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions")
 
 
 class TensorOp(ExprOp):
     def __init__(self, shape, op, dtype, name=None):
         if op != memref.AllocOp and not isinstance(op, BlockArgument):
-            raise RuntimeError("Not supported TensorOp. Got {}".format(op))
+            raise TensorError("Not supported TensorOp. Got {}".format(op))
         super().__init__(op)
         self.shape = shape
         self.dtype = dtype
@@ -998,7 +1000,7 @@ class TensorOp(ExprOp):
         elif isinstance(self.op, BlockArgument):
             self.built_op = self.op
         else:
-            raise RuntimeError(
+            raise TensorError(
                 "TensorOp should use memref.AllocOp or BlockArgument to implement. Got {}".format(
                     self.op
                 )
@@ -1029,7 +1031,7 @@ class TensorOp(ExprOp):
         if len(self.shape) == 1 and self.shape[0] == 1:
             return self.__getitem__(0)
         else:
-            raise RuntimeError(".v can only be used on mutable scalars")
+            raise TensorError(".v can only be used on mutable scalars")
 
     @v.setter
     def v(self, value):
@@ -1062,14 +1064,14 @@ class TensorOp(ExprOp):
             #     load.build()
             return load
         else:
-            raise RuntimeError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions")
 
     def __setitem__(self, indices, expr):
         if not isinstance(indices, tuple):
             indices = (indices,)
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
-            raise RuntimeError("Writing to a slice of tensor is not allowed.")
+            raise NotImpelementedError("Writing to a slice of tensor is not allowed.")
         elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
@@ -1080,7 +1082,7 @@ class TensorOp(ExprOp):
             expr = get_hcl_op(expr)
             return StoreOp(expr, self, new_indices)
         else:
-            raise RuntimeError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions")
 
 
 #################################################
@@ -1103,7 +1105,7 @@ class UnaryOp(ExprOp):
             elif is_fixed_type(dtype):
                 self.op = op["fixed"]
             else:
-                raise RuntimeError("Unsupported types")
+                raise DTypeError("Unsupported types for unary op: {}".format(dtype))
         else:
             self.op = op
         if flags.BUILD_INPLACE:
@@ -1130,7 +1132,7 @@ class BinaryOp(ExprOp):
             elif is_fixed_type(dtype):
                 self.op = op["fixed"]
             else:
-                raise RuntimeError("Unsupported types")
+                raise DTypeError("Unsupported types for binary op: {}".format(dtype))
         else:
             self.op = op
         if flags.BUILD_INPLACE:
@@ -1243,7 +1245,7 @@ class CmpOp(BinaryOp):
                     "u" + arg if arg not in ["eq", "ne"] else arg
                 ]
         else:
-            raise RuntimeError("Unsupported types")
+            raise DTypeError("Unsupported types for CmpOp: {}".format(dtype))
         super().__init__(self.op, IntegerType.get_signless(1), lhs, rhs)
 
     def build(self):
@@ -1526,10 +1528,10 @@ class CastOp(ExprOp):
                 op = hcl_d.FixedToFixedOp
         else:
             op = builtin.UnrealizedConversionCastOp
-            warnings.warn(
-                "Unrealized conversion cast: {} -> {}".format(self.val.dtype, res_type),
-                RuntimeWarning,
-            )
+            DTypeWarning(
+                "Unrealized conversion cast: {} -> {}".format(self.val.dtype, res_type)
+            ).warn()
+
         super().__init__(op, res_type)
         if flags.BUILD_INPLACE:
             self.build()
@@ -1581,12 +1583,11 @@ class GetBitOp(ExprOp):
             index = ConstantOp(IndexType.get(), index)
         self.index = index
         if not isinstance(self.index.dtype, IndexType):
-            warnings.warn(
+            DTypeWarning(
                 "GetBitOp's input is not an index. Cast from {} to {}.".format(
                     self.index.dtype, IndexType.get()
-                ),
-                RuntimeWarning,
-            )
+                )
+            ).warn()
             self.index = CastOp(self.index, IndexType.get())
         if flags.BUILD_INPLACE:
             self.build()
@@ -1614,17 +1615,17 @@ class LogicalAndOp(ExprOp):
         self.cond_lst = cond
 
     def build(self):
-        raise RuntimeError("Do not build logical_and op!")
+        raise APIError("Do not build logical_and op")
 
 
 class LogicalOrOp(ExprOp):
     def __init__(self, *cond):
         super().__init__(hcl_d.LogicalOrOp, IntegerType.get_signless(1))
         self.cond_lst = cond
-        raise RuntimeError("Not implemented!")
+        raise MLIRLimitationError("LogicalOrOp not implemented")
 
     def build(self):
-        raise RuntimeError("Do not build logical_or op!")
+        raise APIError("Do not build logical_or op")
 
 
 class SetBitOp(ExprOp):
@@ -1637,19 +1638,18 @@ class SetBitOp(ExprOp):
         if isinstance(val, int):
             val = ConstantOp(IntegerType.get_signless(1), val)
         if not (is_integer_type(val.dtype) and val.dtype.width == 1):
-            raise RuntimeError(
+            raise HCLValueError(
                 "Can only set a bit of 0/1. Got {} with dtype {}.".format(
                     val, val.dtype
                 )
             )
         self.val = val
         if not isinstance(self.index.dtype, IndexType):
-            warnings.warn(
+            DTypeWarning(
                 "SetBitOp's input is not an index. Cast from {} to {}.".format(
                     self.index.dtype, IndexType.get()
-                ),
-                RuntimeWarning,
-            )
+                )
+            ).warn()
             self.index = CastOp(self.index, IndexType.get())
         if flags.BUILD_INPLACE:
             self.build()
@@ -1678,12 +1678,11 @@ class GetSliceOp(ExprOp):
             if isinstance(index, int):
                 index = ConstantOp(IndexType.get(), index)
             if not isinstance(index.dtype, IndexType):
-                warnings.warn(
+                DTypeWarning(
                     "GetSliceOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    ),
-                    RuntimeWarning,
-                )
+                    )
+                ).warn()
                 index = CastOp(index, IndexType.get())
             return index
 
@@ -1719,12 +1718,11 @@ class SetSliceOp(ExprOp):
             if isinstance(index, int):
                 index = ConstantOp(IndexType.get(), index)
             if not isinstance(index.dtype, IndexType):
-                warnings.warn(
+                DTypeWarning(
                     "SetSliceOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    ),
-                    RuntimeWarning,
-                )
+                    )
+                ).warn()
                 index = CastOp(index, IndexType.get())
             return index
 
@@ -1759,12 +1757,11 @@ class LoadOp(ExprOp):
         self.indices = []
         for index in indices:
             if not isinstance(get_mlir_type(index.dtype), IndexType):
-                warnings.warn(
+                DTypeWarning(
                     "LoadOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    ),
-                    RuntimeWarning,
-                )
+                    )
+                ).warn()
                 index = CastOp(index, IndexType.get())
             self.indices.append(index)
         if flags.BUILD_INPLACE:
@@ -1815,24 +1812,20 @@ class StoreOp(ExprOp):
         super().__init__(affine.AffineStoreOp)
         val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
-            warnings.warn(
-                "StoreOp has different input types. Cast from {} to {}.".format(
-                    val.dtype, to_tensor.dtype
-                ),
-                RuntimeWarning,
-            )
+            DTypeWarning(
+                "StoreOp has different input types. Cast from {} to {}.".format(val.dtype, to_tensor.dtype)
+            ).warn()
             val = CastOp(val, to_tensor.dtype)
         self.val = val
         self.to_tensor = to_tensor
         self.indices = []
         for index in indices:
             if not isinstance(get_mlir_type(index.dtype), IndexType):
-                warnings.warn(
+                DTypeWarning(
                     "StoreOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()
-                    ),
-                    RuntimeWarning,
-                )
+                    )
+                ).warn()
                 index = CastOp(index, IndexType.get())
             self.indices.append(index)
         if flags.BUILD_INPLACE:
@@ -1909,7 +1902,7 @@ class SelectOp(ExprOp):
         false_val = get_hcl_op(false_val)
         # do the testing
         if true_val.dtype != false_val.dtype:
-            raise RuntimeError(
+            raise DTypeError(
                 "SelectOp should have two same type of inputs. Got {} and {}".format(
                     true_val.dtype, false_val.dtype
                 )
@@ -2043,7 +2036,7 @@ class ASTVisitor:
     def __init__(self, mode="build"):
         self.iv = []
         if mode not in ["build", "remove", "profile"]:
-            raise RuntimeError(
+            raise APIError(
                 "ASTVisitor only supports build, remove, or profile mode"
             )
         self.mode = mode
@@ -2105,10 +2098,10 @@ class ASTVisitor:
         * AffineExpr can be automatically simplied
         """
         if not isinstance(expr, (IterVar, ConstantOp, CastOp, BinaryOp)):
-            raise RuntimeError("Not an affine index!")
+            raise HCLValueError("Not an affine index!")
         if isinstance(expr, IterVar):
             if isinstance(expr.op.owner.owner, scf.ForOp):
-                raise RuntimeError("Outer loop is not affine!")
+                raise HCLValueError("Outer loop is not affine!")
             if expr.op not in self.iv:
                 self.iv.append(expr.op)  # BlockArgument
                 return AffineExpr.get_dim(len(self.iv) - 1)
@@ -2131,14 +2124,14 @@ class ASTVisitor:
         elif isinstance(expr, RemOp):
             return lhs % rhs
         else:
-            raise RuntimeError("Not an affine index!")
+            raise HCLValueError("Not an affine index!")
 
     def erase_op(self, expr):
         # If expr is a "pass-through" op,
         # i.e. the op is not a real op, its `op` is None,
         # remove its built_op without erasing
         # its built_op. An example is the ConstantOp,
-        # whose op can be set to None representing 
+        # whose op can be set to None representing
         # a pass-through op.
         if expr.op is None:
             expr.built_op = None
@@ -2307,7 +2300,7 @@ class ASTVisitor:
 
     def visit_reduce_op(self, expr):
         if self.mode == "remove":
-            raise RuntimeError("Cannot remove ReduceOp")
+            raise APIError("Cannot remove ReduceOp")
         elif self.mode == "profile":
             return
         # save insetion point
@@ -2349,7 +2342,7 @@ class ASTVisitor:
                 dtype, zero_value.result, ip=GlobalInsertionPoint.get()
             )
         else:
-            raise RuntimeError("Unrecognized data type in reduction op")
+            raise DTypeError("Unrecognized data type in reduction op: {}".format(dtype))
         if is_unsigned_type(expr.dtype):
             zero_value.attributes["unsigned"] = UnitAttr.get()
 
@@ -2404,17 +2397,16 @@ class ASTVisitor:
         elif is_fixed_type(dtype):
             reduce_op = reduce_op["fixed"]
         else:
-            raise RuntimeError("Unsupported type")
+            raise DTypeError("Unsupported type: {}".format(dtype))
         data_type = get_concrete_type(data.result.type)
         if "unsigned" in data.attributes:
             data_type = IntegerType.get_unsigned(data_type.width)
         if dtype != data_type:
-            warnings.warn(
+            DTypeWarning(
                 "Reduction variable should have the same type with the data. Got {0} and {1}. Do type casting from {1} to {0}".format(
                     dtype, data_type
-                ),
-                RuntimeWarning,
-            )
+                )
+            ).warn()
             placeholder = ExprOp(None, dtype=data_type)
             placeholder.built_op = data
             data = CastOp(placeholder, dtype)
@@ -2458,7 +2450,7 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
     # TODO: need to test if lb, ub, step are all affine
     # Construct step
     if not isinstance(step, int):
-        raise RuntimeError("Not supported")
+        raise NotImpelementedError("int type step is not supported")
     if step < 0:  # need to also change induction variable
         lb, ub = ub + 1, lb + 1  # swap
         step = -step
@@ -2525,7 +2517,7 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
 def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, (CmpOp, LogicalAndOp)):
-        raise RuntimeError("`if` operation condition should be CmpOp")
+        raise HCLValueError("`if` operation condition should be CmpOp")
     visitor = ASTVisitor(mode="profile")
     if isinstance(cond, LogicalAndOp):
         lst = cond.cond_lst
@@ -2565,7 +2557,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
             if not isinstance(
                 cond.lhs.dtype, (IntegerType, IndexType)
             ) or not isinstance(cond.rhs.dtype, (IntegerType, IndexType)):
-                raise RuntimeError("`affine.if` can only support integer comparison")
+                raise HCLValueError("`affine.if` can only support integer comparison")
             # only support affine expressions now (i.e. calculations on iteration variables)
             if cond.arg == 0:  # eq
                 # lhs==rhs
@@ -2573,7 +2565,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
                 new_conds.append(cond.lhs - cond.rhs)
             elif cond.arg == 1:  # ne
                 # lhs>rhs and lhs<rhs
-                raise RuntimeError("Not supported for `affine.if`")
+                raise MLIRLimitationError("ne is not supported for `affine.if`")
             elif cond.arg == 2:  # slt
                 # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
                 eq_flags.append(False)
@@ -2591,7 +2583,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
                 eq_flags.append(False)
                 new_conds.append(cond.lhs - cond.rhs)
             else:
-                raise RuntimeError("Predicate of CmpOp")
+                raise HCLValueError("Unknown predicate of CmpOp: {}".format(cond.arg))
 
             if cond.built_op is not None:
                 cond.built_op.operation.erase()
@@ -2632,7 +2624,7 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
 def make_while(cond, ip=None):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, CmpOp):
-        raise RuntimeError("`if` operation condition should be CmpOp")
+        raise HCLValueError("`if` operation condition should be CmpOp")
     while_op = scf.WhileOp([], [], ip=ip)
     while_op.before.blocks.append(*[])
     while_op.after.blocks.append(*[])

@@ -2484,7 +2484,13 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
 
   // 5) Create a new function
   auto builder = OpBuilder(f);
-  TypeRange argTypes = ValueRange(newMemrefs).getTypes();
+  SmallVector<mlir::Type> TypeArr;
+  for (auto memref : newMemrefs)
+    TypeArr.push_back(memref.getType());
+  if (outlineOp->hasAttr("param")) {
+    TypeArr.push_back(IndexType::get(f.getContext()));
+  }
+  TypeRange argTypes(TypeArr);
   FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
   std::string func_name = "Stage";
   for (auto stage_name : stageNames) {
@@ -2528,6 +2534,19 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
 
   // 6) Create callop in the main function
   OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+
+  if (outlineOp->hasAttr("param")) {
+    auto loop_name = outlineOp->getAttr("param").cast<StringAttr>().getValue();
+    AffineForOp forOp = rootForOps[0];
+    getLoop(forOp, loop_name);
+    auto idx = call_builder.create<arith::ConstantIndexOp>(
+        rootForOps[rootForOps.size() - 1].getLoc(),
+        forOp.getConstantUpperBound());
+    allMemrefs.push_back(idx);
+    // update loop bound
+    auto affineMap = builder.getSymbolIdentityMap();
+    forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)}, affineMap);
+  }
   call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(), func,
                               allMemrefs);
 

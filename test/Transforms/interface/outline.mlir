@@ -44,4 +44,49 @@ module {
     hcl.outline (%7, %11)
     return %8 : memref<10x32xi32>
   }
+  func @top2(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
+    %0 = memref.alloc() {name = "C1"} : memref<10x32xi32>
+    %1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
+    %2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
+    affine.for %arg1 = 0 to 10 {
+      affine.for %arg2 = 0 to 32 {
+        %12 = affine.load %arg0[%arg1, %arg2] {from = "A1"} : memref<10x32xi32>
+        %c1_i32 = arith.constant 1 : i32
+        %13 = arith.addi %12, %c1_i32 : i32
+        affine.store %13, %0[%arg1, %arg2] {to = "C1"} : memref<10x32xi32>
+      } {loop_name = "j"}
+    } {loop_name = "i", stage_name = "C1"}
+    %3 = hcl.create_stage_handle "C1" : !hcl.StageHandle
+    %4 = memref.alloc() {name = "D"} : memref<10x32xi32>
+    %5 = hcl.create_loop_handle "i" : !hcl.LoopHandle
+    %6 = hcl.create_loop_handle "j" : !hcl.LoopHandle
+    affine.for %arg1 = 0 to 10 {
+      affine.for %arg2 = 0 to 32 {
+        %12 = affine.load %0[%arg1, %arg2] {from = "C1"} : memref<10x32xi32>
+        %c2_i32 = arith.constant 2 : i32
+        %13 = arith.muli %12, %c2_i32 : i32
+        affine.store %13, %4[%arg1, %arg2] {to = "D1"} : memref<10x32xi32>
+      } {loop_name = "j"}
+    } {loop_name = "i", stage_name = "D1"}
+    %7 = hcl.create_stage_handle "D1" : !hcl.StageHandle
+    %8 = memref.alloc() {name = "E1"} : memref<10x32xi32>
+    %9 = hcl.create_loop_handle "i" : !hcl.LoopHandle
+    %10 = hcl.create_loop_handle "j" : !hcl.LoopHandle
+    affine.for %arg1 = 0 to 10 {
+      affine.for %arg2 = 0 to 32 {
+        %12 = affine.load %4[%arg1, %arg2] {from = "D1"} : memref<10x32xi32>
+        %c3_i32 = arith.constant 3 : i32
+        %13 = arith.muli %12, %c3_i32 : i32
+        affine.store %13, %8[%arg1, %arg2] {to = "E1"} : memref<10x32xi32>
+      } {loop_name = "j"}
+    } {loop_name = "i", stage_name = "E1"}
+    %11 = hcl.create_stage_handle "E1" : !hcl.StageHandle
+    // CHECK: call @Stage_C1
+    hcl.outline (%3) {param = ["i", "j"]}
+    // CHECK: call @Stage_C1
+    hcl.outline (%7) {param = ["i", "j"], merge="Stage_C1"}
+    // CHECK: call @Stage_C1
+    hcl.outline (%11) {param = ["i", "j"], merge="Stage_C1"}
+    return %8 : memref<10x32xi32>
+  }
 }

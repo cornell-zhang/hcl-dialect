@@ -2462,7 +2462,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   }
   SmallVector<Value> newMemrefs(allMemrefs);
 
-  // 5.0) If the function has been built, directly call it
+  // 5) If the function has been built, directly call it
   if (outlineOp->hasAttr("merge")) {
     FuncOp targetFunc;
     auto preFuncName =
@@ -2474,6 +2474,22 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       }
     }
     OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+    if (outlineOp->hasAttr("param")) {
+      auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
+      for (auto loopNameAttr : loopNames) {
+        auto loopName = loopNameAttr.cast<StringAttr>().getValue();
+        AffineForOp forOp = rootForOps[0];
+        getLoop(forOp, loopName);
+        auto idx = call_builder.create<arith::ConstantIndexOp>(
+            rootForOps[rootForOps.size() - 1].getLoc(),
+            forOp.getConstantUpperBound());
+        allMemrefs.push_back(idx);
+        // update loop bound
+        auto affineMap = call_builder.getSymbolIdentityMap();
+        forOp.setUpperBound({targetFunc.getArgument(allMemrefs.size() - 1)},
+                            affineMap);
+      }
+    }
     call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
                                 targetFunc, allMemrefs);
     for (auto rootForOp : rootForOps) {
@@ -2482,7 +2498,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     return success();
   }
 
-  // 5) Create a new function
+  // 6) Create a new function
   auto builder = OpBuilder(f);
   SmallVector<mlir::Type> TypeArr;
   for (auto memref : newMemrefs)
@@ -2535,9 +2551,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());
 
-  // 6) Create callop in the main function
+  // 7) Create callop in the main function
   OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
-
   if (outlineOp->hasAttr("param")) {
     auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
     for (auto loopNameAttr : loopNames) {
@@ -2556,7 +2571,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(), func,
                               allMemrefs);
 
-  // 7) Move original stage to the new function
+  // 8) Move original stage to the new function
   for (auto rootForOp : rootForOps) {
     rootForOp->moveBefore(ret);
   }
@@ -2564,7 +2579,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     op->moveBefore(rootForOps[0]);
   }
 
-  // 8) Update memrefs
+  // 9) Update memrefs
   for (auto item : llvm::enumerate(newMemrefs)) {
     auto newMemref = func.getArgument(item.index());
     auto oldMemref = item.value();

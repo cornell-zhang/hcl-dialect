@@ -164,6 +164,12 @@ class MLIRLimitationError(HCLError):
         category_str = bcolors.FAIL + "[MLIR Limitation]" + bcolors.ENDC
         HCLError.__init__(self, msg, line, category_str)
 
+class HCLValueError(HCLError):
+    """A subclass for specifying HCL value exception"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.FAIL + "[Value Error]" + bcolors.ENDC
+        HCLError.__init__(self, msg, line, category_str)
 
 """ New Warning subclasses """
 class DTypeWarning(HCLWarning):

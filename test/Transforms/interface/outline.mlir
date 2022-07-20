@@ -86,7 +86,8 @@ module {
     // CHECK: call @Stage_C1
     hcl.outline (%7) {param = ["i", "j"], merge="Stage_C1"}
     // CHECK: affine.for %[[ARG:.*]] = 0 to 10 {
-    // CHECK:   call @Stage_E1
+    // CHECK:   affine.for %[[ARG1:.*]] = 0 to 32 {
+    // CHECK:     call @Stage_E1
     hcl.outline (%11) {axis = "j"}
     return %8 : memref<10x32xi32>
   }

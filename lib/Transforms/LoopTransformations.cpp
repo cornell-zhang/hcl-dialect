@@ -2517,7 +2517,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     auto loopName = outlineOp->getAttr("axis").cast<StringAttr>().getValue();
     targetForOp = rootForOps[0];
     axis = getLoop(targetForOp, loopName);
-    for (int i = 0; i < axis; ++i)
+    for (int i = 0; i <= axis; ++i)
       TypeArr.push_back(IndexType::get(f.getContext()));
   } else {
     targetForOp = rootForOps[rootForOps.size() - 1];
@@ -2580,10 +2580,13 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)}, affineMap);
     }
   } else if (outlineOp->hasAttr("axis")) {
+    call_builder = OpBuilder(&(targetForOp.getBody()->back()));
     AffineForOp innerLoop = rootForOps[0];
     int cntAxis = 0;
-    while (cntAxis < axis) {
+    while (cntAxis <= axis) {
       allMemrefs.push_back(innerLoop.getInductionVar());
+      if (cntAxis == axis)
+        break;
       for (auto loop : innerLoop.getOps<AffineForOp>()) {
         innerLoop = loop;
         break;
@@ -2595,7 +2598,11 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
 
   // 8) Move original stage to the new function
   if (outlineOp->hasAttr("axis")) {
-    targetForOp->moveBefore(ret);
+    auto &targetBody = targetForOp.getBody()->getOperations();
+    auto &funcBody = func.front().getOperations();
+    // the last two ops are yield and callop
+    funcBody.splice(funcBody.begin(), targetBody, targetBody.begin(),
+                    std::prev(std::prev(targetBody.end())));
   } else {
     for (auto rootForOp : rootForOps) {
       rootForOp->moveBefore(ret);
@@ -2610,14 +2617,16 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     for (auto item : llvm::enumerate(newMemrefs)) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();
-      replaceAllUsesInRegionWith(oldMemref, newMemref, targetForOp.region());
+      replaceAllUsesInRegionWith(oldMemref, newMemref, func.getBody());
     }
     AffineForOp innerLoop = rootForOps[0];
     int cntAxis = 0;
-    while (cntAxis < axis) {
+    while (cntAxis <= axis) {
       replaceAllUsesInRegionWith(innerLoop.getInductionVar(),
                                  func.getArgument(newMemrefs.size() + cntAxis),
-                                 targetForOp.region());
+                                 func.getBody());
+      if (cntAxis == axis)
+        break;
       for (auto loop : innerLoop.getOps<AffineForOp>()) {
         innerLoop = loop;
         break;

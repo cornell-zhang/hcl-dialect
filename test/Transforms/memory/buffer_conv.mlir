@@ -3,11 +3,11 @@
 module {
   func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>)
   {
-    %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-    %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-    %lry = hcl.create_loop_handle "ry" : !hcl.LoopHandle
-    %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
-    %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    %li = hcl.create_loop_handle "i"
+    %lj = hcl.create_loop_handle "j"
+    %lry = hcl.create_loop_handle "ry"
+    %lrx = hcl.create_loop_handle "rx"
+    %s = hcl.create_op_handle "s"
     affine.for %i = 0 to 30 {
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30xf32>
       // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -35,20 +35,20 @@ module {
       // CHECK:   %[[RES:.*]] = affine.load %[[MEM]][%[[VAR]]] : memref<30xf32>
       // CHECK:   affine.store %[[RES]], {{.*}}[{{.*}}, %[[VAR]]] : memref<30x30xf32>
       // CHECK: } {buffer, loop_name = "j_back", pipeline_ii = 1 : i32}
-    } { loop_name = "i", stage_name = "s" }
+    } { loop_name = "i", op_name = "s" }
     hcl.reorder(%s, %lry, %lrx, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<30x30xf32>, %li) -> memref<30xf32>
     return
   }
   func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
-    %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-    %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-    %lrc = hcl.create_loop_handle "rc" : !hcl.LoopHandle
-    %lry = hcl.create_loop_handle "ry" : !hcl.LoopHandle
-    %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
-    %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    %loc = hcl.create_loop_handle "oc"
+    %li = hcl.create_loop_handle "i"
+    %lj = hcl.create_loop_handle "j"
+    %lrc = hcl.create_loop_handle "rc"
+    %lry = hcl.create_loop_handle "ry"
+    %lrx = hcl.create_loop_handle "rx"
+    %s = hcl.create_op_handle "s"
     affine.for %oc = 0 to 6 { // out channel
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
@@ -66,20 +66,20 @@ module {
           } { loop_name = "rc", reduction = 1 }
         } { loop_name = "j" }
       } { loop_name = "i" }
-    } {loop_name = "oc", stage_name = "s" }
+    } {loop_name = "oc", op_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %li) -> memref<30xf32>
     return
   }
   func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
-    %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-    %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-    %lrc = hcl.create_loop_handle "rc" : !hcl.LoopHandle
-    %lry = hcl.create_loop_handle "ry" : !hcl.LoopHandle
-    %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
-    %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    %loc = hcl.create_loop_handle "oc"
+    %li = hcl.create_loop_handle "i"
+    %lj = hcl.create_loop_handle "j"
+    %lrc = hcl.create_loop_handle "rc"
+    %lry = hcl.create_loop_handle "ry"
+    %lrx = hcl.create_loop_handle "rx"
+    %s = hcl.create_op_handle "s"
     affine.for %oc = 0 to 6 { // out channel
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
@@ -97,19 +97,19 @@ module {
           } { loop_name = "rc", reduction = 1 }
         } { loop_name = "j" }
       } { loop_name = "i" }
-    } {loop_name = "oc", stage_name = "s" }
+    } {loop_name = "oc", op_name = "s" }
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %lj) -> memref<1xf32>
     return
   }
   func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
-    %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-    %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-    %lrc = hcl.create_loop_handle "rc" : !hcl.LoopHandle
-    %lry = hcl.create_loop_handle "ry" : !hcl.LoopHandle
-    %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
-    %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    %loc = hcl.create_loop_handle "oc"
+    %li = hcl.create_loop_handle "i"
+    %lj = hcl.create_loop_handle "j"
+    %lrc = hcl.create_loop_handle "rc"
+    %lry = hcl.create_loop_handle "ry"
+    %lrx = hcl.create_loop_handle "rx"
+    %s = hcl.create_op_handle "s"
     affine.for %oc = 0 to 6 { // out channel
     // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
     // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -141,19 +141,19 @@ module {
       // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
       // CHECK: } {buffer, loop_name = "i_back"}
-    } {loop_name = "oc", stage_name = "s" }
+    } {loop_name = "oc", op_name = "s" }
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %loc) -> memref<30x30xf32>
     return
   }
   func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc" : !hcl.LoopHandle
-    %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-    %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-    %lrc = hcl.create_loop_handle "rc" : !hcl.LoopHandle
-    %lry = hcl.create_loop_handle "ry" : !hcl.LoopHandle
-    %lrx = hcl.create_loop_handle "rx" : !hcl.LoopHandle
-    %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+    %loc = hcl.create_loop_handle "oc"
+    %li = hcl.create_loop_handle "i"
+    %lj = hcl.create_loop_handle "j"
+    %lrc = hcl.create_loop_handle "rc"
+    %lry = hcl.create_loop_handle "ry"
+    %lrx = hcl.create_loop_handle "rx"
+    %s = hcl.create_op_handle "s"
     affine.for %oc = 0 to 6 { // out channel
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
       // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -189,7 +189,7 @@ module {
       // CHECK:     affine.store %[[RES]], {{.*}}[{{.*}}, {{.*}}, {{.*}}] : memref<6x30x30xf32>
       // CHECK:   } {pipeline_ii = 1 : i32}
       // CHECK: } {buffer, loop_name = "i_back"}
-    } {loop_name = "oc", stage_name = "s" }
+    } {loop_name = "oc", op_name = "s" }
     hcl.reorder(%s, %lrc, %lry, %lrx, %li, %lj)
     %buf = hcl.buffer_at(%s, %Output: memref<6x30x30xf32>, %loc) -> memref<30x30xf32>
     return

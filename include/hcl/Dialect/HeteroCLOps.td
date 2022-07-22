@@ -33,24 +33,24 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
     let arguments = (ins StrAttr:$loop_name);
     let results = (outs LoopHandle:$result);
     let assemblyFormat = [{
-       $loop_name attr-dict `:` type($result)
+       $loop_name attr-dict
     }];
 }
 
-def HeteroCL_CreateStageHandleOp : HeteroCL_Op<"create_stage_handle"> 
+def HeteroCL_CreateOpHandleOp : HeteroCL_Op<"create_op_handle"> 
 {
-    let summary = "stage handle";
+    let summary = "op handle";
     let description = [{
-        Create a stage handle
+        Create a op handle
 
         Parameters
-        stage_name (String) - The name of a stage
+        op_name (String) - The name of a op
     }];
 
-    let arguments = (ins StrAttr:$stage_name);
-    let results = (outs StageHandle:$result);
+    let arguments = (ins StrAttr:$op_name);
+    let results = (outs OpHandle:$result);
     let assemblyFormat = [{
-       $stage_name attr-dict `:` type($result)
+       $op_name attr-dict
     }];
 }
 
@@ -193,7 +193,7 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
         args (list of IterVar) - The order to be ordered
     }];
 
-    let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
+    let arguments = (ins OpHandle:$stage, Variadic<LoopHandle>:$loops);
     let results = (outs );
     let assemblyFormat = [{
         `(` $stage `,` ($loops^)? `)` attr-dict
@@ -219,7 +219,7 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
         * inner (IterVar) - The inner variable of iteration.
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, UI32Attr:$factor);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, UI32Attr:$factor);
     let results = (outs LoopHandle:$outer, LoopHandle:$inner);
     let assemblyFormat = [{
         `(` $stage `,` $loop `,` $factor `)` attr-dict
@@ -251,7 +251,7 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
         p_y_inner (IterVar) - Inner axis of y dimension
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
     let results = (outs LoopHandle:$x_outer, LoopHandle:$x_inner, LoopHandle:$y_outer, LoopHandle:$y_inner);
     let assemblyFormat = [{
         `(` $stage `,` $x_loop `,` $y_loop `,` $x_factor `,` $y_factor `)` attr-dict
@@ -275,7 +275,7 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
         fused - The fused variable of iteration.
     }];
 
-    let arguments = (ins StageHandle:$stage, Variadic<LoopHandle>:$loops);
+    let arguments = (ins OpHandle:$stage, Variadic<LoopHandle>:$loops);
     let results = (outs LoopHandle:$fused_loop);
     let assemblyFormat = [{
         `(` $stage `,` ($loops^)? `)` attr-dict
@@ -295,7 +295,7 @@ def HeteroCL_ComputeAtOp : HeteroCL_Op<"compute_at">
         * scope (IterVar) - The loop scope t be attached to.
     }];
 
-    let arguments = (ins StageHandle:$producer, StageHandle:$consumer, LoopHandle:$axis);
+    let arguments = (ins OpHandle:$producer, OpHandle:$consumer, LoopHandle:$axis);
     let results = (outs );
     let assemblyFormat = [{
         `(` $producer `,` $consumer `,` $axis `)` attr-dict
@@ -315,7 +315,7 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
         * factor (Expr) - The unroll factor. Default value 0 means full unroll.
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
         `(` $stage `,` $loop (`,` $factor^)? `)` attr-dict
@@ -335,7 +335,7 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
         * initiation_interval (Expr) - The initiation interval in pipeline schedule. Default value is 1.
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
     let results = (outs );
     let assemblyFormat = [{
         `(` $stage `,` $loop (`,` $ii^)? `)` attr-dict
@@ -358,7 +358,7 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
         var (IterVar) - The iteration to be parallelized.
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$loop);
     let results = (outs );
     let assemblyFormat = [{
         `(` $stage `,` $loop `)` attr-dict
@@ -378,7 +378,7 @@ def HeteroCL_ThreadBindOp : HeteroCL_Op<"bind">
         * dim (Expr) - The NDRange dimension to be binded to the iteration.
     }];
 
-    let arguments = (ins StageHandle:$stage, LoopHandle:$loop, NDRangeDimKindEnum:$dim);
+    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, NDRangeDimKindEnum:$dim);
     let results = (outs );
     let assemblyFormat = [{
         `(` $stage `,` $loop `,` $dim `)` attr-dict
@@ -433,7 +433,7 @@ def HeteroCL_ReuseAtOp : HeteroCL_Op<"reuse_at">
         * name (string, optional) - The name of the reuse buffer
     }];
 
-    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
+    let arguments = (ins OpHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
         `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
@@ -456,7 +456,7 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
         * axis (IterVar) - The axis that generates the buffer
     }];
 
-    let arguments = (ins StageHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
+    let arguments = (ins OpHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
         `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
@@ -501,7 +501,7 @@ def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to">
             in the future we should be able to infer automatically
     }];
 
-    let arguments = (ins AnyMemRef:$target, StageHandle:$dst,
+    let arguments = (ins AnyMemRef:$target, OpHandle:$dst,
                          OptionalAttr<DefaultValuedAttr<I32Attr,"-1">>:$fifo_depth);
     let results = (outs );
     let assemblyFormat = [{
@@ -518,7 +518,7 @@ def HeteroCL_OutlineOp : HeteroCL_Op<"outline">
         Outline a stage as a function
     }];
 
-    let arguments = (ins Variadic<StageHandle>:$stages);
+    let arguments = (ins Variadic<OpHandle>:$stages);
     let results = (outs );
     let assemblyFormat = [{
         `(` ($stages^)? `)` attr-dict

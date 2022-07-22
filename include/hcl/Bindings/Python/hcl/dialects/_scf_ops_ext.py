@@ -42,7 +42,7 @@ class ForOp:
     if name != "":
       attributes["loop_name"] = name
     if stage != "":
-      attributes["stage_name"] = stage
+      attributes["op_name"] = stage
     if reduction:
       attributes["reduction"] = reduction
 

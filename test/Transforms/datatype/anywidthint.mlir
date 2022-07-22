@@ -7,7 +7,7 @@ module {
       %2 = affine.load %arg1[%arg2] {from = "compute_1"} : memref<10xi10>
       %3 = arith.addi %1, %2 : i10
       affine.store %3, %0[%arg2] {to = "compute_2"} : memref<10xi10>
-    } {loop_name = "x", stage_name = "compute_2"}
+    } {loop_name = "x", op_name = "compute_2"}
     return %0 : memref<10xi10>
   }
 }

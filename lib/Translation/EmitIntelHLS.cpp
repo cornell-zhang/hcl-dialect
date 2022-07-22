@@ -336,7 +336,7 @@ public:
 
   /// HCL operations.
   bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
-  bool visitOp(hcl::CreateStageHandleOp op) { return true; }
+  bool visitOp(hcl::CreateOpHandleOp op) { return true; }
 
 private:
   ModuleEmitter &emitter;

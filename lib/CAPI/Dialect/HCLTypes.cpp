@@ -19,12 +19,12 @@ MlirType hclMlirLoopHandleTypeGet(MlirContext ctx) {
   return wrap(hcl::LoopHandleType::get(unwrap(ctx)));
 }
 
-bool hclMlirTypeIsAStageHandle(MlirType type) {
-  return unwrap(type).isa<hcl::StageHandleType>();
+bool hclMlirTypeIsAOpHandle(MlirType type) {
+  return unwrap(type).isa<hcl::OpHandleType>();
 }
 
-MlirType hclMlirStageHandleTypeGet(MlirContext ctx) {
-  return wrap(hcl::StageHandleType::get(unwrap(ctx)));
+MlirType hclMlirOpHandleTypeGet(MlirContext ctx) {
+  return wrap(hcl::OpHandleType::get(unwrap(ctx)));
 }
 
 bool hclMlirTypeIsAFixedType(MlirType type) {

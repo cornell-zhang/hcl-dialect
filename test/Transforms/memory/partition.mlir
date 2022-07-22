@@ -6,10 +6,10 @@
 module {
     func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
     {
-        %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
-        %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
-        %l3 = hcl.create_loop_handle "k" : !hcl.LoopHandle
-        %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        %l1 = hcl.create_loop_handle "i"
+        %l2 = hcl.create_loop_handle "j"
+        %l3 = hcl.create_loop_handle "k"
+        %s = hcl.create_op_handle "s"
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {
@@ -21,7 +21,7 @@ module {
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k" }
             } { loop_name = "j" }
-        } { loop_name = "i", stage_name = "s" }
+        } { loop_name = "i", op_name = "s" }
         hcl.partition(%A: memref<1024x1024xf32>, "CyclicPartition", 0, 4)
         hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 2, 2)
         hcl.partition(%B: memref<1024x1024xf32>, "BlockPartition", 1, 4)

@@ -211,10 +211,10 @@ public:
   }
 };
 
-class CreateStageHandleOpLowering : public ConversionPattern {
+class CreateOpHandleOpLowering : public ConversionPattern {
 public:
-  explicit CreateStageHandleOpLowering(MLIRContext *context)
-      : ConversionPattern(hcl::CreateStageHandleOp::getOperationName(), 1,
+  explicit CreateOpHandleOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::CreateOpHandleOp::getOperationName(), 1,
                           context) {}
 
   LogicalResult
@@ -443,7 +443,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
-  patterns.add<CreateStageHandleOpLowering>(&context);
+  patterns.add<CreateOpHandleOpLowering>(&context);
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);

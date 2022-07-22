@@ -52,7 +52,7 @@ class AffineForOp:
         attributes["upper_bound"] = upperBoundMap
         attributes["loop_name"] = name
         if stage != "":
-            attributes["stage_name"] = stage
+            attributes["op_name"] = stage
         if reduction:
             attributes["reduction"] = reduction
         if lower_bound == None and upper_bound == None:

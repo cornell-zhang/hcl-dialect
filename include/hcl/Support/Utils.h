@@ -29,7 +29,7 @@ Attribute getLoopDirective(Operation *op, std::string name);
 StringRef getLoopName(AffineForOp &forOp);
 
 void setLoopName(AffineForOp &forOp, std::string loop_name);
-void setStageName(AffineForOp &forOp, StringRef stage_name);
+void setStageName(AffineForOp &forOp, StringRef op_name);
 
 /// Parse other attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
@@ -52,7 +52,7 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 /// AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
-LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef stage_name);
+LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef op_name);
 
 int getLoop(AffineForOp &forOp, StringRef loop_name);
 

@@ -31,9 +31,9 @@ void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
   forOp->setAttr("loop_name", StringAttr::get(forOp->getContext(), loop_name));
 }
 
-void hcl::setStageName(AffineForOp &forOp, StringRef stage_name) {
-  forOp->setAttr("stage_name",
-                 StringAttr::get(forOp->getContext(), stage_name));
+void hcl::setStageName(AffineForOp &forOp, StringRef op_name) {
+  forOp->setAttr("op_name",
+                 StringAttr::get(forOp->getContext(), op_name));
 }
 
 std::vector<std::string> hcl::split_names(const std::string &arg_names) {
@@ -96,10 +96,10 @@ bool hcl::setLoopNames(SmallVector<AffineForOp, 6> &forOps,
 //===----------------------------------------------------------------------===//
 
 LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
-                            StringRef stage_name) {
+                            StringRef op_name) {
   for (auto rootForOp : func.getOps<AffineForOp>()) {
-    if (stage_name ==
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue()) {
+    if (op_name ==
+        rootForOp->getAttr("op_name").cast<StringAttr>().getValue()) {
       forOp = rootForOp;
       return success();
     }

@@ -23,15 +23,15 @@ module {
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
-        } { loop_name = "i", stage_name = "s" }
+        } { loop_name = "i", op_name = "s" }
         return %C : memref<1024x1024xf32>
     }
     func @matrix_multiply(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %l1 = hcl.create_loop_handle "i" : !hcl.LoopHandle
-        %l2 = hcl.create_loop_handle "j" : !hcl.LoopHandle
-        %l3 = hcl.create_loop_handle "k" : !hcl.LoopHandle
-        %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        %l1 = hcl.create_loop_handle "i"
+        %l2 = hcl.create_loop_handle "j"
+        %l3 = hcl.create_loop_handle "k"
+        %s = hcl.create_op_handle "s"
         // CHECK: affine.for %[[ARG:.*]] = 0 to 128 {
         // CHECK:   affine.for %[[ARG1:.*]] = 0 to 8 {
         affine.for %i = 0 to 1024 {
@@ -50,7 +50,7 @@ module {
                     affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                 } { loop_name = "k" }
             } { loop_name = "j" }
-        } { loop_name = "i", stage_name = "s" }
+        } { loop_name = "i", op_name = "s" }
         %l4, %l5 = hcl.split (%s, %l1, 8)
         %l6, %l7, %l8, %l9 = hcl.tile (%s, %l2, %l3, 2, 4) // split & tile
         %l10, %l11 = hcl.split (%s, %l6, 16)

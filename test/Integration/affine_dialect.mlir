@@ -20,7 +20,7 @@ module {
         %4 = affine.load %3[%c0_0] {from = "sum_rv"} : memref<1xf32>
         affine.store %4, %0[%arg4, %arg5] {to = "out_AB"} : memref<16x18xf32>
       } {loop_name = "y"}
-    } {loop_name = "x", stage_name = "out_AB"}
+    } {loop_name = "x", op_name = "out_AB"}
     %1 = memref.alloc() {name = "out_ABC"} : memref<16x24xf32>
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 24 {
@@ -40,7 +40,7 @@ module {
         %4 = affine.load %3[%c0_0] {from = "sum_rv"} : memref<1xf32>
         affine.store %4, %1[%arg4, %arg5] {to = "out_ABC"} : memref<16x24xf32>
       } {loop_name = "y"}
-    } {loop_name = "x", stage_name = "out_ABC"}
+    } {loop_name = "x", op_name = "out_ABC"}
     %2 = memref.alloc() {name = "E"} : memref<16x24xf32>
     affine.for %arg4 = 0 to 16 {
       affine.for %arg5 = 0 to 24 {
@@ -53,7 +53,7 @@ module {
         %7 = arith.addf %4, %6 : f32
         affine.store %7, %2[%arg4, %arg5] {to = "E"} : memref<16x24xf32>
       } {loop_name = "y"}
-    } {loop_name = "x", stage_name = "E"}
+    } {loop_name = "x", op_name = "E"}
     return %2 : memref<16x24xf32>
   }
 }

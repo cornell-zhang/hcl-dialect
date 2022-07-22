@@ -71,7 +71,7 @@ public:
             hcl::FixedToFloatOp, hcl::FloatToFixedOp, hcl::IntToFixedOp,
             hcl::FixedToIntOp, hcl::FixedToFixedOp, UnrealizedConversionCastOp,
             // HCL operations.
-            hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp, hcl::AddFixedOp,
+            hcl::CreateLoopHandleOp, hcl::CreateOpHandleOp, hcl::AddFixedOp,
             hcl::SubFixedOp, hcl::MulFixedOp, hcl::DivFixedOp, hcl::CmpFixedOp,
             hcl::MinFixedOp, hcl::MaxFixedOp, hcl::PrintOp>(
             [&](auto opNode) -> ResultType {
@@ -223,7 +223,7 @@ public:
 
   // HCL operations
   HANDLE(hcl::CreateLoopHandleOp);
-  HANDLE(hcl::CreateStageHandleOp);
+  HANDLE(hcl::CreateOpHandleOp);
   HANDLE(hcl::PrintOp);
 
   // Fixed point operations

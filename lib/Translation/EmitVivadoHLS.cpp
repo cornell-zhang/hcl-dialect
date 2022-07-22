@@ -459,7 +459,7 @@ public:
 
   /// HCL operations.
   bool visitOp(hcl::CreateLoopHandleOp op) { return true; }
-  bool visitOp(hcl::CreateStageHandleOp op) { return true; }
+  bool visitOp(hcl::CreateOpHandleOp op) { return true; }
 
   /// Fixed points
   bool visitOp(hcl::AddFixedOp op) { return emitter.emitBinary(op, "+"), true; }
@@ -658,11 +658,11 @@ void ModuleEmitter::emitAffineFor(AffineForOp op) {
     loop_name = op->getAttr("loop_name").cast<StringAttr>().getValue().str();
     std::replace(loop_name.begin(), loop_name.end(), '.', '_');
     os << "l_";
-    if (op->hasAttr("stage_name")) {
-      std::string stage_name =
-          op->getAttr("stage_name").cast<StringAttr>().getValue().str();
-      std::replace(stage_name.begin(), stage_name.end(), '.', '_');
-      os << stage_name << "_";
+    if (op->hasAttr("op_name")) {
+      std::string op_name =
+          op->getAttr("op_name").cast<StringAttr>().getValue().str();
+      std::replace(op_name.begin(), op_name.end(), '.', '_');
+      os << op_name << "_";
     }
     os << addName(iterVar, false, loop_name);
     os << ": ";
@@ -1754,10 +1754,10 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
           os << " factor=" << factors[dim] << "\n";
         }
       } else { // fully partitioned
-        emitPragmaFlag = true;
         if (memref.getType().cast<ShapedType>().getShape()[dim] == 1)
           continue;
 
+        emitPragmaFlag = true;
         indent();
         os << "#pragma HLS array_partition";
         os << " variable=";

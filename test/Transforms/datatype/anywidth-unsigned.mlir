@@ -8,7 +8,7 @@ module {
       %2 = arith.addi %1, %c1_i32 {unsigned} : i32
       %3 = arith.trunci %2 : i32 to i2
       affine.store %3, %0[%arg1] {to = "B"} : memref<10xi2>
-    } {loop_name = "x", stage_name = "B"}
+    } {loop_name = "x", op_name = "B"}
     return %0 : memref<10xi2>
   }
 }

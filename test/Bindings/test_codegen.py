@@ -20,7 +20,7 @@ def test_codegen():
                         affine.store %sum, %C[%i, %j] : memref<1024x1024xf32>
                     } { loop_name = "k" }
                 } { loop_name = "j" }
-            } { loop_name = "i", stage_name = "s" }
+            } { loop_name = "i", op_name = "s" }
             return
         }
     }

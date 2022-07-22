@@ -6,7 +6,7 @@ module {
         %A: memref<?x?x!hcl.Type>,
         %B: memref<?x?x!hcl.Type>,
         %C: memref<?x?x!hcl.Type>,
-        %s: !hcl.StageHandle,
+        %s: !hcl.OpHandle,
         %i: !hcl.LoopHandle,
         %j: !hcl.LoopHandle,
         %k: !hcl.LoopHandle
@@ -19,10 +19,10 @@ module {
     }
     func @top(%A: memref<64x32xi32>, %B: memref<32x64xi32>, %C: memref<64x64xi32>) -> memref<64x64xi32>
     {
-        %s1 = hcl.create_stage_handle "s1" : !hcl.StageHandle
-        %i1 = hcl.create_loop_handle "i1" : !hcl.LoopHandle
-        %j1 = hcl.create_loop_handle "j1" : !hcl.LoopHandle
-        %k1 = hcl.create_loop_handle "k1" : !hcl.LoopHandle
+        %s1 = hcl.create_op_handle "s1"
+        %i1 = hcl.create_loop_handle "i1"
+        %j1 = hcl.create_loop_handle "j1"
+        %k1 = hcl.create_loop_handle "k1"
         // D = A * B
         %D = memref.alloc() : memref<64x64xi32>
         affine.for %i = 0 to 64 {
@@ -38,11 +38,11 @@ module {
                 } { loop_name = "k1" }
             // CHECK:  } {loop_name = "j1", pipeline_ii = 1 : i32}
             } { loop_name = "j1" }
-        } { loop_name = "i1", stage_name = "s1" }
-        %s2 = hcl.create_stage_handle "s2" : !hcl.StageHandle
-        %i2 = hcl.create_loop_handle "i2" : !hcl.LoopHandle
-        %j2 = hcl.create_loop_handle "j2" : !hcl.LoopHandle
-        %k2 = hcl.create_loop_handle "k2" : !hcl.LoopHandle
+        } { loop_name = "i1", op_name = "s1" }
+        %s2 = hcl.create_op_handle "s2"
+        %i2 = hcl.create_loop_handle "i2"
+        %j2 = hcl.create_loop_handle "j2"
+        %k2 = hcl.create_loop_handle "k2"
         // E = C * D
         %E = memref.alloc() : memref<64x64xi32>
         affine.for %i = 0 to 64 {
@@ -57,9 +57,9 @@ module {
                 } { loop_name = "k2" }
             // CHECK:  } {loop_name = "j2", pipeline_ii = 1 : i32}
             } { loop_name = "j2" }
-        } { loop_name = "i2", stage_name = "s2" }
-        hcl.apply @gemm_opt(%A, %B, %D, %s1, %i1, %j1, %k1) : (memref<64x32xi32>, memref<32x64xi32>, memref<64x64xi32>, !hcl.StageHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) -> ()
-        hcl.apply @gemm_opt(%C, %D, %E, %s2, %i2, %j2, %k2) : (memref<64x64xi32>, memref<64x64xi32>, memref<64x64xi32>, !hcl.StageHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) -> ()
+        } { loop_name = "i2", op_name = "s2" }
+        hcl.apply @gemm_opt(%A, %B, %D, %s1, %i1, %j1, %k1) : (memref<64x32xi32>, memref<32x64xi32>, memref<64x64xi32>, !hcl.OpHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) -> ()
+        hcl.apply @gemm_opt(%C, %D, %E, %s2, %i2, %j2, %k2) : (memref<64x64xi32>, memref<64x64xi32>, memref<64x64xi32>, !hcl.OpHandle, !hcl.LoopHandle, !hcl.LoopHandle, !hcl.LoopHandle) -> ()
         return %E : memref<64x64xi32>
     }
 }

@@ -31,13 +31,13 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
           "Get an instance of LoopHandleType in given context.", py::arg("cls"),
           py::arg("context") = py::none());
 
-  mlir_type_subclass(m, "StageHandleType", hclMlirTypeIsAStageHandle)
+  mlir_type_subclass(m, "OpHandleType", hclMlirTypeIsAOpHandle)
       .def_classmethod(
           "get",
           [](py::object cls, MlirContext ctx) {
-            return cls(hclMlirStageHandleTypeGet(ctx));
+            return cls(hclMlirOpHandleTypeGet(ctx));
           },
-          "Get an instance of StageHandleType in given context.",
+          "Get an instance of OpHandleType in given context.",
           py::arg("cls"), py::arg("context") = py::none());
 
   mlir_type_subclass(m, "FixedType", hclMlirTypeIsAFixedType)

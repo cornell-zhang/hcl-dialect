@@ -24,9 +24,9 @@ def LoopHandle : HeteroCL_Type<"LoopHandle"> {
   let mnemonic = "LoopHandle";
 }
 
-def StageHandle : HeteroCL_Type<"StageHandle"> {
-  let summary = "stage handle";
-  let mnemonic = "StageHandle";
+def OpHandle : HeteroCL_Type<"OpHandle"> {
+  let summary = "op handle";
+  let mnemonic = "OpHandle";
 }
 
 def Fixed : HeteroCL_Type<"Fixed", [MemRefElementTypeInterface]> {

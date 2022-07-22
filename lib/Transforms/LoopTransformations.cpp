@@ -72,14 +72,14 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   unsigned int factor = splitOp.factor();
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(splitOp.loop().getDefiningOp()).loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(splitOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(splitOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -89,14 +89,14 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   rootForOp->walk([&](AffineForOp forOp) {
     if (band.size() == 0 && loop_name == getLoopName(forOp)) {
       band.push_back(forOp);
-      if (forOp->hasAttr("stage_name"))
+      if (forOp->hasAttr("op_name"))
         isOuterMost = true;
     }
   });
   // handle exception
   if (band.size() == 0) {
     splitOp.emitError("Cannot find Loop ")
-        << loop_name.str() << " in Stage " << stage_name.str();
+        << loop_name.str() << " in Stage " << op_name.str();
     return failure();
   }
   if (factor >= band[0].getConstantUpperBound()) {
@@ -173,7 +173,7 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   newNameArr.push_back(loop_name.str() + ".inner");
   setLoopNames(tiledNest, newNameArr);
   if (isOuterMost)
-    setStageName(tiledNest[0], stage_name);
+    setStageName(tiledNest[0], op_name);
 
   // 8) Create new loop handles
   auto firstOp = *(f.getOps<AffineForOp>().begin());
@@ -200,14 +200,14 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
       dyn_cast<CreateLoopHandleOp>(tileOp.x_loop().getDefiningOp()).loop_name();
   const auto y_loop =
       dyn_cast<CreateLoopHandleOp>(tileOp.y_loop().getDefiningOp()).loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(tileOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(tileOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -240,7 +240,7 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
         << band[1].getConstantUpperBound() << ") of the loop";
     return failure();
   }
-  if (band[0]->hasAttr("stage_name"))
+  if (band[0]->hasAttr("op_name"))
     isOuterMost = true;
 
   // 4) Tile the loops
@@ -314,7 +314,7 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   newNameArr.push_back(y_loop.str() + ".inner");
   setLoopNames(tiledNest, newNameArr);
   if (isOuterMost)
-    setStageName(tiledNest[0], stage_name);
+    setStageName(tiledNest[0], op_name);
 
   // 8) Create new loop handles &
   //    Link the loop handles with SSA values
@@ -332,9 +332,9 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
 
 LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   // 1) Get the schedule
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(reorderOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(reorderOp.stage().getDefiningOp())
+          .op_name();
   const auto loopsToReorder = reorderOp.loops(); // operand_range
   if (loopsToReorder.size() < 2) {
     reorderOp.emitError("Should at least input 2 loops to be reordered");
@@ -343,8 +343,8 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -418,7 +418,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   // permutation
   if (nest.size() >= 2 && nest.size() == permMap.size()) {
     if (outerMostIdx != 0)
-      nest[0]->removeAttr("stage_name");
+      nest[0]->removeAttr("op_name");
     permuteLoops(nest, permMap);
   } else {
     reorderOp.emitError("Cannot permute the loops because the size of the "
@@ -432,8 +432,8 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   // 7) Rename the stage if the outermost loop moves inward
   if (outerMostIdx != 0) {
     nest[outerMostIdx]->setAttr(
-        "stage_name",
-        StringAttr::get(nest[outerMostIdx]->getContext(), stage_name));
+        "op_name",
+        StringAttr::get(nest[outerMostIdx]->getContext(), op_name));
   }
 
   return success();
@@ -450,14 +450,14 @@ LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   }
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(unrollOp.loop().getDefiningOp()).loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(unrollOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(unrollOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -485,14 +485,14 @@ LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp())
           .loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(parallelOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(parallelOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -527,14 +527,14 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(pipelineOp.loop().getDefiningOp())
           .loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(pipelineOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(pipelineOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -562,14 +562,14 @@ LogicalResult runThreadBind(FuncOp &f, ThreadBindOp &threadBindOp) {
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(threadBindOp.loop().getDefiningOp())
           .loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(threadBindOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(threadBindOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -717,9 +717,9 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
     fuseOp.emitError("Should at least input 2 loops to be fused");
     return failure();
   }
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(fuseOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(fuseOp.stage().getDefiningOp())
+          .op_name();
   SmallVector<StringRef, 6> nameArr;
   for (auto loop : loopsToFuse) {
     nameArr.push_back(
@@ -728,8 +728,8 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -748,7 +748,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
         << ". Please specify the loop to be fused from outermost to innermost.";
     return failure();
   }
-  if (band[0]->hasAttr("stage_name"))
+  if (band[0]->hasAttr("op_name"))
     isOuterMost = true;
 
   // 4) Construct new loop
@@ -790,7 +790,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   new_name += "fused";
   setLoopName(fusedLoops[0], new_name);
   if (isOuterMost)
-    setStageName(fusedLoops[0], stage_name);
+    setStageName(fusedLoops[0], op_name);
 
   // 7) Create new loop handles &
   //    Link the loop handles with SSA values
@@ -810,11 +810,11 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
       dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
           .loop_name();
   const auto producer_name =
-      dyn_cast<CreateStageHandleOp>(computeAtOp.producer().getDefiningOp())
-          .stage_name();
+      dyn_cast<CreateOpHandleOp>(computeAtOp.producer().getDefiningOp())
+          .op_name();
   const auto consumer_name =
-      dyn_cast<CreateStageHandleOp>(computeAtOp.consumer().getDefiningOp())
-          .stage_name();
+      dyn_cast<CreateOpHandleOp>(computeAtOp.consumer().getDefiningOp())
+          .op_name();
 
   // 2) Traverse all the outer-most loops and find the requested one
   AffineForOp producerFor;
@@ -822,7 +822,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   std::pair<bool, bool> isFound{false, false};
   for (auto rootForOp : f.getOps<AffineForOp>()) {
     auto curr_name =
-        rootForOp->getAttr("stage_name").cast<StringAttr>().getValue();
+        rootForOp->getAttr("op_name").cast<StringAttr>().getValue();
     if (producer_name == curr_name) {
       producerFor = rootForOp;
       isFound.first = true;
@@ -1081,16 +1081,16 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(reuseAtOp.axis().getDefiningOp())
           .loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(reuseAtOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(reuseAtOp.stage().getDefiningOp())
+          .op_name();
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -1468,7 +1468,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
       MemRefType::get(
           shape, target.getType().dyn_cast<MemRefType>().getElementType()));
   buf->setAttr("name", StringAttr::get(buf->getContext(),
-                                       StringRef(stage_name.str() + "_reuse_" +
+                                       StringRef(op_name.str() + "_reuse_" +
                                                  std::to_string(loopAxis))));
 
   // 10) link the result SSA with the buffer
@@ -1957,14 +1957,14 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(bufferAtOp.axis().getDefiningOp())
           .loop_name();
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(bufferAtOp.stage().getDefiningOp())
-          .stage_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(bufferAtOp.stage().getDefiningOp())
+          .op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
-  if (failed(getStage(f, rootForOp, stage_name))) {
-    f.emitError("Cannot find Stage ") << stage_name.str();
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
     return failure();
   }
 
@@ -2407,8 +2407,8 @@ template <class T, int opId>
 void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
                       std::set<Operation *> &opToMove) {
   SmallVector<Value> memrefToRemove;
-  const auto stage_name =
-      stage->getAttr("stage_name").cast<StringAttr>().getValue().str();
+  const auto op_name =
+      stage->getAttr("op_name").cast<StringAttr>().getValue().str();
   stage.walk([&](T op) {
     auto target = op.getOperand(opId);
     if (std::find(allMemrefs.begin(), allMemrefs.end(), target) ==
@@ -2438,14 +2438,14 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   std::vector<std::string> stageNames;
   std::set<Operation *> opToMove;
   for (auto stage : stages) {
-    const auto stage_name =
-        dyn_cast<CreateStageHandleOp>(stage.getDefiningOp()).stage_name();
-    stageNames.push_back(stage_name.str());
+    const auto op_name =
+        dyn_cast<CreateOpHandleOp>(stage.getDefiningOp()).op_name();
+    stageNames.push_back(op_name.str());
 
     // 2) Find the requested stages
     AffineForOp rootForOp;
-    if (failed(getStage(f, rootForOp, stage_name))) {
-      f.emitError("Cannot find Stage ") << stage_name.str();
+    if (failed(getStage(f, rootForOp, op_name))) {
+      f.emitError("Cannot find Stage ") << op_name.str();
       return failure();
     }
     rootForOps.push_back(rootForOp);
@@ -2525,8 +2525,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   TypeRange argTypes(TypeArr);
   FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
   std::string func_name = "Stage";
-  for (auto stage_name : stageNames) {
-    func_name += "_" + stage_name;
+  for (auto op_name : stageNames) {
+    func_name += "_" + op_name;
   }
   auto func =
       builder.create<FuncOp>(f.getLoc(), StringRef(func_name), funcType);
@@ -2707,12 +2707,12 @@ template <class HCLOp>
 bool runSchedule(
     std::map<std::string, FuncOp> &funcMap, HCLOp &op,
     std::function<LogicalResult(FuncOp &, HCLOp &)> schedule_func) {
-  const auto stage_name =
-      dyn_cast<CreateStageHandleOp>(op.stage().getDefiningOp())
-          .stage_name()
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(op.stage().getDefiningOp())
+          .op_name()
           .str();
-  if (funcMap.count(stage_name) > 0) {
-    if (!failed(schedule_func(funcMap[stage_name], op)))
+  if (funcMap.count(op_name) > 0) {
+    if (!failed(schedule_func(funcMap[op_name], op)))
       return true;
   }
   return false;
@@ -2721,7 +2721,7 @@ bool runSchedule(
 void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation &op : f.getOps()) {
-    if (llvm::isa<hcl::CreateLoopHandleOp, hcl::CreateStageHandleOp>(op))
+    if (llvm::isa<hcl::CreateLoopHandleOp, hcl::CreateOpHandleOp>(op))
       opToRemove.push_back(&op);
   }
   for (Operation *op : opToRemove) {

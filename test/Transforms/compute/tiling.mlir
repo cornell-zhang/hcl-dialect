@@ -3,10 +3,10 @@
 module {
     func @matrix_multiply(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i" : !hcl.LoopHandle
-        %lj = hcl.create_loop_handle "j" : !hcl.LoopHandle
-        %lk = hcl.create_loop_handle "k" : !hcl.LoopHandle
-        %s = hcl.create_stage_handle "s" : !hcl.StageHandle
+        %li = hcl.create_loop_handle "i"
+        %lj = hcl.create_loop_handle "j"
+        %lk = hcl.create_loop_handle "k"
+        %s = hcl.create_op_handle "s"
         // CHECK: affine.for %arg3 = 0 to 8 {
         // CHECK:   affine.for %arg4 = 0 to 8 {
         // CHECK:     affine.for %arg5 = 0 to 2 {
@@ -31,7 +31,7 @@ module {
                 // CHECK: } {loop_name = "j.inner", parallel = 1 : i32}
                 } { loop_name = "k" }
             } { loop_name = "j" }
-        } { loop_name = "i", stage_name = "s" }
+        } { loop_name = "i", op_name = "s" }
         %li_outer, %li_inner = hcl.split (%s, %li, 16)
         %li_in_out, %li_in_in = hcl.split (%s, %li_inner, 4) // nest with split
         %li_out_out, %li_out_in = hcl.split (%s, %li_outer, 8) // multiple split

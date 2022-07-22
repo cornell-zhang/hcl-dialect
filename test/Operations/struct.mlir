@@ -39,13 +39,13 @@ module {
       %4 = affine.load %arg2[%arg3] {from = "compute_2"} : memref<100xf32>
       %5 = hcl.struct_construct(%2, %3, %4) : i8, !hcl.Fixed<13, 11>, f32 -> <i8, !hcl.Fixed<13, 11>, f32>
       affine.store %5, %0[%arg3] {to = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
-    } {loop_name = "x", stage_name = "compute_3"}
+    } {loop_name = "x", op_name = "compute_3"}
     %1 = memref.alloc() {name = "compute_4"} : memref<100xi8>
     affine.for %arg3 = 0 to 100 {
       %2 = affine.load %0[%arg3] {from = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
       %3 = hcl.struct_get %2[0] : <i8, !hcl.Fixed<13, 11>, f32> -> i8
       affine.store %3, %1[%arg3] {to = "compute_4"} : memref<100xi8>
-    } {loop_name = "x", stage_name = "compute_4"}
+    } {loop_name = "x", op_name = "compute_4"}
     return
   }
 }

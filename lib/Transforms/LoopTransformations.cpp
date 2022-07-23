@@ -339,7 +339,8 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   const auto loopsToReorder = reorderOp.loops(); // operand_range
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(loopsToReorder[0].getDefiningOp());
-  const auto op_name = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
   if (loopsToReorder.size() < 2) {
     reorderOp.emitError("Should at least input 2 loops to be reordered");
     return failure();
@@ -560,11 +561,11 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
 LogicalResult runThreadBind(FuncOp &f, ThreadBindOp &threadBindOp) {
   // 1) Get the schedule
   auto target_dim = threadBindOp.dim();
-  auto loopHandle = dyn_cast<CreateLoopHandleOp>(threadBindOp.loop().getDefiningOp());
+  auto loopHandle =
+      dyn_cast<CreateLoopHandleOp>(threadBindOp.loop().getDefiningOp());
   const auto loop_name = loopHandle.loop_name();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp())
-          .op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -2659,12 +2660,12 @@ void updateMemrefAccess(Operation *&user, SmallVector<AffineExpr> &dimExprs) {
   }
 }
 
-LogicalResult runLayout(FuncOp &f, LayoutOp &layoutOp, Value &array) {
+LogicalResult runReform(FuncOp &f, ReformOp &reformOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
   auto oldShape = oldType.getShape();
   auto layoutMap =
-      layoutOp->getAttr("layout").template cast<AffineMapAttr>().getValue();
+      reformOp->getAttr("layout").template cast<AffineMapAttr>().getValue();
 
   // 2) Get new shape
   SmallVector<int64_t> newShape;
@@ -2697,7 +2698,7 @@ LogicalResult runLayout(FuncOp &f, LayoutOp &layoutOp, Value &array) {
 bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   OutlineOp, ReshapeOp, LayoutOp, ThreadBindOp,
+                   OutlineOp, ReshapeOp, ReformOp, ThreadBindOp,
                    InterKernelToOp>(op);
 }
 
@@ -2817,10 +2818,10 @@ bool applyLoopTransformationOnSingleFunction(
         } else {
           return false;
         }
-      } else if (auto new_op = dyn_cast<LayoutOp>(op)) {
+      } else if (auto new_op = dyn_cast<ReformOp>(op)) {
         Value array;
         if (findArray(f, new_op.target(), array)) {
-          if (failed(runLayout(f, new_op, array)))
+          if (failed(runReform(f, new_op, array)))
             return false;
         } else {
           return false;
@@ -2949,7 +2950,8 @@ bool applyLoopTransformation(ModuleOp &mod) {
   //           fifo_depth = -1; // conservative assumption
   //         }
   //         if (!findArray(top_func, new_op.target(), array) ||
-  //             failed(runInterKernelDataPlacement(funcMap, array, fifo_depth)))
+  //             failed(runInterKernelDataPlacement(funcMap, array,
+  //             fifo_depth)))
   //           return false;
   //       }
   //       opToRemove.push_back(&op);

@@ -537,11 +537,11 @@ def HeteroCL_OutlineOp : HeteroCL_Op<"outline">
     }];
 }
 
-def HeteroCL_LayoutOp : HeteroCL_Op<"layout"> 
+def HeteroCL_ReformOp : HeteroCL_Op<"reform"> 
 {
-    let summary = "layout";
+    let summary = "reform";
     let description = [{
-        hcl.layout(target)
+        hcl.reform(target)
 
         Change the layout of the target tensor
         Need to pass in AffineMapAttr as layout

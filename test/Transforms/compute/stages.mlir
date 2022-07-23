@@ -3,14 +3,14 @@
 module {
     func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %l1 = hcl.create_loop_handle "i"
-        %l2 = hcl.create_loop_handle "j"
-        %l3 = hcl.create_loop_handle "k"
         %s1 = hcl.create_op_handle "s1"
-        %l11 = hcl.create_loop_handle "i1"
-        %l21 = hcl.create_loop_handle "j1"
-        %l31 = hcl.create_loop_handle "k1"
+        %l1 = hcl.create_loop_handle %s1, "i"
+        %l2 = hcl.create_loop_handle %s1, "j"
+        %l3 = hcl.create_loop_handle %s1, "k"
         %s2 = hcl.create_op_handle "s2"
+        %l11 = hcl.create_loop_handle %s2, "i1"
+        %l21 = hcl.create_loop_handle %s2, "j1"
+        %l31 = hcl.create_loop_handle %s2, "k1"
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 affine.for %k = 0 to 1024 {

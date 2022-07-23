@@ -3,11 +3,11 @@
 module {
   func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>)
   {
-    %li = hcl.create_loop_handle "i"
-    %lj = hcl.create_loop_handle "j"
-    %lry = hcl.create_loop_handle "ry"
-    %lrx = hcl.create_loop_handle "rx"
     %s = hcl.create_op_handle "s"
+    %li = hcl.create_loop_handle %s, "i"
+    %lj = hcl.create_loop_handle %s, "j"
+    %lry = hcl.create_loop_handle %s, "ry"
+    %lrx = hcl.create_loop_handle %s, "rx"
     affine.for %i = 0 to 30 {
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30xf32>
       // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -42,13 +42,13 @@ module {
   }
   func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc"
-    %li = hcl.create_loop_handle "i"
-    %lj = hcl.create_loop_handle "j"
-    %lrc = hcl.create_loop_handle "rc"
-    %lry = hcl.create_loop_handle "ry"
-    %lrx = hcl.create_loop_handle "rx"
     %s = hcl.create_op_handle "s"
+    %loc = hcl.create_loop_handle %s, "oc"
+    %li = hcl.create_loop_handle  %s, "i"
+    %lj = hcl.create_loop_handle  %s, "j"
+    %lrc = hcl.create_loop_handle %s, "rc"
+    %lry = hcl.create_loop_handle %s, "ry"
+    %lrx = hcl.create_loop_handle %s, "rx"
     affine.for %oc = 0 to 6 { // out channel
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
@@ -73,13 +73,13 @@ module {
   }
   func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc"
-    %li = hcl.create_loop_handle "i"
-    %lj = hcl.create_loop_handle "j"
-    %lrc = hcl.create_loop_handle "rc"
-    %lry = hcl.create_loop_handle "ry"
-    %lrx = hcl.create_loop_handle "rx"
     %s = hcl.create_op_handle "s"
+    %loc = hcl.create_loop_handle %s, "oc"
+    %li = hcl.create_loop_handle  %s, "i"
+    %lj = hcl.create_loop_handle  %s, "j"
+    %lrc = hcl.create_loop_handle %s, "rc"
+    %lry = hcl.create_loop_handle %s, "ry"
+    %lrx = hcl.create_loop_handle %s, "rx"
     affine.for %oc = 0 to 6 { // out channel
       affine.for %i = 0 to 30 {
         affine.for %j = 0 to 30 {
@@ -103,13 +103,13 @@ module {
   }
   func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc"
-    %li = hcl.create_loop_handle "i"
-    %lj = hcl.create_loop_handle "j"
-    %lrc = hcl.create_loop_handle "rc"
-    %lry = hcl.create_loop_handle "ry"
-    %lrx = hcl.create_loop_handle "rx"
     %s = hcl.create_op_handle "s"
+    %loc = hcl.create_loop_handle %s, "oc"
+    %li = hcl.create_loop_handle  %s, "i"
+    %lj = hcl.create_loop_handle  %s, "j"
+    %lrc = hcl.create_loop_handle %s, "rc"
+    %lry = hcl.create_loop_handle %s, "ry"
+    %lrx = hcl.create_loop_handle %s, "rx"
     affine.for %oc = 0 to 6 { // out channel
     // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
     // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -147,13 +147,13 @@ module {
   }
   func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
-    %loc = hcl.create_loop_handle "oc"
-    %li = hcl.create_loop_handle "i"
-    %lj = hcl.create_loop_handle "j"
-    %lrc = hcl.create_loop_handle "rc"
-    %lry = hcl.create_loop_handle "ry"
-    %lrx = hcl.create_loop_handle "rx"
     %s = hcl.create_op_handle "s"
+    %loc = hcl.create_loop_handle %s, "oc"
+    %li = hcl.create_loop_handle  %s, "i"
+    %lj = hcl.create_loop_handle  %s, "j"
+    %lrc = hcl.create_loop_handle %s, "rc"
+    %lry = hcl.create_loop_handle %s, "ry"
+    %lrx = hcl.create_loop_handle %s, "rx"
     affine.for %oc = 0 to 6 { // out channel
       // CHECK: %[[MEM:.*]] = memref.alloc() : memref<30x30xf32>
       // CHECK: %cst = arith.constant 0.000000e+00 : f32

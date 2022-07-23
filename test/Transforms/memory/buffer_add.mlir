@@ -3,9 +3,9 @@
 module {
     func @add_buffer_at_axis_0(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %l1 = hcl.create_loop_handle "i"
-        %l2 = hcl.create_loop_handle "j"
         %s = hcl.create_op_handle "s"
+        %l1 = hcl.create_loop_handle %s, "i"
+        %l2 = hcl.create_loop_handle %s, "j"
         affine.for %i = 0 to 1024 {
             // CHECK: %[[MEM:.*]] = memref.alloc() : memref<1024xf32>
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -32,9 +32,9 @@ module {
     // Notice: buffer_at cannot apply to the inner-most non-reduction loop
     // func @add_buffer_at_axis_1(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>)
     // {
-    //     %l1 = hcl.create_loop_handle "i"
-    //     %l2 = hcl.create_loop_handle "j"
     //     %s = hcl.create_op_handle "s"
+    //     %l1 = hcl.create_loop_handle %s, "i"
+    //     %l2 = hcl.create_loop_handle %s, "j"
     //     affine.for %i = 0 to 1024 {
     //         affine.for %j = 0 to 1024 {
     //             // B[i, j] = A[i, j] + 1

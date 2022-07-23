@@ -28,10 +28,10 @@ module {
     }
     func @matrix_multiply(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %l1 = hcl.create_loop_handle "i"
-        %l2 = hcl.create_loop_handle "j"
-        %l3 = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %l1 = hcl.create_loop_handle %s, "i"
+        %l2 = hcl.create_loop_handle %s, "j"
+        %l3 = hcl.create_loop_handle %s, "k"
         // CHECK: affine.for %[[ARG:.*]] = 0 to 128 {
         // CHECK:   affine.for %[[ARG1:.*]] = 0 to 8 {
         affine.for %i = 0 to 1024 {

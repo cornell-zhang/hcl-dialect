@@ -4,9 +4,9 @@
 module {
     func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
         affine.for %i = 0 to 10 {
             affine.for %j = 0 to 8 {
                 // CHECK: %[[VAR1:.*]] = affine.load %[[VAR:.*]][1] : memref<3xf32>
@@ -34,9 +34,9 @@ module {
     }
     func @blur5(%A: memref<10x10xf32>, %B: memref<10x5xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
         affine.for %i = 0 to 10 {
             affine.for %j = 0 to 5 {
                 %tmp = affine.load %A[%i, %j] : memref<10x10xf32>
@@ -56,9 +56,9 @@ module {
     }
     func @blur_x(%A: memref<10x10xf32>, %B: memref<8x10xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
         affine.for %i = 0 to 8 {
             affine.for %j = 0 to 10 {
                 %tmp = affine.load %A[%i, %j] : memref<10x10xf32>
@@ -74,9 +74,9 @@ module {
     }
     // func @blur_reduction(%A: memref<10x10xf32>, %B: memref<10x8xf32>) -> memref<10x8xf32>
     // {
-    //     %li = hcl.create_loop_handle "i"
-    //     %lj = hcl.create_loop_handle "j"
     //     %s = hcl.create_op_handle "s"
+    //     %li = hcl.create_loop_handle %s, "i"
+    //     %lj = hcl.create_loop_handle %s, "j"
     //     affine.for %i = 0 to 10 {
     //         affine.for %j = 0 to 8 {
     //             %zero = constant 0.0 : f32
@@ -93,9 +93,9 @@ module {
     // }
     func @conv2d(%A: memref<10x10xf32>, %B: memref<8x8xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
         affine.for %i = 0 to 8 {
             affine.for %j = 0 to 8 {
                 %tmp = affine.load %A[%i, %j] : memref<10x10xf32>

@@ -3,10 +3,10 @@
 module {
     func @gemm_buffer_at_axis_0(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
         affine.for %i = 0 to 1024 {
             // CHECK: {{.*}} = memref.alloc() : memref<1024xf32>
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -35,10 +35,10 @@ module {
     }
     func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
                 // CHECK: %[[VAR:.*]] = memref.alloc() : memref<1xf32>
@@ -64,10 +64,10 @@ module {
     // Notice: storing at reduction axis is prohibited
     // func @gemm_buffer_at_axis_2(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     // {
-    //     %li = hcl.create_loop_handle "i"
-    //     %lj = hcl.create_loop_handle "j"
-    //     %lk = hcl.create_loop_handle "k"
     //     %s = hcl.create_op_handle "s"
+    //     %li = hcl.create_loop_handle %s, "i"
+    //     %lj = hcl.create_loop_handle %s, "j"
+    //     %lk = hcl.create_loop_handle %s, "k"
     //     affine.for %i = 0 to 1024 {
     //         affine.for %j = 0 to 1024 {
     //             affine.for %k = 0 to 512 {
@@ -85,10 +85,10 @@ module {
     // }
     func @gemm_interleaving_accu(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
         affine.for %i = 0 to 1024 {
             // CHECK: {{.*}} = memref.alloc() : memref<1024xf32>
             // CHECK: %cst = arith.constant 0.000000e+00 : f32
@@ -116,10 +116,10 @@ module {
     }
     // func @tiled_gemm_interleaving_accu(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
     // {
-    //     %li = hcl.create_loop_handle "i"
-    //     %lj = hcl.create_loop_handle "j"
-    //     %lk = hcl.create_loop_handle "k"
     //     %s = hcl.create_op_handle "s"
+    //     %li = hcl.create_loop_handle %s, "i"
+    //     %lj = hcl.create_loop_handle %s, "j"
+    //     %lk = hcl.create_loop_handle %s, "k"
     //     affine.for %i = 0 to 1024 {
     //         affine.for %j = 0 to 1024 {
     //             affine.for %k = 0 to 512 {

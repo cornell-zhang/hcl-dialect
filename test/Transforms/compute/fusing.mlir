@@ -3,10 +3,10 @@
 module {
     func @gemm_fuse_two(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
         // CHECK: affine.for %[[ARG:.*]] = 0 to 1048576 {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
@@ -26,10 +26,10 @@ module {
     }
     func @gemm_fuse_three(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
         // CHECK: affine.for %[[ARG:.*]] = 0 to 536870912 {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {
@@ -49,11 +49,11 @@ module {
     }
     func @gemm_fuse_two_among_four(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
-        %li = hcl.create_loop_handle "i"
-        %lj = hcl.create_loop_handle "j"
-        %lk = hcl.create_loop_handle "k"
-        %ll = hcl.create_loop_handle "l"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
+        %lj = hcl.create_loop_handle %s, "j"
+        %lk = hcl.create_loop_handle %s, "k"
+        %ll = hcl.create_loop_handle %s, "l"
         // CHECK: affine.for %[[ARG:.*]] = 0 to 1024 {
         affine.for %i = 0 to 1024 {
             // CHECK: affine.for %[[ARG1:.*]] = 0 to 1048576 {

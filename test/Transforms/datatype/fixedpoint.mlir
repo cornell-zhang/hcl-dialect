@@ -16,13 +16,11 @@ module {
   }
 
   func @func_call(%arg0: memref<10xi32>, %arg1: memref<10xi32>) attributes {itypes = "ss", otypes = ""} {
-    %0 = hcl.create_loop_handle "loop_0"
     affine.for %arg2 = 0 to 10 {
       affine.for %arg3 = 0 to 10 {
         call @Stage_update_B(%arg0, %arg1, %arg3) {inputs = "compute_0,compute_1,"} : (memref<10xi32>, memref<10xi32>, index) -> ()
       } {loop_name = "loop_1"}
     } {loop_name = "loop_0"}
-    %1 = hcl.create_loop_handle "loop_1"
     return
   }
   func @Stage_update_B(%arg0: memref<10xi32>, %arg1: memref<10xi32>, %arg2: index) attributes {itypes = "sss"} {

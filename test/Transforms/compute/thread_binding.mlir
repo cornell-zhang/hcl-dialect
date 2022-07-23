@@ -3,8 +3,8 @@
 module {
     func @vector_add(%A: memref<256xf32>, %B: memref<256xf32>, %C: memref<256xf32>)
     {
-        %li = hcl.create_loop_handle "i"
         %s = hcl.create_op_handle "s"
+        %li = hcl.create_loop_handle %s, "i"
         // CHECK: affine.for %arg3 = 0 to 4 {
         // CHECK:   affine.for %arg4 = 0 to 64 {
         affine.for %i = 0 to 256 {

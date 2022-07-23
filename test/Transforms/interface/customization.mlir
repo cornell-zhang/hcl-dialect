@@ -20,9 +20,9 @@ module {
     func @top(%A: memref<64x32xi32>, %B: memref<32x64xi32>, %C: memref<64x64xi32>) -> memref<64x64xi32>
     {
         %s1 = hcl.create_op_handle "s1"
-        %i1 = hcl.create_loop_handle "i1"
-        %j1 = hcl.create_loop_handle "j1"
-        %k1 = hcl.create_loop_handle "k1"
+        %i1 = hcl.create_loop_handle %s1, "i1"
+        %j1 = hcl.create_loop_handle %s1, "j1"
+        %k1 = hcl.create_loop_handle %s1, "k1"
         // D = A * B
         %D = memref.alloc() : memref<64x64xi32>
         affine.for %i = 0 to 64 {
@@ -40,9 +40,9 @@ module {
             } { loop_name = "j1" }
         } { loop_name = "i1", op_name = "s1" }
         %s2 = hcl.create_op_handle "s2"
-        %i2 = hcl.create_loop_handle "i2"
-        %j2 = hcl.create_loop_handle "j2"
-        %k2 = hcl.create_loop_handle "k2"
+        %i2 = hcl.create_loop_handle %s2, "i2"
+        %j2 = hcl.create_loop_handle %s2, "j2"
+        %k2 = hcl.create_loop_handle %s2, "k2"
         // E = C * D
         %E = memref.alloc() : memref<64x64xi32>
         affine.for %i = 0 to 64 {

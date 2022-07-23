@@ -1,7 +1,7 @@
 # RUN: %PYTHON %s
 
 from hcl_mlir.ir import *
-from hcl_mlir.dialects import builtin, arith, memref, affine
+from hcl_mlir.dialects import func, arith, memref, affine
 from hcl_mlir.dialects import hcl as hcl_d
 import hcl_mlir
 
@@ -18,7 +18,7 @@ with Context() as ctx, Location.unknown() as loc:
         hcl_d.CreateLoopHandleOp(op.result, StringAttr.get("j"))
         hcl_d.CreateLoopHandleOp(op.result, StringAttr.get("k"))
 
-        @builtin.FuncOp.from_py_func(memref_type, memref_type, memref_type)
+        @func.FuncOp.from_py_func(memref_type, memref_type, memref_type)
         def gemm(A, B, C):
             for_i = hcl_mlir.make_for(0, 1024, name="i")
             with InsertionPoint(for_i.body.operations[0]):
@@ -27,13 +27,16 @@ with Context() as ctx, Location.unknown() as loc:
                     for_k = hcl_mlir.make_for(0, 1024, name="k")
                     with InsertionPoint(for_k.body.operations[0]):
                         a = memref.LoadOp(
-                            A, [for_i.induction_variable, for_k.induction_variable]
+                            A, [for_i.induction_variable,
+                                for_k.induction_variable]
                         )
                         b = memref.LoadOp(
-                            B, [for_k.induction_variable, for_j.induction_variable]
+                            B, [for_k.induction_variable,
+                                for_j.induction_variable]
                         )
                         c = memref.LoadOp(
-                            C, [for_i.induction_variable, for_j.induction_variable]
+                            C, [for_i.induction_variable,
+                                for_j.induction_variable]
                         )
                         prod = arith.MulFOp(a.result, b.result)
                         sum_ = arith.AddFOp(prod.result, c.result)
@@ -61,20 +64,24 @@ with Context() as ctx, Location.unknown() as loc:
                         if_op = affine.AffineIfOp(attr, set_operands)
                         with InsertionPoint(if_op.then_block):
                             a = affine.AffineLoadOp(
-                                A, [for_i.induction_variable, for_k.induction_variable]
+                                A, [for_i.induction_variable,
+                                    for_k.induction_variable]
                             )
                             b = affine.AffineLoadOp(
-                                B, [for_k.induction_variable, for_j.induction_variable]
+                                B, [for_k.induction_variable,
+                                    for_j.induction_variable]
                             )
                             c = affine.AffineLoadOp(
-                                C, [for_i.induction_variable, for_j.induction_variable]
+                                C, [for_i.induction_variable,
+                                    for_j.induction_variable]
                             )
                             prod = arith.MulFOp(a.result, b.result)
                             sum_ = arith.AddFOp(prod.result, c.result)
                             memref.StoreOp(
                                 sum_.result,
                                 C,
-                                [for_i.induction_variable, for_j.induction_variable],
+                                [for_i.induction_variable,
+                                    for_j.induction_variable],
                             )
                             affine.AffineYieldOp([])
 

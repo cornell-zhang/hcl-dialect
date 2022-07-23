@@ -19,6 +19,7 @@
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
@@ -27,7 +28,7 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void deadStructConstructElimination(FuncOp &func) {
+void deadStructConstructElimination(func::FuncOp &func) {
   SmallVector<Operation *, 8> structConstructOps;
   func.walk([&](Operation *op) {
     if (auto structConstructOp = dyn_cast<StructConstructOp>(op)) {
@@ -43,7 +44,7 @@ void deadStructConstructElimination(FuncOp &func) {
   }
 }
 
-void deadMemRefAllocElimination(FuncOp &func) {
+void deadMemRefAllocElimination(func::FuncOp &func) {
   SmallVector<Operation *, 8> memRefAllocOps;
   func.walk([&](Operation *op) {
     if (auto memRefAllocOp = dyn_cast<memref::AllocOp>(op)) {
@@ -59,7 +60,7 @@ void deadMemRefAllocElimination(FuncOp &func) {
   }
 }
 
-void lowerStructType(FuncOp &func) {
+void lowerStructType(func::FuncOp &func) {
 
   SmallVector<Operation *, 10> structGetOps;
   func.walk([&](Operation *op) {
@@ -68,7 +69,8 @@ void lowerStructType(FuncOp &func) {
     }
   });
 
-  std::map<mlir::detail::ValueImpl *, SmallVector<Value, 8>> structMemRef2fieldMemRefs;
+  std::map<mlir::detail::ValueImpl *, SmallVector<Value, 8>>
+      structMemRef2fieldMemRefs;
 
   for (auto op : structGetOps) {
     // Collect info from structGetOp
@@ -173,7 +175,7 @@ void lowerStructType(FuncOp &func) {
 
 /// Pass entry point
 bool applyLowerCompositeType(ModuleOp &mod) {
-  for (FuncOp func : mod.getOps<FuncOp>()) {
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerStructType(func);
   }
   return true;

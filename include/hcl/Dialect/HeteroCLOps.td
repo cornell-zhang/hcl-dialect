@@ -63,7 +63,7 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
 //===----------------------------------------------------------------------===//
 
 def CustomizationOp : HeteroCL_Op<"customization", [
-    FunctionOpInterface, IsolatedFromAbove, Symbol
+    CallableOpInterface, FunctionOpInterface, IsolatedFromAbove, Symbol
   ]> {
   let summary = "user defined customization";
   let description = [{
@@ -79,42 +79,41 @@ def CustomizationOp : HeteroCL_Op<"customization", [
     ```
   }];
 
-  let arguments = (ins
-    SymbolNameAttr:$sym_name,
-    TypeAttr:$type
-  );
+  let arguments = (ins SymbolNameAttr:$sym_name,
+                       TypeAttrOf<FunctionType>:$function_type);
   let regions = (region AnyRegion:$body);
-
+  
   let builders = [OpBuilder<(ins
     "StringRef":$name, "FunctionType":$type,
     CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)
   >];
   let extraClassDeclaration = [{
-    /// Returns the type of this function.
-    /// FIXME: We should drive this via the ODS `type` param.
-    FunctionType getType() { 
-      return getTypeAttr().getValue().cast<FunctionType>();
+    FunctionType getFunctionType() {
+        return function_type();
     }
+
+    //===------------------------------------------------------------------===//
+    // CallableOpInterface
+    //===------------------------------------------------------------------===//
+
+    /// Returns the region on the current operation that is callable. This may
+    /// return null in the case of an external callable object, e.g. an external
+    /// function.
+    ::mlir::Region *getCallableRegion() { return isExternal() ? nullptr : &getBody(); }
+
+    /// Returns the results types that the callable region produces when
+    /// executed.
+    ArrayRef<Type> getCallableResults() { return getFunctionType().getResults(); }
 
     //===------------------------------------------------------------------===//
     // FunctionOpInterface Methods
     //===------------------------------------------------------------------===//
 
     /// Returns the argument types of this function.
-    ArrayRef<Type> getArgumentTypes() { return getType().getInputs(); }
+    ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
 
     /// Returns the result types of this function.
-    ArrayRef<Type> getResultTypes() { return getType().getResults(); }
-
-    /// Verify the type attribute of this function. Returns failure and emits
-    /// an error if the attribute is invalid.
-    LogicalResult verifyType() {
-      auto type = getTypeAttr().getValue();
-      if (!type.isa<FunctionType>())
-        return emitOpError("requires '" + getTypeAttrName() +
-                           "' attribute of function type");
-      return success();
-    }
+    ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
 
     //===------------------------------------------------------------------===//
     // SymbolOpInterface Methods
@@ -122,10 +121,8 @@ def CustomizationOp : HeteroCL_Op<"customization", [
 
     bool isDeclaration() { return isExternal(); }
   }];
-  let parser = [{ return mlir::hcl::parseCustomizationOp(parser, result); }];
-  let printer = [{ return mlir::hcl::print(*this, p); }];
-  let verifier = [{ return mlir::hcl::verify(*this); }];
-  let skipDefaultBuilders = 1;
+  bit hasCustomAssemblyFormat = 1;
+  bit hasVerifier = 1;
 }
 
 def EndOp : HeteroCL_Op<"end", [NoSideEffect, HasParent<"CustomizationOp">, Terminator]> {
@@ -613,7 +610,7 @@ def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, Types
     }
   }];
 
-  let verifier = [{ return success(); }];
+  bit hasVerifier = 0;
 
   let assemblyFormat = "$predicate `,` $lhs `,` $rhs attr-dict `:` type($lhs)";
 }

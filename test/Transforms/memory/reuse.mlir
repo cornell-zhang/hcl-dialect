@@ -2,7 +2,7 @@
 
 // CHECK: #set0 = affine_set<(d0) : (d0 - 2 >= 0)>
 module {
-    func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
+    func.func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -32,7 +32,7 @@ module {
         %buf = hcl.reuse_at(%A: memref<10x10xf32>, %lj) -> memref<3xf32>
         return
     }
-    func @blur5(%A: memref<10x10xf32>, %B: memref<10x5xf32>)
+    func.func @blur5(%A: memref<10x10xf32>, %B: memref<10x5xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -54,7 +54,7 @@ module {
         %buf = hcl.reuse_at(%A: memref<10x10xf32>, %lj) -> memref<5xf32>
         return
     }
-    func @blur_x(%A: memref<10x10xf32>, %B: memref<8x10xf32>)
+    func.func @blur_x(%A: memref<10x10xf32>, %B: memref<8x10xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -91,7 +91,7 @@ module {
     //     %buf = hcl.reuse_at(%A: memref<10x10xf32>, %lj) -> memref<3xf32>
     //     return %B : memref<10x8xf32>
     // }
-    func @conv2d(%A: memref<10x10xf32>, %B: memref<8x8xf32>)
+    func.func @conv2d(%A: memref<10x10xf32>, %B: memref<8x8xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"

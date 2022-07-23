@@ -2,7 +2,7 @@
 
 from hcl_mlir.build_ir import IterVar
 from hcl_mlir.ir import *
-from hcl_mlir.dialects import builtin, arith, memref, affine
+from hcl_mlir.dialects import func, arith, memref, affine
 from hcl_mlir.dialects import hcl as hcl_d
 import hcl_mlir
 
@@ -17,10 +17,11 @@ with Context() as ctx, Location.unknown() as loc:
 
     with InsertionPoint(module.body):
 
-        @builtin.FuncOp.from_py_func(memref_type)
+        @func.FuncOp.from_py_func(memref_type)
         def kernel(A):
             for_i = hcl_mlir.make_for(0, 1024, name="i")
-            hcl_mlir.GlobalInsertionPoint.save(InsertionPoint(for_i.body.operations[0]))
+            hcl_mlir.GlobalInsertionPoint.save(
+                InsertionPoint(for_i.body.operations[0]))
             var = IterVar(for_i.induction_variable)
             var.dtype = idx_type
             with InsertionPoint(for_i.body.operations[0]):

@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -27,7 +27,7 @@ module {
         hcl.reorder (%lk, %lj, %li_inner)
         return
     }
-    func @gemm_reorder_outermost(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_reorder_outermost(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"

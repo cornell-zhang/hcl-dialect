@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @gemm_buffer_at_axis_0(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_buffer_at_axis_0(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -33,7 +33,7 @@ module {
         %buf = hcl.buffer_at(%C: memref<1024x1024xf32>, %li) -> memref<1024xf32>
         return
     }
-    func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_buffer_at_axis_1(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -83,7 +83,7 @@ module {
     //     %buf = hcl.buffer_at(%C: memref<1024x1024xf32>, 2) -> memref<1xf32>
     //     return
     // }
-    func @gemm_interleaving_accu(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_interleaving_accu(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"

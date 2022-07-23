@@ -16,8 +16,8 @@
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
@@ -67,7 +67,7 @@ Attribute createZeroAttr(OpBuilder &builder, mlir::Type elementType) {
   return {};
 }
 
-LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
+LogicalResult runSplitting(func::FuncOp &f, SplitOp &splitOp) {
   // 1) Get the schedule
   unsigned int factor = splitOp.factor();
   auto loopHandle =
@@ -194,7 +194,7 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   return success();
 }
 
-LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
+LogicalResult runTiling(func::FuncOp &f, TileOp &tileOp) {
   // 1) Get the schedule
   unsigned int x_factor = tileOp.x_factor();
   unsigned int y_factor = tileOp.y_factor();
@@ -334,7 +334,7 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   return success();
 }
 
-LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
+LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   // 1) Get the schedule
   const auto loopsToReorder = reorderOp.loops(); // operand_range
   auto loopHandle =
@@ -443,7 +443,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   return success();
 }
 
-LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
+LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
   auto optional_factor = unrollOp.factor();
   unsigned int factor;
@@ -484,7 +484,7 @@ LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   return success();
 }
 
-LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
+LogicalResult runParallel(func::FuncOp &f, ParallelOp &parallelOp) {
   // 1) Get the schedule
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp());
@@ -518,7 +518,7 @@ LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   return success();
 }
 
-LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
+LogicalResult runPipelining(func::FuncOp &f, PipelineOp &pipelineOp) {
   // 1) Get the schedule
   auto optional_ii = pipelineOp.ii();
   unsigned int ii;
@@ -558,7 +558,7 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   return success();
 }
 
-LogicalResult runThreadBind(FuncOp &f, ThreadBindOp &threadBindOp) {
+LogicalResult runThreadBind(func::FuncOp &f, ThreadBindOp &threadBindOp) {
   // 1) Get the schedule
   auto target_dim = threadBindOp.dim();
   auto loopHandle =
@@ -710,7 +710,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
 
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
-LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
+LogicalResult runFusing(func::FuncOp &f, FuseOp &fuseOp) {
   // 1) Get the schedule
   const auto loopsToFuse = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToFuse.size();
@@ -805,7 +805,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   return success();
 }
 
-LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
+LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
   // 1) Get the schedule
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
@@ -964,7 +964,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   return success();
 }
 
-bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
+bool findArray(func::FuncOp &f, const Value &target, Value &ret_array) {
   if (!target.getDefiningOp()) { // in func args
     for (auto arg : f.getArguments()) {
       if (target == arg) { // found the corresponding array
@@ -980,7 +980,8 @@ bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
+LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
+                           Value &array) {
   // 1) Get the schedule
   // auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
@@ -1076,7 +1077,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   return success();
 }
 
-LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
+LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   auto target = reuseAtOp.target(); // return a Value type
   auto loopHandle =
@@ -1951,7 +1952,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   return success();
 }
 
-LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
+LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
   // 1) Get the schedule
   auto target = bufferAtOp.target(); // return a Value type
   auto loopHandle =
@@ -2223,7 +2224,7 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
+LogicalResult runReshape(func::FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
   auto newType = reshapeOp.output().getType().dyn_cast<MemRefType>();
@@ -2305,7 +2306,7 @@ LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
 }
 
 LogicalResult
-runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
+runInterKernelDataPlacement(std::map<std::string, func::FuncOp> &funcMap,
                             Value &arrayToStream, int fifo_depth = -1) {
   // Construct new array type (add stream attribute)
   auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
@@ -2327,7 +2328,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
   // Set new types in stage functions
   for (auto user : arrayToStream.getUsers()) {
     // first locate the CallOp
-    if (auto callOp = dyn_cast<CallOp>(user)) {
+    if (auto callOp = dyn_cast<func::CallOp>(user)) {
       // get stage function
       auto stage = funcMap[callOp.getCallee().str().substr(6)];
       for (unsigned argIdx = 0, e = user->getNumOperands(); argIdx < e;
@@ -2438,7 +2439,7 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
   }
 }
 
-LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
+LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
   // 1) Get the schedule
   auto stages = outlineOp.stages();
   SmallVector<AffineForOp> rootForOps;
@@ -2472,10 +2473,10 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
 
   // 5) If the function has been built, directly call it
   if (outlineOp->hasAttr("unify")) {
-    FuncOp targetFunc;
+    func::FuncOp targetFunc;
     auto preFuncName =
         outlineOp->getAttr("unify").cast<StringAttr>().getValue();
-    for (FuncOp func : mod.getOps<FuncOp>()) {
+    for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
       if (func.getName() == preFuncName) {
         targetFunc = func;
         break;
@@ -2628,8 +2629,8 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     inputTypes = f.front().getArgumentTypes();
     f.setType(Builder(f.getContext()).getFunctionType(inputTypes, resultTypes));
     // Call the function
-    call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
-                                targetFunc, allMemrefs);
+    call_builder.create<func::CallOp>(
+        rootForOps[rootForOps.size() - 1].getLoc(), targetFunc, allMemrefs);
     for (auto rootForOp : rootForOps) {
       rootForOp.erase();
     }
@@ -2661,7 +2662,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     func_name += "_" + op_name;
   }
   auto func =
-      builder.create<FuncOp>(f.getLoc(), StringRef(func_name), funcType);
+      builder.create<func::FuncOp>(f.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
   // used for generating HLS ap_int/fixed types
   func->setAttr("bit", builder.getUnitAttr());
@@ -2694,7 +2695,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   func->setAttr("itypes", StringAttr::get(func.getContext(), itypes));
   Block *entryBlock = func.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
-  auto ret = builder.create<ReturnOp>(func->getLoc());
+  auto ret = builder.create<func::ReturnOp>(func->getLoc());
 
   if (outlineOp->hasAttr("axis")) {
     // 7) Create callop in the main function
@@ -2712,7 +2713,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       }
       cntAxis++;
     }
-    call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    call_builder.create<func::CallOp>(targetForOp.getLoc(), func, allMemrefs);
     // 8) Move original stage to the new function
     auto &targetBody = targetForOp.getBody()->getOperations();
     auto &funcBody = func.front().getOperations();
@@ -2781,7 +2782,7 @@ void updateMemrefAccess(Operation *&user, SmallVector<AffineExpr> &dimExprs) {
   }
 }
 
-LogicalResult runReform(FuncOp &f, ReformOp &reformOp, Value &array) {
+LogicalResult runReform(func::FuncOp &f, ReformOp &reformOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
   auto oldShape = oldType.getShape();
@@ -2823,7 +2824,8 @@ bool isHCLOp(Operation &op) {
                    InterKernelToOp>(op);
 }
 
-void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
+void eraseScheduleOp(func::FuncOp &f,
+                     SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -2840,7 +2842,7 @@ void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
 }
 
 void applyCustomization(
-    FuncOp &top_func,
+    func::FuncOp &top_func,
     std::map<std::string, hcl::CustomizationOp> &customizationMap,
     SmallVector<Operation *, 10> &opToRemove) {
   auto builder = OpBuilder::atBlockTerminator(&(top_func.getBody().front()));
@@ -2869,7 +2871,7 @@ void applyCustomization(
 }
 
 bool applyLoopTransformationOnSingleFunction(
-    ModuleOp &mod, FuncOp &f,
+    ModuleOp &mod, func::FuncOp &f,
     std::map<std::string, hcl::CustomizationOp> &customizationMap) {
   SmallVector<Operation *, 10> opToRemove;
   applyCustomization(f, customizationMap, opToRemove);
@@ -2968,7 +2970,7 @@ bool applyLoopTransformation(ModuleOp &mod) {
     customizationMap[c.getName().str()] = c;
   }
   // apply schedule
-  for (FuncOp f : mod.getOps<FuncOp>()) {
+  for (func::FuncOp f : mod.getOps<func::FuncOp>()) {
     applyLoopTransformationOnSingleFunction(mod, f, customizationMap);
   }
   return true;

@@ -7,6 +7,7 @@
 #ifndef HCL_TRANSFORMS_PASSES_H
 #define HCL_TRANSFORMS_PASSES_H
 
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {

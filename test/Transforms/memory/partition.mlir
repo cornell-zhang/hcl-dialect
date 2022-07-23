@@ -4,7 +4,7 @@
 // CHECK: #map1 = affine_map<(d0, d1) -> (d0 floordiv 256, d1 floordiv 512, d0 mod 256, d1 mod 512)>
 // CHECK: #map2 = affine_map<(d0, d1) -> (d0, 0, 0, d1)>
 module {
-    func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
+    func.func @matrix_multiply(%A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>) -> memref<1024x1024xf32>
     {
         %s = hcl.create_op_handle "s"
         %l1 = hcl.create_loop_handle %s, "i"

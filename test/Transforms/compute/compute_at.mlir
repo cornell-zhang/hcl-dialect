@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @sibling_fusion(%arg0: memref<10x10xf32>, %arg1: memref<10x10xf32>,
+    func.func @sibling_fusion(%arg0: memref<10x10xf32>, %arg1: memref<10x10xf32>,
                      %arg2: memref<10x10xf32>, %arg3: memref<10x10xf32>,
                      %arg4: memref<10x10xf32>) {
         %s1 = hcl.create_op_handle "s1"
@@ -31,7 +31,7 @@ module {
         hcl.compute_at (%s1, %s2, %l4)
         return
     }
-    func @matrix_multiply( %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>, %D: memref<1024x1024xf32>)
+    func.func @matrix_multiply( %A: memref<1024x1024xf32>, %B: memref<1024x1024xf32>, %C: memref<1024x1024xf32>, %D: memref<1024x1024xf32>)
     {
         %s1 = hcl.create_op_handle "s1"
         %s2 = hcl.create_op_handle "s2"
@@ -70,7 +70,7 @@ module {
         hcl.compute_at (%s1, %s2, %l6)
         return
     }
-    func @no_load() -> (memref<10x10xi32>, memref<10x10xi32>) {
+    func.func @no_load() -> (memref<10x10xi32>, memref<10x10xi32>) {
         %3 = hcl.create_op_handle "A"
         %0 = hcl.create_loop_handle %3, "y"
         %1 = hcl.create_loop_handle %3, "x"

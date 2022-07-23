@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-  func @top(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
+  func.func @top(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
     %0 = memref.alloc() {name = "C"} : memref<10x32xi32>
     %3 = hcl.create_op_handle "C"
     %1 = hcl.create_loop_handle %3, "i"
@@ -44,7 +44,7 @@ module {
     hcl.outline (%7, %11)
     return %8 : memref<10x32xi32>
   }
-  func @top2(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
+  func.func @top2(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
     %0 = memref.alloc() {name = "C1"} : memref<10x32xi32>
     %3 = hcl.create_op_handle "C1"
     %1 = hcl.create_loop_handle %3, "i"

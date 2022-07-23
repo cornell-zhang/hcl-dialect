@@ -23,6 +23,7 @@
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -30,8 +31,8 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void moveReturnToInput(FuncOp &funcOp) {
-  FunctionType functionType = funcOp.getType();
+void moveReturnToInput(func::FuncOp &funcOp) {
+  FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> resTypes = llvm::to_vector<4>(functionType.getResults());
   SmallVector<Type, 4> argTypes;
   for (auto &arg : funcOp.getArguments()) {
@@ -51,7 +52,7 @@ void moveReturnToInput(FuncOp &funcOp) {
   // and replace their uses with newly created block args
   SmallVector<Operation *, 4> returnOps;
   funcOp.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<ReturnOp>(op)) {
+    if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
       returnOps.push_back(op);
     }
   });
@@ -89,8 +90,8 @@ void moveReturnToInput(FuncOp &funcOp) {
 bool applyMoveReturnToInput(ModuleOp &mod) {
   // Find top-level function
   bool isFoundTopFunc = false;
-  FuncOp *topFunc;
-  for (FuncOp func : mod.getOps<FuncOp>()) {
+  func::FuncOp *topFunc;
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     if (func->hasAttr("top")) {
       isFoundTopFunc = true;
       topFunc = &func;

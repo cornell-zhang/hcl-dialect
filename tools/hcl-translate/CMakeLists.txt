@@ -18,8 +18,8 @@ if(OPENSCOP)
       MLIRIR
       MLIRParser
       MLIRPass
-      MLIRSPIRV
-      MLIRTranslation
+      MLIRSPIRVDialect
+      MLIRTranslateLib
       MLIRSupport
       MLIRHCLEmitHLSCpp
       MLIRHCLEmitOpenSCoP
@@ -34,8 +34,8 @@ else()
       MLIRIR
       MLIRParser
       MLIRPass
-      MLIRSPIRV
-      MLIRTranslation
+      MLIRSPIRVDialect
+      MLIRTranslateLib
       MLIRSupport
       MLIRHCLEmitHLSCpp
       MLIRHeteroCL

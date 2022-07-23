@@ -1,5 +1,5 @@
 # RUN: %PYTHON %s
-import os 
+import os
 import ctypes
 import numpy as np
 
@@ -8,13 +8,15 @@ from hcl_mlir.passmanager import *
 from hcl_mlir.execution_engine import *
 from hcl_mlir.runtime import *
 
+
 def lowerToLLVM(module):
     import hcl_mlir.conversions
     pm = PassManager.parse(
-        "lower-affine,convert-scf-to-std,convert-memref-to-llvm,convert-std-to-llvm,reconcile-unrealized-casts")
+        "lower-affine,convert-scf-to-cf,convert-arith-to-llvm,convert-memref-to-llvm,convert-func-to-llvm,convert-cf-to-llvm,reconcile-unrealized-casts")
     pm.run(module)
     # module.dump()
     return module
+
 
 def get_assembly(filename):
     with open(filename, "r") as f:
@@ -23,13 +25,16 @@ def get_assembly(filename):
 
 
 def test_execution_engine(P=16, Q=22, R=18, S=24):
-    code = get_assembly(os.path.join(os.path.dirname(os.path.abspath(__file__)), "affine_dialect.mlir"))
+    code = get_assembly(os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "affine_dialect.mlir"))
 
     # Add shared library
     if os.getenv("LLVM_BUILD_DIR") is not None:
         shared_libs = [
-            os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_runner_utils.so'),
-            os.path.join(os.getenv("LLVM_BUILD_DIR"), 'lib', 'libmlir_c_runner_utils.so')
+            os.path.join(os.getenv("LLVM_BUILD_DIR"),
+                         'lib', 'libmlir_runner_utils.so'),
+            os.path.join(os.getenv("LLVM_BUILD_DIR"),
+                         'lib', 'libmlir_c_runner_utils.so')
         ]
     else:
         shared_libs = None
@@ -49,7 +54,7 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
     D_memref = ctypes.pointer(
         ctypes.pointer(get_ranked_memref_descriptor(D)))
     # res1_memref = ctypes.pointer(
-        # ctypes.pointer(get_ranked_memref_descriptor(res1))
+    # ctypes.pointer(get_ranked_memref_descriptor(res1))
     # )
     res1 = make_nd_memref_descriptor(2, ctypes.c_float)()
     res1_memref = ctypes.pointer(ctypes.pointer(res1))
@@ -58,14 +63,17 @@ def test_execution_engine(P=16, Q=22, R=18, S=24):
         module = Module.parse(code)
         lowered = lowerToLLVM(module)
         if shared_libs is not None:
-            execution_engine = ExecutionEngine(lowered, opt_level=3, shared_libs=shared_libs)
+            execution_engine = ExecutionEngine(
+                lowered, opt_level=3, shared_libs=shared_libs)
         else:
             execution_engine = ExecutionEngine(lowered)
-        execution_engine.invoke("top", res1_memref, A_memref, B_memref, C_memref, D_memref)
-        
+        execution_engine.invoke(
+            "top", res1_memref, A_memref, B_memref, C_memref, D_memref)
+
     ret = ranked_memref_to_numpy(res1_memref[0])
     golden = 0.1 * np.matmul(np.matmul(A, B), C) + 0.1 * D
     assert np.allclose(ret, golden)
+
 
 if __name__ == "__main__":
     test_execution_engine()

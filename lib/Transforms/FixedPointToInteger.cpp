@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/SCF.h"
@@ -59,9 +60,9 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
  * to 64-bit int/uint, so we update the input/output arguments
  * to 64-bit signless integer type. When the input memref
  */
-FunctionType updateFunctionSignature(FuncOp &funcOp) {
+FunctionType updateFunctionSignature(func::FuncOp &funcOp) {
   bool isTop = funcOp.getName() == "top";
-  FunctionType functionType = funcOp.getType();
+  FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
   SmallVector<Type, 8> arg_types;
@@ -138,7 +139,7 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
   funcOp->setAttr("itypes", StringAttr::get(funcOp.getContext(), itypes));
   funcOp->setAttr("otypes", StringAttr::get(funcOp.getContext(), otypes));
 
-  // Update FuncOp's block argument types
+  // Update func::FuncOp's block argument types
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
@@ -170,7 +171,7 @@ FunctionType updateFunctionSignature(FuncOp &funcOp) {
                   Value v = nestedBuilder.create<AffineLoadOp>(
                       loc, block.getArgument(i), ivs);
                   Value truncated =
-                      nestedBuilder.create<arith::TruncIOp>(loc, v, truncType);
+                      nestedBuilder.create<arith::TruncIOp>(loc, truncType, v);
                   nestedBuilder.create<AffineStoreOp>(loc, truncated,
                                                       truncMemRef, ivs);
                 });
@@ -193,7 +194,7 @@ memref may change as well, which makes the affine load's result
 type different from input memref's element type. This function
 updates the result type of affine load operations
 */
-void updateAffineLoad(FuncOp &f) {
+void updateAffineLoad(func::FuncOp &f) {
   SmallVector<Operation *, 10> loads;
   f.walk([&](Operation *op) {
     if (auto add_op = dyn_cast<AffineLoadOp>(op)) {
@@ -214,18 +215,19 @@ void updateAffineLoad(FuncOp &f) {
  * Check ReturnOp's argument, if it is an AllocOp and
  * it's type is not i64 memref, update it to be i64 memeref
  */
-void updateReturnOp(FuncOp &funcOp) {
+void updateReturnOp(func::FuncOp &funcOp) {
   bool isTop = funcOp.getName() == "top";
-  if (!isTop) return; // Only update top function
-  // Update FuncOp's return types
+  if (!isTop)
+    return; // Only update top function
+  // Update func::FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
   funcOp.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<ReturnOp>(op)) {
+    if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
       returnOps.push_back(op);
     }
   });
   // get the return type of the function
-  FunctionType funcType = funcOp.getType();
+  FunctionType funcType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types = llvm::to_vector<4>(funcType.getResults());
 
   // If return op is not int64, we need to add a cast node
@@ -266,7 +268,7 @@ void updateReturnOp(FuncOp &funcOp) {
  * Create a float64 memref to store the real value
  * of hcl.print's operand memref
  */
-void lowerPrintOp(FuncOp &funcOp) {
+void lowerPrintOp(func::FuncOp &funcOp) {
   SmallVector<Operation *, 4> printOps;
   funcOp.walk([&](Operation *op) {
     if (auto new_op = dyn_cast<PrintOp>(op)) {
@@ -319,7 +321,7 @@ void lowerPrintOp(FuncOp &funcOp) {
  * type, these information will not be directly
  * accessible through operands' types.
  */
-void markFixedArithOps(FuncOp &f) {
+void markFixedArithOps(func::FuncOp &f) {
   SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
     if (llvm::isa<AddFixedOp, SubFixedOp, MulFixedOp, DivFixedOp, CmpFixedOp,
@@ -412,7 +414,7 @@ void markFixedArithOps(FuncOp &f) {
  * type, these information will not be directly
  * accessible through operands' types.
  */
-void markFixedCastOps(FuncOp &f) {
+void markFixedCastOps(func::FuncOp &f) {
   // collect operations to mark
   SmallVector<Operation *, 10> fixedOps;
   f.walk([&](Operation *op) {
@@ -466,7 +468,7 @@ void markFixedCastOps(FuncOp &f) {
 }
 
 // Fixed-point memref allocation op to integer memref
-void updateAlloc(FuncOp &f) {
+void updateAlloc(func::FuncOp &f) {
   SmallVector<Operation *, 10> allocOps;
   f.walk([&](Operation *op) {
     if (auto alloc_op = dyn_cast<memref::AllocOp>(op)) {
@@ -1163,7 +1165,7 @@ void visitRegion(Region &region) {
 /// Pass entry point
 bool applyFixedPointToInteger(ModuleOp &mod) {
 
-  for (FuncOp func : mod.getOps<FuncOp>()) {
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerPrintOp(func);
     markFixedArithOps(func);
     markFixedCastOps(func);

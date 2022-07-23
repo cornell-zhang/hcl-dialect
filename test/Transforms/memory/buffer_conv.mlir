@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-  func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>)
+  func.func @conv_interleaving_accu(%Input: memref<32x32xf32>, %Kernel: memref<3x3xf32>, %Output: memref<30x30xf32>)
   {
     %s = hcl.create_op_handle "s"
     %li = hcl.create_loop_handle %s, "i"
@@ -40,7 +40,7 @@ module {
     %buf = hcl.buffer_at(%Output: memref<30x30xf32>, %li) -> memref<30xf32>
     return
   }
-  func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
+  func.func @conv2d_interleaving_accu(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %s = hcl.create_op_handle "s"
     %loc = hcl.create_loop_handle %s, "oc"
@@ -71,7 +71,7 @@ module {
     %buf = hcl.buffer_at(%Output: memref<6x30x30xf32>, %li) -> memref<30xf32>
     return
   }
-  func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
+  func.func @conv2d_default_buf(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %s = hcl.create_op_handle "s"
     %loc = hcl.create_loop_handle %s, "oc"
@@ -101,7 +101,7 @@ module {
     %buf = hcl.buffer_at(%Output: memref<6x30x30xf32>, %lj) -> memref<1xf32>
     return
   }
-  func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
+  func.func @conv2d_buffer_at_0(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %s = hcl.create_op_handle "s"
     %loc = hcl.create_loop_handle %s, "oc"
@@ -145,7 +145,7 @@ module {
     %buf = hcl.buffer_at(%Output: memref<6x30x30xf32>, %loc) -> memref<30x30xf32>
     return
   }
-  func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
+  func.func @conv2d_buffer_at_0_interleaving(%Input: memref<3x32x32xf32>, %Kernel: memref<6x3x3x3xf32>, %Output: memref<6x30x30xf32>)
   {
     %s = hcl.create_op_handle "s"
     %loc = hcl.create_loop_handle %s, "oc"

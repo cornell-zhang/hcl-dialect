@@ -20,23 +20,6 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/IR/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 
-def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
-{
-    let summary = "loop handle";
-    let description = [{
-        Create a loop handle
-
-        Parameters
-        loop_name (String) - The name of a loop
-    }];
-
-    let arguments = (ins StrAttr:$loop_name);
-    let results = (outs LoopHandle:$result);
-    let assemblyFormat = [{
-       $loop_name attr-dict
-    }];
-}
-
 def HeteroCL_CreateOpHandleOp : HeteroCL_Op<"create_op_handle"> 
 {
     let summary = "op handle";
@@ -51,6 +34,23 @@ def HeteroCL_CreateOpHandleOp : HeteroCL_Op<"create_op_handle">
     let results = (outs OpHandle:$result);
     let assemblyFormat = [{
        $op_name attr-dict
+    }];
+}
+
+def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle"> 
+{
+    let summary = "loop handle";
+    let description = [{
+        Create a loop handle
+
+        Parameters
+        loop_name (String) - The name of a loop
+    }];
+
+    let arguments = (ins OpHandle:$op, StrAttr:$loop_name);
+    let results = (outs LoopHandle:$result);
+    let assemblyFormat = [{
+       $op `,` $loop_name attr-dict
     }];
 }
 

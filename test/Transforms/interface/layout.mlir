@@ -20,7 +20,7 @@ module {
                 } { loop_name = "k", reduction = 1 : i32}
             } { loop_name = "j" }
         } { loop_name = "i", stage_name = "s" }
-        hcl.layout(%B : memref<512x1024xf32>) {layout=affine_map<(d0,d1)->(d1,d0)>} -> memref<1024x512xf32>
+        hcl.reform(%B : memref<512x1024xf32>) {layout=affine_map<(d0,d1)->(d1,d0)>} -> memref<1024x512xf32>
         return %C : memref<1024x1024xf32>
     }
 }

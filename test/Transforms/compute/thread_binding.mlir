@@ -16,9 +16,9 @@ module {
             // CHECK:   } {loop_name = "i.outer", op_name = "s", thread_axis = 0 : i32}
         } { loop_name = "i", op_name = "s" }
 
-        %li_outer, %li_inner = hcl.split (%s, %li, 64)
-        hcl.bind (%s, %li_outer, "BlockIdxX")
-        hcl.bind (%s, %li_inner, "ThreadIdxX")
+        %li_outer, %li_inner = hcl.split (%li, 64)
+        hcl.bind (%li_outer, "BlockIdxX")
+        hcl.bind (%li_inner, "ThreadIdxX")
         return
     }
 }

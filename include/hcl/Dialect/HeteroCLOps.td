@@ -20,6 +20,10 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/IR/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 
+//===----------------------------------------------------------------------===//
+// Handle definition
+//===----------------------------------------------------------------------===//
+
 def HeteroCL_CreateOpHandleOp : HeteroCL_Op<"create_op_handle"> 
 {
     let summary = "op handle";
@@ -53,6 +57,10 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
        $op `,` $loop_name attr-dict
     }];
 }
+
+//===----------------------------------------------------------------------===//
+// Parameterized customization template
+//===----------------------------------------------------------------------===//
 
 def CustomizationOp : HeteroCL_Op<"customization", [
     FunctionOpInterface, IsolatedFromAbove, Symbol
@@ -181,6 +189,10 @@ def ApplyOp : HeteroCL_Op<"apply", [CallOpInterface,
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// Customization primitives
+//===----------------------------------------------------------------------===//
+
 def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
 {
     let summary = "reorder";
@@ -193,10 +205,10 @@ def HeteroCL_ReorderOp : HeteroCL_Op<"reorder">
         args (list of IterVar) - The order to be ordered
     }];
 
-    let arguments = (ins OpHandle:$stage, Variadic<LoopHandle>:$loops);
+    let arguments = (ins Variadic<LoopHandle>:$loops);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` ($loops^)? `)` attr-dict
+        `(` ($loops^)? `)` attr-dict
     }];
 }
 
@@ -219,10 +231,10 @@ def HeteroCL_SplitOp : HeteroCL_Op<"split">
         * inner (IterVar) - The inner variable of iteration.
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, UI32Attr:$factor);
+    let arguments = (ins LoopHandle:$loop, UI32Attr:$factor);
     let results = (outs LoopHandle:$outer, LoopHandle:$inner);
     let assemblyFormat = [{
-        `(` $stage `,` $loop `,` $factor `)` attr-dict
+        `(` $loop `,` $factor `)` attr-dict
     }];
     // https://mlir.llvm.org/docs/OpDefinitions/#custom-builder-methods
     // let builders = [];
@@ -251,10 +263,10 @@ def HeteroCL_TileOp : HeteroCL_Op<"tile">
         p_y_inner (IterVar) - Inner axis of y dimension
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
+    let arguments = (ins LoopHandle:$x_loop, LoopHandle:$y_loop, UI32Attr:$x_factor, UI32Attr:$y_factor);
     let results = (outs LoopHandle:$x_outer, LoopHandle:$x_inner, LoopHandle:$y_outer, LoopHandle:$y_inner);
     let assemblyFormat = [{
-        `(` $stage `,` $x_loop `,` $y_loop `,` $x_factor `,` $y_factor `)` attr-dict
+        `(` $x_loop `,` $y_loop `,` $x_factor `,` $y_factor `)` attr-dict
     }];
 }
 
@@ -275,10 +287,10 @@ def HeteroCL_FuseOp : HeteroCL_Op<"fuse">
         fused - The fused variable of iteration.
     }];
 
-    let arguments = (ins OpHandle:$stage, Variadic<LoopHandle>:$loops);
+    let arguments = (ins Variadic<LoopHandle>:$loops);
     let results = (outs LoopHandle:$fused_loop);
     let assemblyFormat = [{
-        `(` $stage `,` ($loops^)? `)` attr-dict
+        `(` ($loops^)? `)` attr-dict
     }];
 }
 
@@ -315,10 +327,10 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
         * factor (Expr) - The unroll factor. Default value 0 means full unroll.
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
+    let arguments = (ins LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"0">>:$factor);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop (`,` $factor^)? `)` attr-dict
+        `(` $loop (`,` $factor^)? `)` attr-dict
     }];
 }
 
@@ -335,10 +347,10 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
         * initiation_interval (Expr) - The initiation interval in pipeline schedule. Default value is 1.
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
+    let arguments = (ins LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop (`,` $ii^)? `)` attr-dict
+        `(` $loop (`,` $ii^)? `)` attr-dict
     }];
     let builders = [
         OpBuilder<(ins "hcl::LoopHandleType":$loop,
@@ -358,10 +370,10 @@ def HeteroCL_ParallelOp : HeteroCL_Op<"parallel">
         var (IterVar) - The iteration to be parallelized.
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$loop);
+    let arguments = (ins LoopHandle:$loop);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop `)` attr-dict
+        `(` $loop `)` attr-dict
     }];
 }
 
@@ -378,10 +390,10 @@ def HeteroCL_ThreadBindOp : HeteroCL_Op<"bind">
         * dim (Expr) - The NDRange dimension to be binded to the iteration.
     }];
 
-    let arguments = (ins OpHandle:$stage, LoopHandle:$loop, NDRangeDimKindEnum:$dim);
+    let arguments = (ins LoopHandle:$loop, NDRangeDimKindEnum:$dim);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $stage `,` $loop `,` $dim `)` attr-dict
+        `(` $loop `,` $dim `)` attr-dict
     }];
     let builders = [
         OpBuilder<(ins "hcl::LoopHandleType":$loop,
@@ -433,10 +445,10 @@ def HeteroCL_ReuseAtOp : HeteroCL_Op<"reuse_at">
         * name (string, optional) - The name of the reuse buffer
     }];
 
-    let arguments = (ins OpHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
+    let arguments = (ins AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
-        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
+        `(` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
     }];
 }
 
@@ -456,10 +468,10 @@ def HeteroCL_BufferAtOp : HeteroCL_Op<"buffer_at">
         * axis (IterVar) - The axis that generates the buffer
     }];
 
-    let arguments = (ins OpHandle:$stage, AnyMemRef:$target, LoopHandle:$axis);
+    let arguments = (ins AnyMemRef:$target, LoopHandle:$axis);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
-        `(` $stage `,` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
+        `(` $target `:` type($target) `,` $axis `)` attr-dict `->` type($result)
     }];
 }
 
@@ -542,7 +554,10 @@ def HeteroCL_LayoutOp : HeteroCL_Op<"layout">
     }];
 }
 
-// Fixed-point operators
+//===----------------------------------------------------------------------===//
+// Fixed-point operations
+//===----------------------------------------------------------------------===//
+
 def AnyFixed : Type<CPred<"$_self.isa<hcl::FixedType>() || $_self.isa<hcl::UFixedType>()">, "fixed-point",
                     "hcl::AnyFixedType">;
 def FixedLike: TypeConstraint<Or<[AnyFixed.predicate,
@@ -620,64 +635,6 @@ def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed", [NoSideEffect]> {
     }];
 }
 
-// Bitwise operators
-def GetIntBitOp : HeteroCL_Op<"get_bit"> {
-    let summary = "get bit of an integer";
-    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index);
-    let results = (outs BoolLike:$result);
-    let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $index `)` attr-dict `->` type($result)
-    }];
-}
-
-def SetIntBitOp : HeteroCL_Op<"set_bit"> {
-    let summary = "set bit of an integer";
-    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index, BoolLike:$val);
-    let results = (outs );
-    let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $index `,` $val `:` type($val) `)` attr-dict
-    }];
-}
-
-def GetIntSliceOp : HeteroCL_Op<"get_slice"> {
-    let summary = "get slice of an integer";
-    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo);
-    let results = (outs SignlessIntegerLike:$result);
-    let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $hi `,` $lo `)` attr-dict `->` type($result)
-    }];
-}
-
-def SetIntSliceOp : HeteroCL_Op<"set_slice"> {
-    let summary = "set slice of an integer";
-    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo, SignlessIntegerLike:$val);
-    let results = (outs );
-    let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $hi `,` $lo `,` $val `:` type($val) `)` attr-dict
-    }];
-}
-
-def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
-    let summary = "reverse bits of an integer";
-    let arguments = (ins SignlessIntegerLike:$num);
-    let results = (outs SignlessIntegerLike:$result);
-    let assemblyFormat = [{
-        `(` $num `:` type($num) `)` attr-dict
-    }];
-}
-
-def PrintOp : HeteroCL_Op<"print"> {
-  let summary = "print operation";
-  let description = [{
-    The "print" builtin operation prints a given input memref, and produces
-    no results.
-  }];
-
-  // The print operation takes an input memref to print.
-  let arguments = (ins AnyMemRef:$input);
-  let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
-}
-
 def FixedToFloatOp : HeteroCL_Op<"fixed_to_float"> {
   let summary = "fixed to float cast operation";
   let arguments = (ins FixedLike:$input);
@@ -723,37 +680,53 @@ def FixedToFixedOp : HeteroCL_Op<"fixed_to_fixed"> {
   }];
 }
 
-def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
-    let summary = "struct construct";
-    let description = [{
-        The "struct_construct" builtin operation constructs a struct from
-        a list of values.
-    }];
-    let arguments = (ins Variadic<AnyType>:$input);
-    let results = (outs Struct:$output);
+//===----------------------------------------------------------------------===//
+// Bitwise operations
+//===----------------------------------------------------------------------===//
 
+def GetIntBitOp : HeteroCL_Op<"get_bit"> {
+    let summary = "get bit of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index);
+    let results = (outs BoolLike:$result);
     let assemblyFormat = [{
-        `(` $input `)` attr-dict `:` type($input) `->` type($output)
+        `(` $num `:` type($num) `,` $index `)` attr-dict `->` type($result)
     }];
 }
 
-
-def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
-    let summary = "struct get";
-    let description = [{
-        The "struct_get" operation gets a field from a struct.
-    }];
-    let arguments = (ins Struct:$input, I64Attr:$index);
-    let results = (outs AnyType:$output);
-
+def SetIntBitOp : HeteroCL_Op<"set_bit"> {
+    let summary = "set bit of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index, BoolLike:$val);
+    let results = (outs );
     let assemblyFormat = [{
-        $input `[` $index `]` attr-dict `:` type($input) `->` type($output)
+        `(` $num `:` type($num) `,` $index `,` $val `:` type($val) `)` attr-dict
     }];
+}
 
-    let builders = [
-        OpBuilder<(ins "Value":$input, "size_t":$index)>
-    ];
+def GetIntSliceOp : HeteroCL_Op<"get_slice"> {
+    let summary = "get slice of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $hi `,` $lo `)` attr-dict `->` type($result)
+    }];
+}
 
+def SetIntSliceOp : HeteroCL_Op<"set_slice"> {
+    let summary = "set slice of an integer";
+    let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo, SignlessIntegerLike:$val);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `,` $hi `,` $lo `,` $val `:` type($val) `)` attr-dict
+    }];
+}
+
+def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
+    let summary = "reverse bits of an integer";
+    let arguments = (ins SignlessIntegerLike:$num);
+    let results = (outs SignlessIntegerLike:$result);
+    let assemblyFormat = [{
+        `(` $num `:` type($num) `)` attr-dict
+    }];
 }
 
 def LogicalAndOp : HeteroCL_Op<"logical_and"> {
@@ -772,6 +745,54 @@ def LogicalOrOp : HeteroCL_Op<"logical_or"> {
     let assemblyFormat = [{
         ($input^)? attr-dict `:` type($input) `->` type($result)
     }];
+}
+
+//===----------------------------------------------------------------------===//
+// Miscellaneous operations
+//===----------------------------------------------------------------------===//
+
+def PrintOp : HeteroCL_Op<"print"> {
+  let summary = "print operation";
+  let description = [{
+    The "print" builtin operation prints a given input memref, and produces
+    no results.
+  }];
+
+  // The print operation takes an input memref to print.
+  let arguments = (ins AnyMemRef:$input);
+  let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
+}
+
+def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
+    let summary = "struct construct";
+    let description = [{
+        The "struct_construct" builtin operation constructs a struct from
+        a list of values.
+    }];
+    let arguments = (ins Variadic<AnyType>:$input);
+    let results = (outs Struct:$output);
+
+    let assemblyFormat = [{
+        `(` $input `)` attr-dict `:` type($input) `->` type($output)
+    }];
+}
+
+def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
+    let summary = "struct get";
+    let description = [{
+        The "struct_get" operation gets a field from a struct.
+    }];
+    let arguments = (ins Struct:$input, I64Attr:$index);
+    let results = (outs AnyType:$output);
+
+    let assemblyFormat = [{
+        $input `[` $index `]` attr-dict `:` type($input) `->` type($output)
+    }];
+
+    let builders = [
+        OpBuilder<(ins "Value":$input, "size_t":$index)>
+    ];
+
 }
 
 #endif // HCL_OPS

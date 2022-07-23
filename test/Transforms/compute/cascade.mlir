@@ -51,9 +51,9 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", op_name = "s" }
-        %l4, %l5 = hcl.split (%s, %l1, 8)
-        %l6, %l7, %l8, %l9 = hcl.tile (%s, %l2, %l3, 2, 4) // split & tile
-        %l10, %l11 = hcl.split (%s, %l6, 16)
+        %l4, %l5 = hcl.split (%l1, 8)
+        %l6, %l7, %l8, %l9 = hcl.tile (%l2, %l3, 2, 4) // split & tile
+        %l10, %l11 = hcl.split (%l6, 16)
         return
     }
 }

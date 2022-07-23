@@ -11,7 +11,7 @@ module {
         %j: !hcl.LoopHandle,
         %k: !hcl.LoopHandle
     ) {
-        hcl.pipeline(%s, %j, 1)
+        hcl.pipeline(%j, 1)
         hcl.partition(%A: memref<?x?x!hcl.Type>, "CompletePartition", 2)
         hcl.partition(%B: memref<?x?x!hcl.Type>, "CompletePartition", 2)
         hcl.partition(%C: memref<?x?x!hcl.Type>, "CompletePartition", 2)

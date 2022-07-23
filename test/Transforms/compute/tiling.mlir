@@ -32,14 +32,14 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", op_name = "s" }
-        %li_outer, %li_inner = hcl.split (%s, %li, 16)
-        %li_in_out, %li_in_in = hcl.split (%s, %li_inner, 4) // nest with split
-        %li_out_out, %li_out_in = hcl.split (%s, %li_outer, 8) // multiple split
-        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%s, %lj, %lk, 16, 8) // split & tile
-        %l14, %l15, %l16, %l17 = hcl.tile (%s, %li_in_out, %li_in_in, 2, 2) // nest with split (failed)
-        hcl.unroll (%s, %lk_in, 16) // unroll
-        hcl.pipeline (%s, %lk_out, 1) // pipeline
-        hcl.parallel (%s, %lj_in) // parallel
+        %li_outer, %li_inner = hcl.split (%li, 16)
+        %li_in_out, %li_in_in = hcl.split (%li_inner, 4) // nest with split
+        %li_out_out, %li_out_in = hcl.split (%li_outer, 8) // multiple split
+        %lj_out, %lj_in, %lk_out, %lk_in = hcl.tile (%lj, %lk, 16, 8) // split & tile
+        %l14, %l15, %l16, %l17 = hcl.tile (%li_in_out, %li_in_in, 2, 2) // nest with split (failed)
+        hcl.unroll (%lk_in, 16) // unroll
+        hcl.pipeline (%lk_out, 1) // pipeline
+        hcl.parallel (%lj_in) // parallel
         return
     }
 }

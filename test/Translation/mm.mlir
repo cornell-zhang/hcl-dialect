@@ -26,11 +26,11 @@ module {
       } {loop_name = "j"}
     } {loop_name = "i", op_name="s"}
       
-    %li0, %li1 = hcl.split (%s, %li, 2)
-    %lj0, %lj1 = hcl.split (%s, %lj, 2)
-    hcl.reorder(%s, %li0, %lj0, %li1,%lj1)
-    hcl.unroll(%s, %lj1)
-    hcl.pipeline(%s, %lj1, 1)
+    %li0, %li1 = hcl.split (%li, 2)
+    %lj0, %lj1 = hcl.split (%lj, 2)
+    hcl.reorder(%li0, %lj0, %li1,%lj1)
+    hcl.unroll(%lj1)
+    hcl.pipeline(%lj1, 1)
     return
   }
 

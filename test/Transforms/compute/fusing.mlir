@@ -20,7 +20,7 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", op_name = "s" }
-        %l_fused = hcl.fuse (%s, %li, %lj)
+        %l_fused = hcl.fuse (%li, %lj)
         // (i,j)->(ij/1024,ij%1024)
         return
     }
@@ -43,7 +43,7 @@ module {
                 } { loop_name = "k" }
             } { loop_name = "j" }
         } { loop_name = "i", op_name = "s" }
-        %l_fused = hcl.fuse (%s, %li, %lj, %lk)
+        %l_fused = hcl.fuse (%li, %lj, %lk)
         // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
         return
     }
@@ -70,7 +70,7 @@ module {
                 } { loop_name = "l" }
             } { loop_name = "j" }
         } { loop_name = "i", op_name = "s" }
-        %l_fused = hcl.fuse (%s, %lj, %ll)
+        %l_fused = hcl.fuse (%lj, %ll)
         // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
         return
     }

@@ -41,8 +41,8 @@ module {
             } { loop_name = "j1" }
         // CHECK: } {loop_name = "k1", op_name = "s2"}
         } { loop_name = "i1", op_name = "s2"}
-        hcl.reorder (%s1, %l3, %l2)
-        hcl.reorder (%s2, %l31, %l21, %l11)
+        hcl.reorder (%l3, %l2)
+        hcl.reorder (%l31, %l21, %l11)
         return
     }
 }

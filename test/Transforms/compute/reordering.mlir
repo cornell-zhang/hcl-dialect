@@ -23,8 +23,8 @@ module {
             } { loop_name = "j" }
         // CHECK: } {loop_name = "i.outer", op_name = "s"}
         } { loop_name = "i", op_name = "s" }
-        %li_outer, %li_inner = hcl.split (%s, %li, 8)
-        hcl.reorder (%s, %lk, %lj, %li_inner)
+        %li_outer, %li_inner = hcl.split (%li, 8)
+        hcl.reorder (%lk, %lj, %li_inner)
         return
     }
     func @gemm_reorder_outermost(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
@@ -48,7 +48,7 @@ module {
             } { loop_name = "j" }
         // CHECK: } {loop_name = "k", op_name = "s"}
         } { loop_name = "i", op_name = "s" }
-        hcl.reorder (%s, %lk, %li, %lj)
+        hcl.reorder (%lk, %li, %lj)
         return
     }
 }

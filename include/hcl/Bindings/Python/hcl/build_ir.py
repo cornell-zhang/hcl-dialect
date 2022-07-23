@@ -1010,7 +1010,7 @@ class TensorOp(ExprOp):
     def build(self):
         if self.op == memref.AllocOp:
             self.built_op = self.op(
-                self.memref_type, [], [], None, ip=GlobalInsertionPoint.get()
+                self.memref_type, [], [], ip=GlobalInsertionPoint.get()
             )
             if is_unsigned_type(self.dtype):
                 self.built_op.attributes["unsigned"] = UnitAttr.get()

@@ -17,6 +17,7 @@ set(LIBS
         MLIRIR
         MLIROptLib
         MLIRHeteroCL
+        MLIRHCLTransformOps
         MLIRHCLConversion
         MLIRHCLPasses
         )

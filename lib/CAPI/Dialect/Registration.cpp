@@ -25,7 +25,8 @@ void hclMlirRegisterAllDialects(MlirContext context) {
   registry.insert<mlir::hcl::HeteroCLDialect, mlir::func::FuncDialect,
                   mlir::arith::ArithmeticDialect, mlir::tensor::TensorDialect,
                   mlir::AffineDialect, mlir::math::MathDialect,
-                  mlir::memref::MemRefDialect, mlir::linalg::LinalgDialect>();
+                  mlir::memref::MemRefDialect, mlir::pdl::PDLDialect,
+                  mlir::transform::TransformDialect>();
   unwrap(context)->appendDialectRegistry(registry);
   unwrap(context)->loadAllAvailableDialects();
 }

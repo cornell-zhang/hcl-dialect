@@ -78,9 +78,9 @@ static llvm::cl::opt<bool> lowerToLLVM("lower-to-llvm",
                                        llvm::cl::desc("Lower to LLVM Dialect"),
                                        llvm::cl::init(false));
 
-static llvm::cl::opt<bool> lowerComposite("lower-composite",
-                                       llvm::cl::desc("Lower composite types"),
-                                       llvm::cl::init(false));
+static llvm::cl::opt<bool>
+    lowerComposite("lower-composite", llvm::cl::desc("Lower composite types"),
+                   llvm::cl::init(false));
 
 static llvm::cl::opt<bool> lowerBitOps("lower-bitops",
                                        llvm::cl::desc("Lower bitops"),
@@ -90,8 +90,8 @@ static llvm::cl::opt<bool> legalizeCast("legalize-cast",
                                         llvm::cl::desc("Legalize cast"),
                                         llvm::cl::init(false));
 static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
-                                        llvm::cl::desc("Remove stride map"),
-                                        llvm::cl::init(false));
+                                           llvm::cl::desc("Remove stride map"),
+                                           llvm::cl::init(false));
 
 static llvm::cl::opt<bool>
     enableNormalize("normalize",

@@ -579,7 +579,8 @@ void hcl::registerToOpenScopExtractTranslation() {
           mlir::scf::SCFDialect,
           mlir::AffineDialect, 
           mlir::math::MathDialect, 
-          mlir::memref::MemRefDialect
+          mlir::memref::MemRefDialect,
+          mlir::linalg::LinalgDialect
          >();
          // clang-format on
       });

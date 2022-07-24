@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/StandardOps/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
@@ -24,7 +25,7 @@ void hclMlirRegisterAllDialects(MlirContext context) {
   registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
                   mlir::arith::ArithmeticDialect, mlir::tensor::TensorDialect,
                   mlir::AffineDialect, mlir::math::MathDialect,
-                  mlir::memref::MemRefDialect>();
+                  mlir::memref::MemRefDialect, mlir::linalg::LinalgDialect>();
   unwrap(context)->appendDialectRegistry(registry);
   unwrap(context)->loadAllAvailableDialects();
 }
@@ -42,6 +43,7 @@ void hclMlirRegisterAllPasses() {
   mlir::LLVM::registerLLVMPasses();
   mlir::memref::registerMemRefPasses();
   mlir::registerStandardPasses();
+  mlir::registerLinalgPasses();
 
   mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();

@@ -2483,12 +2483,22 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
             rootForOps[rootForOps.size() - 1].getLoc(),
             forOp.getConstantUpperBound());
         allMemrefs.push_back(idx);
-        // update loop bound
-        auto affineMap = call_builder.getSymbolIdentityMap();
-        forOp.setUpperBound({targetFunc.getArgument(allMemrefs.size() - 1)},
-                            affineMap);
       }
     }
+    // Fix array types
+    for (auto item : llvm::enumerate(allMemrefs)) {
+      auto targetType = targetFunc.getArgument(item.index()).getType();
+      if (item.value().getType() != targetType) {
+        outlineOp.emitWarning(
+            "Change memref type to match function argument type!");
+        item.value().setType(targetType);
+      }
+    }
+    // Fix function type
+    auto resultTypes = f.front().getTerminator()->getOperandTypes();
+    auto inputTypes = f.front().getArgumentTypes();
+    f.setType(Builder(f.getContext()).getFunctionType(inputTypes, resultTypes));
+    // Call the function
     call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
                                 targetFunc, allMemrefs);
     for (auto rootForOp : rootForOps) {

@@ -2702,19 +2702,6 @@ bool isHCLOp(Operation &op) {
                    InterKernelToOp>(op);
 }
 
-// template <class HCLOp>
-// bool runSchedule(
-//     std::map<std::string, FuncOp> &funcMap, HCLOp &op,
-//     std::function<LogicalResult(FuncOp &, HCLOp &)> schedule_func) {
-//   const auto op_name =
-//       dyn_cast<CreateOpHandleOp>(op.stage().getDefiningOp()).op_name().str();
-//   if (funcMap.count(op_name) > 0) {
-//     if (!failed(schedule_func(funcMap[op_name], op)))
-//       return true;
-//   }
-//   return false;
-// }
-
 void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
@@ -2855,116 +2842,14 @@ bool applyLoopTransformationOnSingleFunction(
 }
 
 bool applyLoopTransformation(ModuleOp &mod) {
-  bool isFoundTopFunc = false;
-  std::map<std::string, FuncOp> funcMap;
-  // create name->function mapping
-  for (FuncOp func : mod.getOps<FuncOp>()) {
-    if (func->hasAttr("top")) {
-      isFoundTopFunc = true;
-      funcMap["top"] = func;
-      break;
-    }
-  }
   std::map<std::string, hcl::CustomizationOp> customizationMap;
   for (auto c : mod.getOps<hcl::CustomizationOp>()) {
     customizationMap[c.getName().str()] = c;
   }
-
   // apply schedule
-  if (!isFoundTopFunc || !funcMap["top"]->hasAttr("top")) { // fallback
-    for (FuncOp f : mod.getOps<FuncOp>()) {
-      applyLoopTransformationOnSingleFunction(mod, f, customizationMap);
-    }
+  for (FuncOp f : mod.getOps<FuncOp>()) {
+    applyLoopTransformationOnSingleFunction(mod, f, customizationMap);
   }
-  // else {
-  //   for (FuncOp func : mod.getOps<FuncOp>()) {
-  //     if (!func->hasAttr("top"))
-  //       funcMap[func.getName().str().substr(6)] = func; // Stage_xxx
-  //   }
-  //   FuncOp top_func = funcMap["top"];
-  //   SmallVector<Operation *, 10> opToRemove;
-  //   // first apply customizations
-  //   applyCustomization(top_func, customizationMap, opToRemove);
-  //   // then apply primitives
-  //   for (Operation &op : top_func.getOps()) {
-  //     if (isHCLOp(op)) {
-  //       if (auto new_op = dyn_cast<SplitOp>(op)) {
-  //         runSchedule<SplitOp>(funcMap, new_op, &runSplitting);
-  //       } else if (auto new_op = dyn_cast<TileOp>(op)) {
-  //         runSchedule<TileOp>(funcMap, new_op, &runTiling);
-  //       } else if (auto new_op = dyn_cast<ReorderOp>(op)) {
-  //         runSchedule<ReorderOp>(funcMap, new_op, &runReordering);
-  //       } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
-  //         runSchedule<UnrollOp>(funcMap, new_op, &runUnrolling);
-  //       } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
-  //         runSchedule<PipelineOp>(funcMap, new_op, &runPipelining);
-  //       } else if (auto new_op = dyn_cast<ThreadBindOp>(op)) {
-  //         runSchedule<ThreadBindOp>(funcMap, new_op, &runThreadBind);
-  //       } else if (auto new_op = dyn_cast<ParallelOp>(op)) {
-  //         runSchedule<ParallelOp>(funcMap, new_op, &runParallel);
-  //       } else if (auto new_op = dyn_cast<FuseOp>(op)) {
-  //         runSchedule<FuseOp>(funcMap, new_op, &runFusing);
-  //       } else if (auto new_op = dyn_cast<ComputeAtOp>(op)) {
-  //         // runSchedule<ComputeAtOp>(funcMap, new_op, &runComputeAt);
-  //       } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
-  //         Value array;
-  //         bool isDone = false;
-  //         for (FuncOp f : mod.getOps<FuncOp>()) {
-  //           if (findArray(f, new_op.target(), array)) {
-  //             if (failed(runPartition(f, new_op, array))) {
-  //               return false;
-  //             } else {
-  //               isDone = true;
-  //               break;
-  //             }
-  //           }
-  //         }
-  //         if (!isDone)
-  //           return false;
-  //       } else if (auto new_op = dyn_cast<ReuseAtOp>(op)) {
-  //         runSchedule<ReuseAtOp>(funcMap, new_op, &runReuseAt);
-  //       } else if (auto new_op = dyn_cast<BufferAtOp>(op)) {
-  //         runSchedule<BufferAtOp>(funcMap, new_op, &runBufferAt);
-  //       } else if (auto new_op = dyn_cast<ReshapeOp>(op)) {
-  //         Value array;
-  //         bool isDone = false;
-  //         for (FuncOp f : mod.getOps<FuncOp>()) {
-  //           if (findArray(f, new_op.target(), array)) {
-  //             if (failed(runReshape(f, new_op, array))) {
-  //               return false;
-  //             } else {
-  //               isDone = true;
-  //               break;
-  //             }
-  //           }
-  //         }
-  //         if (!isDone)
-  //           return false;
-  //       } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
-  //         Value array;
-  //         auto optional_fifo_depth = new_op.fifo_depth();
-  //         unsigned int fifo_depth;
-  //         if (optional_fifo_depth.hasValue()) {
-  //           fifo_depth = optional_fifo_depth.getValue();
-  //         } else {
-  //           fifo_depth = -1; // conservative assumption
-  //         }
-  //         if (!findArray(top_func, new_op.target(), array) ||
-  //             failed(runInterKernelDataPlacement(funcMap, array,
-  //             fifo_depth)))
-  //           return false;
-  //       }
-  //       opToRemove.push_back(&op);
-  //     }
-  //   }
-  //   eraseScheduleOp(top_func, opToRemove);
-  //   // move forward stage functions to avoid backward definition
-  //   for (auto item : funcMap) {
-  //     if (item.first != "top") {
-  //       item.second->moveBefore(top_func);
-  //     }
-  //   }
-  // }
   return true;
 }
 

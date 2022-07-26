@@ -19,6 +19,7 @@ std::unique_ptr<OperationPass<ModuleOp>> createLegalizeCastPass();
 std::unique_ptr<OperationPass<ModuleOp>> createRemoveStrideMapPass();
 std::unique_ptr<OperationPass<ModuleOp>> createMemRefDCEPass();
 std::unique_ptr<OperationPass<ModuleOp>> createDataPlacementPass();
+std::unique_ptr<OperationPass<ModuleOp>> createTransformInterpreterPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 bool applyAnyWidthInteger(ModuleOp &module);

@@ -14,11 +14,13 @@
 #include "hcl-c/Translation/EmitVivadoHLS.h"
 #include "hcl/Conversion/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
+#include "hcl/Dialect/TransformOps/HCLTransformOps.h"
 #include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
@@ -168,10 +170,24 @@ PYBIND11_MODULE(_hcl, m) {
       "register_dialect",
       [](MlirContext context) {
         MlirDialectHandle hcl = mlirGetDialectHandle__hcl__();
+        mlir::DialectRegistry registry;
+        mlir::hcl::registerTransformDialectExtension(registry);
+        unwrap(context)->appendDialectRegistry(registry);
         mlirDialectHandleRegisterDialect(hcl, context);
         mlirDialectHandleLoadDialect(hcl, context);
       },
       py::arg("context") = py::none());
+
+  // Apply transform to a design.
+  hcl_m.def("apply_transform", [](MlirModule &mlir_mod) {
+    ModuleOp module = unwrap(mlir_mod);
+    transform::TransformState state(
+        module.getBodyRegion(), module,
+        transform::TransformOptions().enableExpensiveChecks());
+    for (auto op : module.getBody()->getOps<transform::TransformOpInterface>())
+      if (failed(state.applyTransform(op).checkAndReport()))
+        throw py::value_error("failed to apply the transform");
+  });
 
   // Declare customized types and attributes
   populateHCLIRTypes(hcl_m);

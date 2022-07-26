@@ -21,6 +21,7 @@ std::unique_ptr<OperationPass<ModuleOp>> createLowerCompositeTypePass();
 std::unique_ptr<OperationPass<ModuleOp>> createLowerBitOpsPass();
 std::unique_ptr<OperationPass<ModuleOp>> createLegalizeCastPass();
 std::unique_ptr<OperationPass<ModuleOp>> createRemoveStrideMapPass();
+std::unique_ptr<OperationPass<ModuleOp>> createTransformInterpreterPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 

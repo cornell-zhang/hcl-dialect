@@ -52,4 +52,9 @@ def RemoveStrideMap : Pass<"remove-stride-map", "ModuleOp"> {
   let constructor = "mlir::hcl::createRemoveStrideMapPass()";
 }
 
+def TransformInterpreter : Pass<"transform-interpreter", "ModuleOp"> {
+  let summary = "Rewrite the IR by interpreting transform ops";
+  let constructor = "mlir::hcl::createTransformInterpreterPass()";
+}
+
 #endif // HCL_MLIR_PASSES

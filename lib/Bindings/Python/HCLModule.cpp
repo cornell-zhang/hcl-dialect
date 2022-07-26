@@ -75,34 +75,6 @@ static bool loopTransformation(MlirModule &mlir_mod) {
   return applyLoopTransformation(mod);
 }
 
-static bool hostXcelSeparation(MlirModule &pyhost, MlirModule &pyxcel,
-                               MlirModule &pyextern, py::dict pydevice_map,
-                               py::list pygraph_roots, py::dict subgraph) {
-  py::gil_scoped_release();
-  auto host_mod = unwrap(pyhost);
-  auto xcel_mod = unwrap(pyxcel);
-  auto extern_mod = unwrap(pyextern);
-  std::map<std::string, std::string> device_map;
-  for (auto item : pydevice_map) {
-    device_map[item.first.cast<std::string>()] =
-        item.second.cast<std::string>();
-  }
-  std::vector<std::string> graph_roots;
-  for (auto root : pygraph_roots) {
-    graph_roots.push_back(root.cast<std::string>());
-  }
-  std::vector<std::string> inputs;
-  for (auto input : subgraph["inputs"]) {
-    inputs.push_back(input.cast<std::string>());
-  }
-  std::vector<std::string> outputs;
-  for (auto output : subgraph["outputs"]) {
-    outputs.push_back(output.cast<std::string>());
-  }
-  return applyHostXcelSeparation(host_mod, xcel_mod, extern_mod, device_map,
-                                 graph_roots, inputs, outputs);
-}
-
 //===----------------------------------------------------------------------===//
 // Emission APIs
 //===----------------------------------------------------------------------===//
@@ -131,6 +103,41 @@ static bool lowerHCLToLLVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
   return applyHCLToLLVMLoweringPass(mod, *ctx);
 }
 
+static bool lowerFixedPointToInteger(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyFixedPointToInteger(mod);
+}
+
+static bool lowerAnyWidthInteger(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyAnyWidthInteger(mod);
+}
+
+static bool moveReturnToInput(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyMoveReturnToInput(mod);
+}
+
+static bool lowerCompositeType(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLowerCompositeType(mod);
+}
+
+static bool lowerBitOps(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLowerBitOps(mod);
+}
+
+static bool legalizeCast(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLegalizeCast(mod);
+}
+
+static bool removeStrideMap(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyRemoveStrideMap(mod);
+}
+
 static bool lowerAffineMemOpPar(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
   auto mod = unwrap(mlir_mod);
   auto ctx = unwrap(mlir_ctx);
@@ -147,21 +154,6 @@ static bool lowerGPUToNVVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
   auto mod = unwrap(mlir_mod);
   auto ctx = unwrap(mlir_ctx);
   return applyGPUToNVVMLoweringPass(mod, *ctx);
-}
-
-static bool lowerFixedPointToInteger(MlirModule &mlir_mod) {
-  auto mod = unwrap(mlir_mod);
-  return applyFixedPointToInteger(mod);
-}
-
-static bool lowerAnyWidthInteger(MlirModule &mlir_mod) {
-  auto mod = unwrap(mlir_mod);
-  return applyAnyWidthInteger(mod);
-}
-
-static bool moveReturnToInput(MlirModule &mlir_mod) {
-  auto mod = unwrap(mlir_mod);
-  return applyMoveReturnToInput(mod);
 }
 
 //===----------------------------------------------------------------------===//
@@ -194,7 +186,6 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Loop transform APIs.
   hcl_m.def("loop_transformation", &loopTransformation);
-  hcl_m.def("host_device_separation", &hostXcelSeparation);
 
   // Codegen APIs.
   hcl_m.def("emit_vhls", &emitVivadoHls);
@@ -205,6 +196,12 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
   hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
   hcl_m.def("move_return_to_input", &moveReturnToInput);
+
+  // Lowering APIs.
+  hcl_m.def("lower_composite_type", &lowerCompositeType);
+  hcl_m.def("lower_bit_ops", &lowerBitOps);
+  hcl_m.def("legalize_cast", &legalizeCast);
+  hcl_m.def("remove_stride_map", &removeStrideMap);
 
   //GPU backend APIs
   hcl_m.def("lower_hcl_to_scf", &lowerAffineMemOpPar);

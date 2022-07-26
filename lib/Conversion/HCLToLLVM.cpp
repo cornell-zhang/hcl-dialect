@@ -216,10 +216,10 @@ public:
   }
 };
 
-class CreateStageHandleOpLowering : public ConversionPattern {
+class CreateOphandleOpLowering : public ConversionPattern {
 public:
-  explicit CreateStageHandleOpLowering(MLIRContext *context)
-      : ConversionPattern(hcl::CreateStageHandleOp::getOperationName(), 1,
+  explicit CreateOphandleOpLowering(MLIRContext *context)
+      : ConversionPattern(hcl::CreateOpHandleOp::getOperationName(), 1,
                           context) {}
 
   LogicalResult
@@ -577,7 +577,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
-  patterns.add<CreateStageHandleOpLowering>(&context);
+  patterns.add<CreateOphandleOpLowering>(&context);
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
@@ -634,7 +634,6 @@ bool applyAffineMemOpParLoweringPass(ModuleOp &module, MLIRContext &context) {
 //       return false;
 //     }
 //   }
-
 // //module.walk<WalkOrder::PreOrder>([&](AffineForOp loop) {convertAffineLoopNestToGPULaunch(loop, numBlockDims,numThreadDims);});
 // populateAffineToStdConversionPatterns(patterns);
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -928,7 +927,7 @@ bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context) {
   populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
-  patterns.add<CreateStageHandleOpLowering>(&context);
+  patterns.add<CreateOphandleOpLowering>(&context);
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
@@ -980,7 +979,7 @@ bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
-  patterns.add<CreateStageHandleOpLowering>(&context);
+  patterns.add<CreateOphandleOpLowering>(&context);
   patterns.add<PrintOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);

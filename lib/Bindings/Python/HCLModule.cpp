@@ -184,9 +184,12 @@ PYBIND11_MODULE(_hcl, m) {
     transform::TransformState state(
         module.getBodyRegion(), module,
         transform::TransformOptions().enableExpensiveChecks());
-    for (auto op : module.getBody()->getOps<transform::TransformOpInterface>())
+    for (auto op : llvm::make_early_inc_range(
+             module.getBody()->getOps<transform::TransformOpInterface>())) {
       if (failed(state.applyTransform(op).checkAndReport()))
         throw py::value_error("failed to apply the transform");
+      op.erase();
+    }
   });
 
   // Declare customized types and attributes

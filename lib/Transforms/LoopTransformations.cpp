@@ -2462,10 +2462,10 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<Value> newMemrefs(allMemrefs);
 
   // 5) If the function has been built, directly call it
-  if (outlineOp->hasAttr("merge")) {
+  if (outlineOp->hasAttr("unify")) {
     FuncOp targetFunc;
     auto preFuncName =
-        outlineOp->getAttr("merge").cast<StringAttr>().getValue();
+        outlineOp->getAttr("unify").cast<StringAttr>().getValue();
     for (FuncOp func : mod.getOps<FuncOp>()) {
       if (func.getName() == preFuncName) {
         targetFunc = func;

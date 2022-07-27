@@ -2477,12 +2477,15 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
       for (auto loopNameAttr : loopNames) {
         auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-        AffineForOp forOp = rootForOps[0];
-        getLoop(forOp, loopName);
-        auto idx = call_builder.create<arith::ConstantIndexOp>(
-            rootForOps[rootForOps.size() - 1].getLoc(),
-            forOp.getConstantUpperBound());
-        allMemrefs.push_back(idx);
+        for (auto forOp : rootForOps) {
+          int axis = getLoop(forOp, loopName);
+          if (axis == -1)
+            continue;
+          auto idx = call_builder.create<arith::ConstantIndexOp>(
+              forOp.getLoc(), forOp.getConstantUpperBound());
+          allMemrefs.push_back(idx);
+          break;
+        }
       }
     }
     // Recursively update array types
@@ -2617,14 +2620,19 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
     for (auto loopNameAttr : loopNames) {
       auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-      AffineForOp forOp = rootForOps[0];
-      getLoop(forOp, loopName);
-      auto idx = call_builder.create<arith::ConstantIndexOp>(
-          targetForOp.getLoc(), forOp.getConstantUpperBound());
-      allMemrefs.push_back(idx);
-      // update loop bound
-      auto affineMap = builder.getSymbolIdentityMap();
-      forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)}, affineMap);
+      for (auto forOp : rootForOps) {
+        int axis = getLoop(forOp, loopName);
+        if (axis == -1)
+          continue;
+        auto idx = call_builder.create<arith::ConstantIndexOp>(
+            targetForOp.getLoc(), forOp.getConstantUpperBound());
+        allMemrefs.push_back(idx);
+        // update loop bound
+        auto affineMap = builder.getSymbolIdentityMap();
+        forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)},
+                            affineMap);
+        break;
+      }
     }
   } else if (outlineOp->hasAttr("axis")) {
     call_builder = OpBuilder(&(targetForOp.getBody()->back()));

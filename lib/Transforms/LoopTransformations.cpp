@@ -2485,18 +2485,56 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
         allMemrefs.push_back(idx);
       }
     }
-    // Fix array types
-    for (auto item : llvm::enumerate(allMemrefs)) {
-      auto targetType = targetFunc.getArgument(item.index()).getType();
-      if (item.value().getType() != targetType) {
-        outlineOp.emitWarning(
-            "Change memref type to match function argument type!");
-        item.value().setType(targetType);
+    // Recursively update array types
+    bool isChanged = true;
+    while (isChanged) {
+      isChanged = false;
+      for (auto item : llvm::enumerate(allMemrefs)) {
+        auto funcArgType = targetFunc.getArgument(item.index())
+                               .getType()
+                               .dyn_cast<MemRefType>();
+        auto arrayType = item.value().getType().dyn_cast<MemRefType>();
+        if (!funcArgType || !arrayType) {
+          assert(funcArgType == arrayType && "Type mismatch");
+          continue;
+        }
+        mlir::Type elementType = arrayType.getElementType();
+        assert(elementType == funcArgType.getElementType() && "Type mismatch");
+        auto funcArgShape = funcArgType.getShape();
+        auto arrayShape = arrayType.getShape();
+        SmallVector<int64_t> newShape;
+        // pick the larger shape
+        for (auto shape : llvm::enumerate(arrayShape)) {
+          if (shape.value() < funcArgShape[shape.index()]) {
+            newShape.push_back(funcArgShape[shape.index()]);
+          } else {
+            newShape.push_back(shape.value());
+          }
+        }
+        auto newType = MemRefType::get(newShape, elementType);
+        if (newType != arrayType) {
+          outlineOp.emitWarning("Change memref type to a new type!");
+          item.value().setType(newType);
+          isChanged = true;
+        }
+        if (newType != funcArgType) {
+          outlineOp.emitWarning("Change function type to a new type!");
+          targetFunc.getArgument(item.index()).setType(newType);
+          isChanged = true;
+        }
+        // update previous call operations
+        for (auto callOp : f.getOps<CallOp>()) {
+          callOp.getOperand(item.index()).setType(newType);
+        }
       }
     }
     // Fix function type
-    auto resultTypes = f.front().getTerminator()->getOperandTypes();
-    auto inputTypes = f.front().getArgumentTypes();
+    auto resultTypes = targetFunc.front().getTerminator()->getOperandTypes();
+    auto inputTypes = targetFunc.front().getArgumentTypes();
+    targetFunc.setType(Builder(targetFunc.getContext())
+                           .getFunctionType(inputTypes, resultTypes));
+    resultTypes = f.front().getTerminator()->getOperandTypes();
+    inputTypes = f.front().getArgumentTypes();
     f.setType(Builder(f.getContext()).getFunctionType(inputTypes, resultTypes));
     // Call the function
     call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),

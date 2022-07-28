@@ -2472,6 +2472,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
         break;
       }
     }
+    assert(targetFunc && "Cannot find the target function");
     OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
     if (outlineOp->hasAttr("param")) {
       auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
@@ -2554,12 +2555,6 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<mlir::Type> TypeArr;
   for (auto memref : newMemrefs)
     TypeArr.push_back(memref.getType());
-  if (outlineOp->hasAttr("param")) {
-    auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-    int size = loopNames.size();
-    for (int i = 0; i < size; ++i)
-      TypeArr.push_back(IndexType::get(f.getContext()));
-  }
   int axis = -1;
   if (outlineOp->hasAttr("axis")) {
     // Suppose only one stage is given
@@ -2614,27 +2609,9 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   builder.setInsertionPointToStart(entryBlock);
   auto ret = builder.create<ReturnOp>(func->getLoc());
 
-  // 7) Create callop in the main function
-  OpBuilder call_builder(targetForOp);
-  if (outlineOp->hasAttr("param")) {
-    auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-    for (auto loopNameAttr : loopNames) {
-      auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-      for (auto forOp : rootForOps) {
-        int axis = getLoop(forOp, loopName);
-        if (axis == -1)
-          continue;
-        auto idx = call_builder.create<arith::ConstantIndexOp>(
-            targetForOp.getLoc(), forOp.getConstantUpperBound());
-        allMemrefs.push_back(idx);
-        // update loop bound
-        auto affineMap = builder.getSymbolIdentityMap();
-        forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)},
-                            affineMap);
-        break;
-      }
-    }
-  } else if (outlineOp->hasAttr("axis")) {
+  if (outlineOp->hasAttr("axis")) {
+    // 7) Create callop in the main function
+    OpBuilder call_builder(targetForOp);
     call_builder = OpBuilder(&(targetForOp.getBody()->back()));
     AffineForOp innerLoop = rootForOps[0];
     int cntAxis = 0;
@@ -2648,34 +2625,24 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       }
       cntAxis++;
     }
-  }
-  call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
-
-  // 8) Move original stage to the new function
-  if (outlineOp->hasAttr("axis")) {
+    call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    // 8) Move original stage to the new function
     auto &targetBody = targetForOp.getBody()->getOperations();
     auto &funcBody = func.front().getOperations();
     // the last two ops are yield and callop
     funcBody.splice(funcBody.begin(), targetBody, targetBody.begin(),
                     std::prev(std::prev(targetBody.end())));
-  } else {
-    for (auto rootForOp : rootForOps) {
-      rootForOp->moveBefore(ret);
+    for (auto *op : opToMove) {
+      op->moveBefore(rootForOps[0]);
     }
-  }
-  for (auto *op : opToMove) {
-    op->moveBefore(rootForOps[0]);
-  }
-
-  // 9) Update memrefs
-  if (outlineOp->hasAttr("axis")) {
+    // 9) Update memrefs
     for (auto item : llvm::enumerate(newMemrefs)) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();
       replaceAllUsesInRegionWith(oldMemref, newMemref, func.getBody());
     }
-    AffineForOp innerLoop = rootForOps[0];
-    int cntAxis = 0;
+    innerLoop = rootForOps[0];
+    cntAxis = 0;
     while (cntAxis <= axis) {
       replaceAllUsesInRegionWith(innerLoop.getInductionVar(),
                                  func.getArgument(newMemrefs.size() + cntAxis),
@@ -2689,6 +2656,17 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       cntAxis++;
     }
   } else {
+    // 7) Create callop in the main function
+    OpBuilder call_builder(targetForOp);
+    call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    // 8) Move original stage to the new function
+    for (auto rootForOp : rootForOps) {
+      rootForOp->moveBefore(ret);
+    }
+    for (auto *op : opToMove) {
+      op->moveBefore(rootForOps[0]);
+    }
+    // 9) Update memrefs
     for (auto item : llvm::enumerate(newMemrefs)) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();

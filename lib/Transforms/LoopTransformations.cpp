@@ -2565,13 +2565,18 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
             MemRefType::get(newShape, elementType, arrayType.getLayout(),
                             arrayType.getMemorySpace());
         if (newType != arrayType) {
-          outlineOp.emitError("Change memref of ")
-              << item.value() << " to a new type " << newType;
+          if (!item.value().getDefiningOp()) {
+            outlineOp.emitError("Change memref of ")
+                << item.value() << " to a new type " << newType;
+          } else {
+            outlineOp.emitWarning("Change memref of ")
+                << item.value() << " to a new type " << newType;
+          }
           item.value().setType(newType);
           isChanged = true;
         }
         if (newType != funcArgType) {
-          outlineOp.emitError("Change argument ")
+          outlineOp.emitWarning("Change argument ")
               << targetFunc.getArgument(item.index()) << " of function "
               << targetFunc.getName() << " to a new type " << newType;
           targetFunc.getArgument(item.index()).setType(newType);
@@ -2579,7 +2584,12 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
         }
         // update previous call operations
         for (auto callOp : f.getOps<CallOp>()) {
-          if (callOp.getCallee() == targetFunc.getName()) {
+          if (callOp.getCallee() == targetFunc.getName() &&
+              callOp.getOperand(item.index()).getType() != newType) {
+            if (!item.value().getDefiningOp())
+              outlineOp.emitError("Change argument ")
+                  << callOp.getOperand(item.index()) << " of CallOp " << callOp
+                  << " to a new type " << newType;
             callOp.getOperand(item.index()).setType(newType);
           }
         }

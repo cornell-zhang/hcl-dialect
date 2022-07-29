@@ -2558,16 +2558,22 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
             newShape.push_back(shape.value());
           }
         }
+        assert(arrayType.getLayout().getAffineMap() ==
+                   funcArgType.getLayout().getAffineMap() &&
+               "Layout mismatch");
         auto newType =
             MemRefType::get(newShape, elementType, arrayType.getLayout(),
                             arrayType.getMemorySpace());
         if (newType != arrayType) {
-          outlineOp.emitWarning("Change memref type to a new type!");
+          outlineOp.emitError("Change memref of ")
+              << item.value() << " to a new type " << newType;
           item.value().setType(newType);
           isChanged = true;
         }
         if (newType != funcArgType) {
-          outlineOp.emitWarning("Change function type to a new type!");
+          outlineOp.emitError("Change argument ")
+              << targetFunc.getArgument(item.index()) << " of function "
+              << targetFunc.getName() << " to a new type " << newType;
           targetFunc.getArgument(item.index()).setType(newType);
           isChanged = true;
         }

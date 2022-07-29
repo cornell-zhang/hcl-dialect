@@ -2517,10 +2517,18 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
           } else {
             // no need to parameterize
           }
-        } else { // has been parameterized
-          auto srcUb = call_builder.create<arith::ConstantIndexOp>(
-              srcLoop.getLoc(), srcLoop.getConstantUpperBound());
-          allMemrefs.push_back(srcUb);
+        } else {
+          assert(srcLoop.getLowerBound().getMap() ==
+                     targetLoop.getLowerBound().getMap() &&
+                 "Lower bound mismatch");
+          assert(srcLoop.getUpperBound().getMap() ==
+                     targetLoop.getUpperBound().getMap() &&
+                 "Upper bound mismatch");
+          if (srcLoop.hasConstantUpperBound()) { // has been parameterized
+            auto srcUb = call_builder.create<arith::ConstantIndexOp>(
+                srcLoop.getLoc(), srcLoop.getConstantUpperBound());
+            allMemrefs.push_back(srcUb);
+          }
         }
       }
     }
@@ -2550,7 +2558,9 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
             newShape.push_back(shape.value());
           }
         }
-        auto newType = MemRefType::get(newShape, elementType);
+        auto newType =
+            MemRefType::get(newShape, elementType, arrayType.getLayout(),
+                            arrayType.getMemorySpace());
         if (newType != arrayType) {
           outlineOp.emitWarning("Change memref type to a new type!");
           item.value().setType(newType);
@@ -2563,7 +2573,9 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
         }
         // update previous call operations
         for (auto callOp : f.getOps<CallOp>()) {
-          callOp.getOperand(item.index()).setType(newType);
+          if (callOp.getCallee() == targetFunc.getName()) {
+            callOp.getOperand(item.index()).setType(newType);
+          }
         }
       }
     }

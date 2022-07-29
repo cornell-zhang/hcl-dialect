@@ -82,9 +82,9 @@ module {
       } {loop_name = "j"}
     } {loop_name = "i", op_name = "E1"}
     // CHECK: call @Stage_C1
-    hcl.outline (%3) {param = ["i", "j"]}
+    hcl.outline (%3)
     // CHECK: call @Stage_C1
-    hcl.outline (%7) {param = ["i", "j"], unify="Stage_C1"}
+    hcl.outline (%7) {unify="Stage_C1"}
     // CHECK: affine.for %[[ARG:.*]] = 0 to 10 {
     // CHECK:   affine.for %[[ARG1:.*]] = 0 to 32 {
     // CHECK:     call @Stage_E1

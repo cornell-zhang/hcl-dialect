@@ -56,6 +56,8 @@ LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef op_name);
 
 int getLoop(AffineForOp &forOp, StringRef loop_name);
 
+void getLoops(AffineForOp &forOp, SmallVector<AffineForOp> &forOpList);
+
 bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
                                SmallVector<AffineForOp, 6> &resForOps,
                                SmallVector<StringRef, 6> &nameArr,

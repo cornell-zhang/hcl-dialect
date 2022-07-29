@@ -2474,18 +2474,53 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     }
     assert(targetFunc && "Cannot find the target function");
     OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
-    if (outlineOp->hasAttr("param")) {
-      auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-      for (auto loopNameAttr : loopNames) {
-        auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-        for (auto forOp : rootForOps) {
-          int axis = getLoop(forOp, loopName);
-          if (axis == -1)
-            continue;
-          auto idx = call_builder.create<arith::ConstantIndexOp>(
-              forOp.getLoc(), forOp.getConstantUpperBound());
-          allMemrefs.push_back(idx);
+    for (auto srcForOpItem : llvm::enumerate(rootForOps)) {
+      int srcIdx = srcForOpItem.index();
+      auto srcForOp = srcForOpItem.value();
+      SmallVector<AffineForOp> srcLoops;
+      getLoops(srcForOp, srcLoops);
+      SmallVector<AffineForOp> targetLoops;
+      for (auto targetForOpItem :
+           llvm::enumerate(targetFunc.getOps<AffineForOp>())) {
+        int targetIdx = targetForOpItem.index();
+        if (targetIdx == srcIdx) {
+          auto targetForOp = targetForOpItem.value();
+          getLoops(targetForOp, targetLoops);
           break;
+        }
+      }
+      assert(targetLoops.size() == srcLoops.size() && "Loop mismatch");
+      for (auto it : llvm::zip(srcLoops, targetLoops)) {
+        auto srcLoop = std::get<0>(it);
+        auto targetLoop = std::get<1>(it);
+        if (targetLoop.hasConstantUpperBound()) {
+          if (srcLoop.getConstantUpperBound() !=
+              targetLoop.getConstantUpperBound()) {
+            auto srcUb = call_builder.create<arith::ConstantIndexOp>(
+                srcLoop.getLoc(), srcLoop.getConstantUpperBound());
+            allMemrefs.push_back(srcUb);
+            // update function arguments
+            auto arg = targetFunc.front().addArgument(
+                IndexType::get(f.getContext()), srcLoop.getLoc());
+            // update previous CallOp
+            for (auto callOp : f.getOps<CallOp>()) {
+              if (callOp.getCallee() == targetFunc.getName()) {
+                OpBuilder builder(callOp);
+                auto targetUb = builder.create<arith::ConstantIndexOp>(
+                    targetLoop.getLoc(), targetLoop.getConstantUpperBound());
+                callOp->insertOperands(callOp.getNumOperands(), {targetUb});
+              }
+            }
+            // update target loop bound
+            targetLoop.setUpperBound({arg},
+                                     call_builder.getSymbolIdentityMap());
+          } else {
+            // no need to parameterize
+          }
+        } else { // has been parameterized
+          auto srcUb = call_builder.create<arith::ConstantIndexOp>(
+              srcLoop.getLoc(), srcLoop.getConstantUpperBound());
+          allMemrefs.push_back(srcUb);
         }
       }
     }

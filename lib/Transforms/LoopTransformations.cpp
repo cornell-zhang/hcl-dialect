@@ -2526,14 +2526,14 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
           } else {
             // no need to parameterize
           }
-        } else {
-          assert(srcLoop.getLowerBound().getMap() ==
-                     targetLoop.getLowerBound().getMap() &&
-                 "Lower bound mismatch");
-          assert(srcLoop.getUpperBound().getMap() ==
-                     targetLoop.getUpperBound().getMap() &&
-                 "Upper bound mismatch");
-          if (srcLoop.hasConstantUpperBound()) { // has been parameterized
+        } else { // has been parameterized
+          // assert(srcLoop.getLowerBound().getMap() ==
+          //            targetLoop.getLowerBound().getMap() &&
+          //        "Lower bound mismatch");
+          // assert(srcLoop.getUpperBound().getMap() ==
+          //            targetLoop.getUpperBound().getMap() &&
+          //        "Upper bound mismatch");
+          if (srcLoop.hasConstantUpperBound()) {
             auto srcUb = call_builder.create<arith::ConstantIndexOp>(
                 srcLoop.getLoc(), srcLoop.getConstantUpperBound());
             allMemrefs.push_back(srcUb);

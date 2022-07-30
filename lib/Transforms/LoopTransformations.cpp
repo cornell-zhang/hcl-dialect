@@ -2395,8 +2395,13 @@ void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
       for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e;
            ++argIdx) {
         auto operand = op.getOperand(argIdx);
-        if (operand.getDefiningOp())
+        auto memrefType = operand.getType().template dyn_cast<MemRefType>();
+        if (operand.getDefiningOp()) {
+          if (memrefType && memrefType.getRank() == 1 &&
+              memrefType.getShape()[0] == 1)
+            continue; // sum reg needn't to be moved
           opToMove.insert(operand.getDefiningOp());
+        }
       }
     }
   });
@@ -2416,8 +2421,12 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
     } else {
       if (allMemrefs.size() == 1)
         return WalkResult::advance();
+      auto memrefType = target.getType().template dyn_cast<MemRefType>();
       if (target.getDefiningOp()) {
         memrefToRemove.push_back(target);
+        if (memrefType && memrefType.getRank() == 1 &&
+            memrefType.getShape()[0] == 1)
+          return WalkResult::advance(); // sum reg needn't to be moved
         opToMove.insert(target.getDefiningOp());
       }
     }
@@ -2533,15 +2542,28 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       }
     }
     // Recursively update array types
+    SmallVector<Value> newAllMemrefs(allMemrefs);
+    for (auto *op : opToMove) {
+      if (llvm::isa<memref::AllocOp>(op))
+        newAllMemrefs.push_back(llvm::cast<memref::AllocOp>(op).getResult());
+    }
+    SmallVector<Value> newFuncArgs;
+    for (auto arg : targetFunc.getArguments()) {
+      newFuncArgs.push_back(arg);
+    }
+    for (auto alloc : targetFunc.getOps<memref::AllocOp>()) {
+      newFuncArgs.push_back(alloc.getResult());
+    }
     bool isChanged = true;
     while (isChanged) {
       isChanged = false;
-      for (auto item : llvm::enumerate(allMemrefs)) {
-        auto funcArgType = targetFunc.getArgument(item.index())
-                               .getType()
-                               .dyn_cast<MemRefType>();
-        auto arrayType = item.value().getType().dyn_cast<MemRefType>();
-        if (!funcArgType || !arrayType) {
+      for (auto item : llvm::enumerate(llvm::zip(newAllMemrefs, newFuncArgs))) {
+        auto idx = item.index();
+        auto srcMemref = std::get<0>(item.value());
+        auto targetMemref = std::get<1>(item.value());
+        auto funcArgType = targetMemref.getType().dyn_cast<MemRefType>();
+        auto arrayType = srcMemref.getType().dyn_cast<MemRefType>();
+        if (!funcArgType || !arrayType) { // not a memref (index type)
           assert(funcArgType == arrayType && "Type mismatch");
           continue;
         }
@@ -2565,32 +2587,34 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
             MemRefType::get(newShape, elementType, arrayType.getLayout(),
                             arrayType.getMemorySpace());
         if (newType != arrayType) {
-          if (!item.value().getDefiningOp()) {
+          if (!srcMemref.getDefiningOp()) {
             outlineOp.emitError("Change memref of ")
-                << item.value() << " to a new type " << newType;
+                << srcMemref << " to a new type " << newType;
           } else {
             outlineOp.emitWarning("Change memref of ")
-                << item.value() << " to a new type " << newType;
+                << srcMemref << " to a new type " << newType;
           }
-          item.value().setType(newType);
+          srcMemref.setType(newType);
           isChanged = true;
         }
         if (newType != funcArgType) {
           outlineOp.emitWarning("Change argument ")
-              << targetFunc.getArgument(item.index()) << " of function "
-              << targetFunc.getName() << " to a new type " << newType;
-          targetFunc.getArgument(item.index()).setType(newType);
+              << targetMemref << " of function " << targetFunc.getName()
+              << " to a new type " << newType;
+          targetMemref.setType(newType);
           isChanged = true;
         }
         // update previous call operations
-        for (auto callOp : f.getOps<CallOp>()) {
-          if (callOp.getCallee() == targetFunc.getName() &&
-              callOp.getOperand(item.index()).getType() != newType) {
-            if (!item.value().getDefiningOp())
-              outlineOp.emitError("Change argument ")
-                  << callOp.getOperand(item.index()) << " of CallOp " << callOp
-                  << " to a new type " << newType;
-            callOp.getOperand(item.index()).setType(newType);
+        if (idx < allMemrefs.size()) {
+          for (auto callOp : f.getOps<CallOp>()) {
+            if (callOp.getCallee() == targetFunc.getName() &&
+                callOp.getOperand(idx).getType() != newType) {
+              if (!srcMemref.getDefiningOp())
+                outlineOp.emitError("Change argument ")
+                    << callOp.getOperand(idx) << " of CallOp " << callOp
+                    << " to a new type " << newType;
+              callOp.getOperand(idx).setType(newType);
+            }
           }
         }
       }

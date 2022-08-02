@@ -16,14 +16,14 @@ jobs:
           command: |
             sudo apt-get update && sudo apt-get install -y build-essential cmake
       - restore_cache:
-          key: llvm-14.0.0
+          key: llvm-15.0.0-rc1
       - run:
           name: Build LLVM
           command: | # /home/circleci/hcl-dialect-prototype
             if test -d llvm-project; then echo "LLVM exists"; \
               else git clone https://github.com/llvm/llvm-project.git; fi
             cd llvm-project
-            git checkout tags/llvmorg-14.0.0
+            git checkout tags/llvmorg-15.0.0-rc1
             python3 -m pip install --upgrade pip
             python3 -m pip install -r mlir/python/requirements.txt
             mkdir -p build && cd build
@@ -38,7 +38,7 @@ jobs:
             fi;
             cd ../..
       - save_cache:
-          key: llvm-14.0.0
+          key: llvm-15.0.0-rc1
           paths:
             - llvm-project
       - run:

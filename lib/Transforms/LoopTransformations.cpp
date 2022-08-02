@@ -2514,7 +2514,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
             auto arg = targetFunc.front().addArgument(
                 IndexType::get(f.getContext()), srcLoop.getLoc());
             // update previous CallOp
-            for (auto callOp : f.getOps<CallOp>()) {
+            for (auto callOp : f.getOps<func::CallOp>()) {
               if (callOp.getCallee() == targetFunc.getName()) {
                 OpBuilder builder(callOp);
                 auto targetUb = builder.create<arith::ConstantIndexOp>(
@@ -2608,7 +2608,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
         }
         // update previous call operations
         if (idx < allMemrefs.size()) {
-          for (auto callOp : f.getOps<CallOp>()) {
+          for (auto callOp : f.getOps<func::CallOp>()) {
             if (callOp.getCallee() == targetFunc.getName() &&
                 callOp.getOperand(idx).getType() != newType) {
               if (!srcMemref.getDefiningOp())
@@ -2747,7 +2747,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
   } else {
     // 7) Create callop in the main function
     OpBuilder call_builder(targetForOp);
-    call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    call_builder.create<func::CallOp>(targetForOp.getLoc(), func, allMemrefs);
     // 8) Move original stage to the new function
     for (auto rootForOp : rootForOps) {
       rootForOp->moveBefore(ret);

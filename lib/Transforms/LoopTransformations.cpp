@@ -2526,19 +2526,98 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
           } else {
             // no need to parameterize
           }
-        } else { // has been parameterized
-          // assert(srcLoop.getLowerBound().getMap() ==
-          //            targetLoop.getLowerBound().getMap() &&
-          //        "Lower bound mismatch");
-          // assert(srcLoop.getUpperBound().getMap() ==
-          //            targetLoop.getUpperBound().getMap() &&
-          //        "Upper bound mismatch");
+        } else {
           if (srcLoop.hasConstantUpperBound()) {
             auto srcUb = call_builder.create<arith::ConstantIndexOp>(
                 srcLoop.getLoc(), srcLoop.getConstantUpperBound());
             allMemrefs.push_back(srcUb);
           }
         }
+      }
+    }
+    // update if structure
+    SmallVector<AffineIfOp> srcIfOps;
+    for (auto rootForOp : rootForOps) {
+      rootForOp.walk([&](AffineIfOp ifOp) { srcIfOps.push_back(ifOp); });
+    }
+    SmallVector<AffineIfOp> targetIfOps;
+    for (auto rootForOp : targetFunc.getOps<AffineForOp>()) {
+      rootForOp.walk([&](AffineIfOp ifOp) { targetIfOps.push_back(ifOp); });
+    }
+    assert(srcIfOps.size() == targetIfOps.size() && "IfOp mismatch");
+    bool isDifferent = false;
+    bool isSet = true;
+    for (auto it : llvm::zip(srcIfOps, targetIfOps)) {
+      auto srcIfOp = std::get<0>(it);
+      auto targetIfOp = std::get<1>(it);
+      auto srcConds = srcIfOp.getIntegerSet().getConstraints();
+      auto targetConds = targetIfOp.getIntegerSet().getConstraints();
+      SmallVector<AffineExpr> newConds;
+      int srcCst = 0;
+      int targetCst = 0;
+      for (auto itCond : llvm::zip(srcConds, targetConds)) {
+        auto srcCond = std::get<0>(itCond);
+        auto targetCond = std::get<1>(itCond);
+        auto getConstant = [&](AffineExpr cond) {
+          int cst = 0;
+          cond.walk([&](AffineExpr expr) {
+            if (expr.isa<AffineBinaryOpExpr>() &&
+                expr.getKind() == AffineExprKind::Add) {
+              auto binExpr = expr.cast<AffineBinaryOpExpr>();
+              if (binExpr.getRHS().isa<AffineConstantExpr>()) {
+                cst = binExpr.getRHS().cast<AffineConstantExpr>().getValue();
+                return WalkResult::interrupt();
+              }
+            }
+            return WalkResult::advance();
+          });
+          return cst;
+        };
+        srcCst = getConstant(srcCond);
+        targetCst = getConstant(targetCond);
+        // build new condition
+        if (srcCst != targetCst) {
+          isDifferent = true;
+          if (!targetCond.isFunctionOfSymbol(0)) { // has not been parameterized
+            isSet = false;
+            auto newCond = targetCond -
+                           call_builder.getAffineConstantExpr(targetCst) +
+                           call_builder.getAffineSymbolExpr(0);
+            newConds.push_back(newCond);
+            // outlineOp.emitWarning("Parameterize if condition of ")
+            //     << targetCond << " as " << newCond;
+          }
+        } else {
+          newConds.push_back(targetCond);
+        }
+      }
+      if (isDifferent) {
+        // update function arguments
+        auto ifCst = call_builder.create<arith::ConstantIndexOp>(
+            targetFunc.getLoc(), srcCst);
+        allMemrefs.push_back(ifCst);
+      }
+      if (!isSet) {
+        targetFunc.front().addArgument(IndexType::get(f.getContext()),
+                                       targetFunc.getLoc());
+        // update previous CallOp
+        for (auto callOp : f.getOps<CallOp>()) {
+          if (callOp.getCallee() == targetFunc.getName()) {
+            OpBuilder builder(callOp);
+            auto targetUb = builder.create<arith::ConstantIndexOp>(
+                targetFunc.getLoc(), targetCst);
+            callOp->insertOperands(callOp.getNumOperands(), {targetUb});
+          }
+        }
+        // update if operands
+        auto newCondSet = IntegerSet::get(
+            targetIfOp.getIntegerSet().getNumDims() /*dimCount*/,
+            1 /*symbolCount*/, newConds /*ArrayRef<AffineExpr> constraints*/,
+            targetIfOp.getIntegerSet().getEqFlags());
+        SmallVector<Value> operands = targetIfOp.getOperands();
+        operands.push_back(targetFunc.front().getArgument(
+            targetFunc.front().getNumArguments() - 1));
+        targetIfOp.setConditional(newCondSet, operands);
       }
     }
     // Recursively update array types

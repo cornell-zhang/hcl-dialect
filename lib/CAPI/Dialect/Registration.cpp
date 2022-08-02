@@ -6,6 +6,7 @@
 
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/HCLToNVVM.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Conversion/Passes.h"
@@ -47,4 +48,9 @@ void hclMlirRegisterAllPasses() {
 
   mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();
+
+  // GPU backend passes
+  mlir::hcl::registerAffineMemOpParLoweringPass();
+  mlir::hcl::registerAffineToGPULoweringPass();
+  mlir::hcl::registerGPUToNVVMLoweringPass();
 }

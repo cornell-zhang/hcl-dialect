@@ -31,6 +31,7 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 
 #include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/HCLToNVVM.h"
 #include "hcl/Transforms/Passes.h"
 
 #include <iostream>

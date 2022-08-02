@@ -132,7 +132,7 @@ struct GPUToNVVMLoweringPass
     registry.insert<LLVM::LLVMDialect>();
   }
   void runOnOperation() final;
-  StringRef getArgument() const final { return "scf-lower-to-gpu"; }
+  StringRef getArgument() const final { return "gpu-lower-to-nvvm"; }
   StringRef getDescription() const final {
     return "Lower SCF dialect to GPU dialect.";
   }

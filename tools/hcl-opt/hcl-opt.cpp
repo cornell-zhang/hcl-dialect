@@ -117,6 +117,12 @@ static llvm::cl::opt<bool> moveReturnToInput(
     llvm::cl::desc("Move return values to input argument list"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> affineToGPU(
+    "affine-to-gpu",
+    llvm::cl::desc("Convert affine to GPU dialect"),
+    llvm::cl::init(false));
+
+
 int loadMLIR(mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile(inputFilename, &context);
@@ -216,6 +222,10 @@ int main(int argc, char **argv) {
 
   if (removeStrideMap) {
     pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  }
+
+  if (affineToGPU) {
+    pm.addPass(mlir::hcl::createAffineToGPULoweringPass());
   }
 
   if (enableNormalize) {

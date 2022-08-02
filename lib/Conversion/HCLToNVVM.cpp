@@ -103,6 +103,43 @@ public:
 namespace mlir {
 namespace hcl {
 
+bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context) {
+
+  LLVMConversionTarget target(context);
+  target.addLegalOp<ModuleOp>();
+  LLVMTypeConverter typeConverter(&context);
+  RewritePatternSet patterns(&context);
+
+  target.addLegalDialect<gpu::GPUDialect>();
+  target.addLegalDialect<scf::SCFDialect, StandardOpsDialect>();
+
+  unsigned numBlockDims = 1;
+  unsigned numThreadDims = 1;
+  module.walk<WalkOrder::PreOrder>([&](AffineForOp forOp) {
+    std::cout << "in affine for loop" << std::endl;
+    if (failed(convertAffineLoopNestToGPULaunch(forOp, numBlockDims,
+                                                numThreadDims))) {
+      // std::cout << "failed affine to gpu" << std::endl;
+      return WalkResult::interrupt();
+    }
+  });
+
+  patterns.add<AffineLoadLowering, AffineStoreLowering>(patterns.getContext());
+  patterns.add<CreateLoopHandleOpLowering>(&context);
+  patterns.add<CreateOpHandleOpLowering>(&context);
+  patterns.add<PrintOpLowering>(&context);
+  patterns.add<SetIntBitOpLowering>(&context);
+  patterns.add<GetIntBitOpLowering>(&context);
+  patterns.add<SetIntSliceOpLowering>(&context);
+  patterns.add<GetIntSliceOpLowering>(&context);
+  populateReconcileUnrealizedCastsPatterns(patterns);
+  if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
+    return false;
+  }
+  // finalizeParallelLoopToGPUConversion(module);
+  return true;
+}
+
 bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context) {
 
   LLVMConversionTarget target(context);
@@ -113,8 +150,6 @@ bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   // target.addLegalDialect<scf::SCFDialect, StandardOpsDialect>();
   target.addLegalDialect<gpu::GPUDialect>();
 
-  populateAffineToStdConversionPatterns(patterns);
-  populateLoopToStdConversionPatterns(patterns);
   mlir::arith::populateArithmeticToLLVMConversionPatterns(typeConverter,
                                                           patterns);
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
@@ -135,42 +170,6 @@ bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
     return false;
   }
-  return true;
-}
-
-bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context) {
-
-  LLVMConversionTarget target(context);
-  target.addLegalOp<ModuleOp>();
-  LLVMTypeConverter typeConverter(&context);
-  RewritePatternSet patterns(&context);
-
-  target.addLegalDialect<gpu::GPUDialect>();
-  target.addLegalDialect<scf::SCFDialect, StandardOpsDialect>();
-
-  unsigned numBlockDims = 1;
-  unsigned numThreadDims = 1;
-  module.walk<WalkOrder::PreOrder>([&](AffineForOp forOp) {
-    std::cout << "in affine for loop" << std::endl;
-    if (failed(convertAffineLoopNestToGPULaunch(forOp, numBlockDims,
-                                                numThreadDims))) {
-      std::cout << "failed affine to gpu" << std::endl;
-    }
-  });
-
-  populateReconcileUnrealizedCastsPatterns(patterns);
-  patterns.add<AffineLoadLowering, AffineStoreLowering>(patterns.getContext());
-  patterns.add<CreateLoopHandleOpLowering>(&context);
-  patterns.add<CreateOpHandleOpLowering>(&context);
-  patterns.add<PrintOpLowering>(&context);
-  patterns.add<SetIntBitOpLowering>(&context);
-  patterns.add<GetIntBitOpLowering>(&context);
-  patterns.add<SetIntSliceOpLowering>(&context);
-  patterns.add<GetIntSliceOpLowering>(&context);
-  if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
-    return false;
-  }
-  // finalizeParallelLoopToGPUConversion(module);
   return true;
 }
 

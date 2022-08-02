@@ -50,6 +50,7 @@ void hclMlirRegisterAllPasses() {
   mlir::hcl::registerHCLToLLVMLoweringPass();
 
   // GPU backend passes
+  // TODO(Niansong): Add GPU backend passes when GPU backend is ready.
   mlir::hcl::registerAffineToGPULoweringPass();
   mlir::hcl::registerGPUToNVVMLoweringPass();
 }

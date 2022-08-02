@@ -2,14 +2,14 @@
 
 // This is an example of gemm on GPU.
 // The affine memrory accesses are manually converted to memref load/store.
-// The reduction loop's result memref is manually promoted to a scalar.
+// The reduction loop's result memref is manually promoted outside the loop nest.
 
 module {
   func @top(%arg0: memref<32x32xf32>, %arg1: memref<32x32xf32>) -> memref<32x32xf32> attributes {itypes = "__", otypes = "_"} {
     %0 = memref.alloc() {name = "C"} : memref<32x32xf32>
+    %1 = memref.alloc() {name = "sum_rv"} : memref<1xf32>
     affine.for %arg2 = 0 to 32 {
       affine.for %arg3 = 0 to 32 {
-        %1 = memref.alloc() {name = "sum_rv"} : memref<1xf32>
         %c0 = arith.constant 0 : index
         %cst = arith.constant 0.000000e+00 : f32
         memref.store %cst, %1[%c0] {to = "sum_rv"} : memref<1xf32>

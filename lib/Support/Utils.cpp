@@ -185,7 +185,7 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
       if (sizeNameArr == 0)
         nameArr.push_back(curr_loop);
     }
-    Block &body = forOp.region().front();
+    Block &body = forOp.getRegion().front();
     // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
     //   break;
 

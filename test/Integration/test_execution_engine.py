@@ -10,7 +10,6 @@ from hcl_mlir.runtime import *
 
 
 def lowerToLLVM(module):
-    import hcl_mlir.conversions
     pm = PassManager.parse(
         "lower-affine,convert-scf-to-cf,convert-arith-to-llvm,convert-memref-to-llvm,convert-func-to-llvm,convert-cf-to-llvm,reconcile-unrealized-casts")
     pm.run(module)

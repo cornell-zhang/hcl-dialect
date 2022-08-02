@@ -674,7 +674,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
       opToSink.push_back(inductionVariable.getDefiningOp());
     }
     replaceAllUsesInRegionWith(loops[idx - 1].getInductionVar(),
-                               inductionVariable, loops.back().region());
+                               inductionVariable, loops.back().getRegion());
   }
 
   // 4. Move the operations from the innermost just above the second-outermost
@@ -949,7 +949,7 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
         load->getAttr("from").cast<StringAttr>().getValue().str() ==
             producer_name) {
       replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
-                                 consumerFor.region());
+                                 consumerFor.getRegion());
       opToRemove.push_back(load);
     }
     return WalkResult::advance();
@@ -1518,7 +1518,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
                                     memAffineIndices, rewriter.getContext());
     rewriter.create<AffineStoreOp>(
         op->getLoc(), op.getOperand(0) /*valueToStore*/,
-        op.getOperand(1) /*memref*/, affineMap, op.indices());
+        op.getOperand(1) /*memref*/, affineMap, op.getIndices());
     opToRemove.push_back(op);
     return WalkResult::advance();
   });
@@ -2263,7 +2263,7 @@ LogicalResult runReshape(func::FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
                                       memAffineIndices, rewriter.getContext());
       rewriter.create<AffineStoreOp>(
           op->getLoc(), op.getOperand(0) /*valueToStore*/,
-          op.getOperand(1) /*memref*/, affineMap, op.indices());
+          op.getOperand(1) /*memref*/, affineMap, op.getIndices());
       // remove original op
       opToRemove.push_back(op);
     } else if (auto op = dyn_cast<AffineLoadOp>(user)) {
@@ -2284,8 +2284,9 @@ LogicalResult runReshape(func::FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
       std::reverse(memAffineIndices.begin(), memAffineIndices.end());
       auto affineMap = AffineMap::get(oldRank, 0 /* symbols */,
                                       memAffineIndices, rewriter.getContext());
-      auto load = rewriter.create<AffineLoadOp>(
-          op->getLoc(), op.getOperand(0) /*memref*/, affineMap, op.indices());
+      auto load = rewriter.create<AffineLoadOp>(op->getLoc(),
+                                                op.getOperand(0) /*memref*/,
+                                                affineMap, op.getIndices());
       // remove original op
       op.getResult().replaceAllUsesWith(load);
       opToRemove.push_back(op);
@@ -2759,7 +2760,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();
       for (auto rootForOp : rootForOps)
-        replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.region());
+        replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.getRegion());
     }
   }
 

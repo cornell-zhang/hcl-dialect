@@ -98,7 +98,7 @@ void lowerStructType(func::FuncOp &func) {
       // struct get with loading from field memrefs.
 
       // Step1: create memref for each field
-      Value struct_memref = affine_load.memref();
+      Value struct_memref = affine_load.getMemref();
       // Try to find field_memrefs associated with this struct_memref
       SmallVector<Value, 4> field_memrefs;
       auto it = structMemRef2fieldMemRefs.find(struct_memref.getImpl());
@@ -138,7 +138,7 @@ void lowerStructType(func::FuncOp &func) {
                 storeOp.getOperand(0).getDefiningOp());
             builder.create<AffineStoreOp>(
                 loc, struct_construct_op.getOperand(field_index), field_memref,
-                storeOp.indices());
+                storeOp.getIndices());
           }
           // erase the storeOp that stores to the struct memref
           if (erase_struct_construct) {
@@ -151,7 +151,7 @@ void lowerStructType(func::FuncOp &func) {
       // Step3: replace structGetOp with load from field memrefs
       OpBuilder load_builder(op);
       Value loaded_field = load_builder.create<AffineLoadOp>(
-          loc, field_memrefs[index], affine_load.indices());
+          loc, field_memrefs[index], affine_load.getIndices());
       struct_field.replaceAllUsesWith(loaded_field);
       op->erase();
 

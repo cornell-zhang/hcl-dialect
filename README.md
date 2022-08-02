@@ -14,7 +14,7 @@ This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](htt
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout 73202130e52e69d58c571c60163d1c8994e8d166
+git checkout tags/llvmorg-15.0.0-rc1
 ```
 
 - Build

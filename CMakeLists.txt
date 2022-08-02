@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.13.4)
+cmake_policy(SET CMP0116 NEW)
+
 project(hcl-dialect LANGUAGES CXX C)
 
 set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)

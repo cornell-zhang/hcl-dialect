@@ -15,12 +15,29 @@ jobs:
           name: Install dependency
           command: |
             sudo apt-get update && sudo apt-get install -y build-essential
-            wget https://github.com/Kitware/CMake/releases/download/v3.23.3/cmake-3.23.3.tar.gz
-            tar -xzvf cmake-3.23.3.tar.gz
+      - restore_cache:
+          key: cmake-3.23.3
+      - run:
+          name: Install CMake
+          command: |
+            if test -d cmake-3.23.3; then 
+              echo "CMake is downloaded"
+            else
+              wget https://github.com/Kitware/CMake/releases/download/v3.23.3/cmake-3.23.3.tar.gz
+              tar -xzvf cmake-3.23.3.tar.gz
+            fi
             cd cmake-3.23.3
-            ./bootstrap
-            make
+            if test -d bin; then
+              echo "CMake is built"
+            else
+              ./bootstrap
+              make
+            fi
             sudo make install
+      - save_cache:
+          key: cmake-3.23.3
+          paths:
+            - cmake-3.23.3
       - restore_cache:
           key: llvm-15.0.0-rc1
       - run:

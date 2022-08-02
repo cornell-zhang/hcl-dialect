@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/GPU/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -226,6 +227,7 @@ int main(int argc, char **argv) {
 
   if (affineToGPU) {
     pm.addPass(mlir::hcl::createAffineToGPULoweringPass());
+    pm.addPass(mlir::createGpuKernelOutliningPass());
   }
 
   if (enableNormalize) {

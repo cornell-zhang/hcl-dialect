@@ -16,35 +16,14 @@
 namespace mlir {
 namespace hcl {
 
-// HeteroCL Dialect -> SCF(Parallel) Dialect
-void registerAffineMemOpParLoweringPass();
-std::unique_ptr<OperationPass<ModuleOp>> createAffineMemOpParLoweringPass();
-
-bool applyAffineMemOpParLoweringPass(ModuleOp &module, MLIRContext &context);
-
-} // namespace hcl
-} // namespace mlir
-
-
-namespace mlir {
-namespace hcl {
-
 // SCF(Parallel) -> GPU Dialect
 void registerAffineToGPULoweringPass();
 std::unique_ptr<OperationPass<ModuleOp>> createAffineToGPULoweringPass();
-
 bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context);
 
-} // namespace hcl
-} // namespace mlir
-
-namespace mlir {
-namespace hcl {
-
-// SCF(Parallel) -> GPU Dialect
+// GPU -> NVVM Dialect
 void registerGPUToNVVMLoweringPass();
 std::unique_ptr<OperationPass<ModuleOp>> createGPUToNVVMLoweringPass();
-
 bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context);
 
 } // namespace hcl

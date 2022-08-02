@@ -139,23 +139,23 @@ static bool removeStrideMap(MlirModule &mlir_mod) {
   return applyRemoveStrideMap(mod);
 }
 
-static bool lowerAffineMemOpPar(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
-  auto mod = unwrap(mlir_mod);
-  auto ctx = unwrap(mlir_ctx);
-  return applyAffineMemOpParLoweringPass(mod, *ctx);
-}
+// static bool lowerAffineMemOpPar(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
+//   auto mod = unwrap(mlir_mod);
+//   auto ctx = unwrap(mlir_ctx);
+//   return applyAffineMemOpParLoweringPass(mod, *ctx);
+// }
 
-static bool lowerAffineToGPU(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
-  auto mod = unwrap(mlir_mod);
-  auto ctx = unwrap(mlir_ctx);
-  return applyAffineToGPULoweringPass(mod, *ctx);
-}
+// static bool lowerAffineToGPU(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
+//   auto mod = unwrap(mlir_mod);
+//   auto ctx = unwrap(mlir_ctx);
+//   return applyAffineToGPULoweringPass(mod, *ctx);
+// }
 
-static bool lowerGPUToNVVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
-  auto mod = unwrap(mlir_mod);
-  auto ctx = unwrap(mlir_ctx);
-  return applyGPUToNVVMLoweringPass(mod, *ctx);
-}
+// static bool lowerGPUToNVVM(MlirModule &mlir_mod, MlirContext &mlir_ctx) {
+//   auto mod = unwrap(mlir_mod);
+//   auto ctx = unwrap(mlir_ctx);
+//   return applyGPUToNVVMLoweringPass(mod, *ctx);
+// }
 
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
@@ -205,8 +205,8 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("remove_stride_map", &removeStrideMap);
 
   //GPU backend APIs
-  hcl_m.def("lower_hcl_to_scf", &lowerAffineMemOpPar);
-  hcl_m.def("lower_scf_to_gpu", &lowerAffineToGPU);
-  hcl_m.def("lower_gpu_to_nvvm", &lowerGPUToNVVM);
+  // hcl_m.def("lower_hcl_to_scf", &lowerAffineMemOpPar);
+  // hcl_m.def("lower_scf_to_gpu", &lowerAffineToGPU);
+  // hcl_m.def("lower_gpu_to_nvvm", &lowerGPUToNVVM);
   
 }

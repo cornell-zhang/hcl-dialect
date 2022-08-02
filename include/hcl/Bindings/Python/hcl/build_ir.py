@@ -2338,7 +2338,7 @@ class ASTVisitor:
         if is_unsigned_type(dtype):
             dtype = IntegerType.get_signless(dtype.width)
         memref_type = MemRefType.get((1,), dtype)
-        rv = memref.AllocOp(memref_type, [], [], None,
+        rv = memref.AllocOp(memref_type, [], [],
                             ip=GlobalInsertionPoint.get())
         prefix = expr.prefix
         init_val = expr.init_val

@@ -14,6 +14,7 @@
 #include "hcl-c/Translation/EmitIntelHLS.h"
 #include "hcl-c/Translation/EmitVivadoHLS.h"
 #include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/HCLToNVVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"

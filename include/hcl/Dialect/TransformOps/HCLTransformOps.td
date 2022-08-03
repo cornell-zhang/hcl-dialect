@@ -56,7 +56,10 @@ def HCLLoopUnrollOp : Op<Transform_Dialect, "hcl.loop_unroll",
   let assemblyFormat = "$target attr-dict";
 
   let extraClassDeclaration = [{
-    ::mlir::LogicalResult applyToOne(::mlir::AffineForOp loop);
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::AffineForOp target, 
+        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformState &state);
   }];
 }
 

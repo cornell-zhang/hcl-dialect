@@ -57,10 +57,16 @@ transform::HCLGetParentLoopOp::apply(transform::TransformResults &results,
 // HCLLoopUnrollOp
 //===----------------------------------------------------------------------===//
 
-LogicalResult transform::HCLLoopUnrollOp::applyToOne(AffineForOp loop) {
-  if (failed(loopUnrollByFactor(loop, getFactor())))
-    return reportUnknownTransformError(loop);
-  return success();
+DiagnosedSilenceableFailure
+transform::HCLLoopUnrollOp::applyToOne(AffineForOp target,
+                                       SmallVector<Operation *> &results,
+                                       transform::TransformState &state) {
+  if (failed(loopUnrollByFactor(target, getFactor()))) {
+    Diagnostic diag(target->getLoc(), DiagnosticSeverity::Note);
+    diag << "op failed to unroll";
+    return DiagnosedSilenceableFailure::silenceableFailure(std::move(diag));
+  }
+  return DiagnosedSilenceableFailure(success());
 }
 
 //===----------------------------------------------------------------------===//

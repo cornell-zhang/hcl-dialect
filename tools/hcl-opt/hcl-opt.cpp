@@ -6,6 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined(CUDA_ENABLED)
+#define CUDA_BACKEND_ENABLED
+#endif
+
+#include <iostream>
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/GPU/Passes.h"
 #include "mlir/Dialect/GPU/GPUDialect.h"
@@ -34,10 +39,13 @@
 
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Conversion/HCLToNVVM.h"
+
+#ifdef CUDA_BACKEND_ENABLED
 #include "hcl/Conversion/NVVMToCubin.h"
+#endif
+
 #include "hcl/Transforms/Passes.h"
 
-#include <iostream>
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
                                                 llvm::cl::desc("<input file>"),
@@ -168,7 +176,6 @@ int runJiTCompiler(mlir::ModuleOp module) {
 }
 
 int main(int argc, char **argv) {
-
   // Register dialects and passes in current context
   mlir::MLIRContext context;
   auto registry = context.getDialectRegistry();
@@ -234,9 +241,11 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::createLowerToCFGPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createStripDebugInfoPass());
-    mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
-    gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
-    gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
+    #ifdef CUDA_BACKEND_ENABLED
+      mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
+      gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
+      gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
+    #endif
   }
 
   if (enableNormalize) {

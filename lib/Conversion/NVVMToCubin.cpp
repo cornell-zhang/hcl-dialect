@@ -12,12 +12,11 @@
 //===----------------------------------------------------------------------===//
 #include "mlir/Dialect/GPU/Passes.h"
 
-// #if HCL_GPU_ENABLED
+#include "hcl/Conversion/NVVMToCubin.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "llvm/Support/TargetSelect.h"
-#include "hcl/Conversion/NVVMToCubin.h"
 
 #include <cuda.h>
 
@@ -129,20 +128,9 @@ SerializeToCubinPass::serializeISA(const std::string &isa) {
   return result;
 }
 
-// Register pass to serialize GPU kernel functions to a CUBIN binary annotation.
-// void mlir::registerGpuSerializeToCubinPass() {
-//   PassRegistration<SerializeToCubinPass> registerSerializeToCubin([] {
-//     // Initialize LLVM NVPTX backend.
-//     LLVMInitializeNVPTXTarget();
-//     LLVMInitializeNVPTXTargetInfo();
-//     LLVMInitializeNVPTXTargetMC();
-//     LLVMInitializeNVPTXAsmPrinter();
-
-//     return std::make_unique<SerializeToCubinPass>();
-//   });
-// }
-
-std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> mlir::hcl::createNVVMToCubinPass() {
+namespace mlir {
+namespace hcl {
+std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> createNVVMToCubinPass() {
   // Initialize LLVM NVPTX backend.
   LLVMInitializeNVPTXTarget();
   LLVMInitializeNVPTXTargetInfo();
@@ -151,10 +139,5 @@ std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> mlir::hcl::createNVVMToCu
 
   return std::make_unique<SerializeToCubinPass>();
 }
-
-// #else  // HCL_GPU_ENABLED
-// void mlir::registerGpuSerializeToCubinPass() {}
-// #endif // HCL_GPU_ENABLED
-
-// check this file:
-// build/lib/Conversion/CMakeFiles/obj.MLIRHCLConversion.dir/NVVMToCubin.cpp.o
+} // namespace hcl
+} // namespace mlir

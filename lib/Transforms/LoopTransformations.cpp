@@ -2698,6 +2698,33 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
         }
       }
     }
+    // Double check previous call operations
+    for (auto callOp : f.getOps<CallOp>()) {
+      for (auto func : mod.getOps<FuncOp>()) {
+        if (callOp.getCallee() == func.getName()) {
+          for (int i = 0, size = func.getNumArguments(); i < size; ++i) {
+            auto callMemrefType =
+                callOp.getOperand(i).getType().dyn_cast<MemRefType>();
+            auto funcMemrefType =
+                func.getArgument(i).getType().dyn_cast<MemRefType>();
+            if (callMemrefType != funcMemrefType) {
+              outlineOp.emitWarning("Argument ")
+                  << i << " of CallOp " << callOp
+                  << " is not the same type as argument " << i
+                  << " of function " << func.getName() << "\n";
+              func.front().getArgument(i).setType(
+                  callOp.getOperand(i).getType());
+              auto resultTypes =
+                  func.front().getTerminator()->getOperandTypes();
+              auto inputTypes = func.front().getArgumentTypes();
+              func.setType(Builder(func.getContext())
+                               .getFunctionType(inputTypes, resultTypes));
+            }
+          }
+          break;
+        }
+      }
+    }
     // Fix function type
     auto resultTypes = targetFunc.front().getTerminator()->getOperandTypes();
     auto inputTypes = targetFunc.front().getArgumentTypes();

@@ -2,19 +2,19 @@
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithmeticToLLVM/ArithmeticToLLVM.h"
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
-#include "mlir/Conversion/SCFToStandard/SCFToStandard.h"
-#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVM.h"
-#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
+#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
@@ -70,8 +70,8 @@ public:
 
       // Insert a newline after each of the inner dimensions of the shape.
       if (i != e - 1)
-        rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
-                                newLineCst);
+        rewriter.create<func::CallOp>(loc, printfRef,
+                                      rewriter.getIntegerType(32), newLineCst);
       rewriter.create<scf::YieldOp>(loc);
       rewriter.setInsertionPointToStart(loop.getBody());
     }
@@ -82,8 +82,9 @@ public:
         rewriter.create<memref::LoadOp>(loc, printOp.input(), loopIvs);
     // Cast element to f64
     auto casted = castToF64(rewriter, elementLoad, hasUnsignedAttr);
-    rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
-                            ArrayRef<Value>({formatSpecifierCst, casted}));
+    rewriter.create<func::CallOp>(
+        loc, printfRef, rewriter.getIntegerType(32),
+        ArrayRef<Value>({formatSpecifierCst, casted}));
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);
@@ -243,7 +244,7 @@ public:
     // Cast index to i32
     Type itype = rewriter.getIntegerType(width);
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, index, itype);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, itype, index);
     Value bitmask =
         rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
@@ -257,7 +258,8 @@ public:
     // (e.g. input && 111101111)
     Value Val0Res =
         rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
-    Value trueRes = rewriter.create<SelectOp>(loc, val, Val1Res, Val0Res);
+    Value trueRes =
+        rewriter.create<arith::SelectOp>(loc, val, Val1Res, Val0Res);
     op->getOperand(0).replaceAllUsesWith(trueRes);
     rewriter.eraseOp(op);
     return success();
@@ -279,10 +281,10 @@ public:
     Type itype = rewriter.getIntegerType(iwidth);
     Type i1 = rewriter.getI1Type();
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, idx, itype);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, itype, idx);
     Value shifted =
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
-    Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
+    Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, i1, shifted);
     op->getResult(0).replaceAllUsesWith(singleBit);
     rewriter.eraseOp(op);
     return success();
@@ -303,8 +305,8 @@ public:
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
     Type itype = rewriter.getIntegerType(iwidth);
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, itype);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, itype);
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, itype, lo);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, itype, hi);
     Value width = rewriter.create<mlir::arith::ConstantIntOp>(
         loc, input.getType().getIntOrFloatBitWidth() - 1, iwidth);
     Value lshift_width =
@@ -346,13 +348,13 @@ public:
         rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, iwidth);
     Type int_type = rewriter.getIntegerType(iwidth);
     Value lo_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, lo, int_type);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, int_type, lo);
     Value hi_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, hi, int_type);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, int_type, hi);
     Value const1 =
         rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, int_type);
     Value val_ext =
-        rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
+        rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
 
     // Step 1: get higher slice - shift right, then shift left
     Value hi_shift_width =
@@ -375,8 +377,8 @@ public:
     Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, iwidth);
     Value condition = rewriter.create<mlir::arith::CmpIOp>(
         loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
-    Value lo_slice =
-        rewriter.create<SelectOp>(loc, condition, lo_slice_possible, zero);
+    Value lo_slice = rewriter.create<arith::SelectOp>(loc, condition,
+                                                      lo_slice_possible, zero);
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
@@ -396,14 +398,11 @@ public:
 
 namespace {
 struct HCLToLLVMLoweringPass
-    : public PassWrapper<HCLToLLVMLoweringPass, OperationPass<ModuleOp>> {
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<LLVM::LLVMDialect, scf::SCFDialect>();
-  }
-  void runOnOperation() final;
-  StringRef getArgument() const final { return "hcl-lower-to-llvm"; }
-  StringRef getDescription() const final {
-    return "Lower HeteroCL dialect to LLVM dialect.";
+    : public HCLToLLVMLoweringBase<HCLToLLVMLoweringPass> {
+  void runOnOperation() override {
+    auto module = getOperation();
+    if (!applyHCLToLLVMLoweringPass(module, getContext()))
+      signalPassFailure();
   }
 };
 } // namespace
@@ -434,12 +433,13 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   // set of legal ones.
   RewritePatternSet patterns(&context);
   populateAffineToStdConversionPatterns(patterns);
-  populateLoopToStdConversionPatterns(patterns);
+  populateSCFToControlFlowConversionPatterns(patterns);
+
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
-  mlir::arith::populateArithmeticToLLVMConversionPatterns(typeConverter,
-                                                          patterns);
+  arith::populateArithmeticToLLVMConversionPatterns(typeConverter, patterns);
   populateMathToLLVMConversionPatterns(typeConverter, patterns);
-  populateStdToLLVMConversionPatterns(typeConverter, patterns);
+  populateFuncToLLVMConversionPatterns(typeConverter, patterns);
+  cf::populateControlFlowToLLVMConversionPatterns(typeConverter, patterns);
   populateReconcileUnrealizedCastsPatterns(patterns);
 
   patterns.add<CreateLoopHandleOpLowering>(&context);
@@ -459,22 +459,14 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
 } // namespace hcl
 } // namespace mlir
 
-void HCLToLLVMLoweringPass::runOnOperation() {
-  auto module = getOperation();
-  if (!applyHCLToLLVMLoweringPass(module, getContext()))
-    signalPassFailure();
-}
-
 namespace mlir {
 namespace hcl {
-
-void registerHCLToLLVMLoweringPass() {
-  PassRegistration<HCLToLLVMLoweringPass>();
-}
+// void registerHCLToLLVMLoweringPass() {
+//   PassRegistration<HCLToLLVMLoweringPass>();
+// }
 
 std::unique_ptr<OperationPass<ModuleOp>> createHCLToLLVMLoweringPass() {
   return std::make_unique<HCLToLLVMLoweringPass>();
 }
-
 } // namespace hcl
 } // namespace mlir

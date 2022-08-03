@@ -11,7 +11,7 @@ with Context() as ctx:
 
     mod = Module.parse(
         """
-        func @top () -> () {
+        func.func @top () -> () {
             %0 = arith.constant 2 : i32
             %1 = arith.addi %0, %0 : i32
             return

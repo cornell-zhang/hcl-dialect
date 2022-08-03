@@ -33,75 +33,21 @@ def Fixed : HeteroCL_Type<"Fixed", [MemRefElementTypeInterface]> {
   let summary = "fixed point";
   let mnemonic = "Fixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
-  let printer = [{
-    $_printer << "<" << getImpl()->width << ", " << getImpl()->frac << ">";
-  }];
-  let parser = [{
-    if (parser.parseLess())
-      return Type();
-    std::size_t width;
-    if ($_parser.parseInteger(width))
-      return Type();
-    if ($_parser.parseComma())
-      return Type();
-    std::size_t frac;
-    if ($_parser.parseInteger(frac))
-      return Type();
-    if ($_parser.parseGreater())
-      return Type();
-    return get($_ctxt, width, frac);
-  }];
+  let assemblyFormat = "`<` $width `,` $frac `>`";
 }
 
 def UFixed : HeteroCL_Type<"UFixed", [MemRefElementTypeInterface]> {
   let summary = "unsigned fixed point";
   let mnemonic = "UFixed";
   let parameters = (ins "std::size_t":$width, "std::size_t":$frac);
-  let printer = [{
-    $_printer << "<" << getImpl()->width << ", " << getImpl()->frac << ">";
-  }];
-  let parser = [{
-    if (parser.parseLess())
-      return Type();
-    std::size_t width;
-    if ($_parser.parseInteger(width))
-      return Type();
-    if ($_parser.parseComma())
-      return Type();
-    std::size_t frac;
-    if ($_parser.parseInteger(frac))
-      return Type();
-    if ($_parser.parseGreater())
-      return Type();
-    return get($_ctxt, width, frac);
-  }];
+  let assemblyFormat = "`<` $width `,` $frac `>`";
 }
 
 def Struct : HeteroCL_Type<"Struct", [MemRefElementTypeInterface]> {
   let summary = "struct type";
   let mnemonic = "struct";
   let parameters = (ins ArrayRefParameter<"Type", "elementTypes">:$elementTypes);
-  let printer = [{
-    $_printer << "<";
-    llvm::interleaveComma(getImpl()->elementTypes, $_printer);
-    $_printer << '>';
-  }];
-  let parser = [{
-    if ($_parser.parseLess())
-      return Type();
-    SmallVector<mlir::Type, 1> elementTypes;
-    do {
-      mlir::Type elementType;
-      if ($_parser.parseType(elementType))
-        return nullptr;
-
-      elementTypes.push_back(elementType);
-    } while (succeeded($_parser.parseOptionalComma()));
-
-    if ($_parser.parseGreater())
-      return Type();
-    return get($_ctxt, elementTypes);
-  }];
+  bit hasCustomAssemblyFormat = 1;
 }
 
 #endif // HCL_TYPES

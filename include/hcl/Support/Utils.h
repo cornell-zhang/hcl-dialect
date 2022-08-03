@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 namespace mlir {
@@ -52,7 +53,8 @@ using AffineLoopBands = std::vector<AffineLoopBand>;
 /// AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
-LogicalResult getStage(FuncOp &func, AffineForOp &forOp, StringRef op_name);
+LogicalResult getStage(func::FuncOp &func, AffineForOp &forOp,
+                       StringRef stage_name);
 
 int getLoop(AffineForOp &forOp, StringRef loop_name);
 

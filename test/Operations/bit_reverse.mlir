@@ -1,6 +1,6 @@
 // RUN: hcl-opt %s --lower-bitops | FileCheck %s
 module {
-  func @top(%arg0: memref<10xi8>, %arg1: memref<10xi8>) attributes {bit, itypes = "uu", otypes = ""} {
+  func.func @top(%arg0: memref<10xi8>, %arg1: memref<10xi8>) attributes {bit, itypes = "uu", otypes = ""} {
     affine.for %arg2 = 0 to 10 {
       %0 = affine.load %arg0[%arg2] {from = "compute_0", unsigned} : memref<10xi8>
       %1 = hcl.bit_reverse(%0 : i8) {unsigned}

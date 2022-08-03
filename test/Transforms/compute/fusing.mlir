@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @gemm_fuse_two(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_fuse_two(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -24,7 +24,7 @@ module {
         // (i,j)->(ij/1024,ij%1024)
         return
     }
-    func @gemm_fuse_three(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_fuse_three(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"
@@ -47,7 +47,7 @@ module {
         // (i,j,k)->(ijk/(1024*1024),ijk/1024%1024,ijk%1024)
         return
     }
-    func @gemm_fuse_two_among_four(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @gemm_fuse_two_among_four(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"

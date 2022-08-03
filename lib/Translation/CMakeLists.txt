@@ -6,6 +6,6 @@ add_mlir_library(MLIRHCLEmitHLSCpp
   LINK_LIBS PUBLIC
   MLIRHeteroCL
   MLIRHCLSupport
-  MLIRMemRef
+  MLIRMemRefDialect
   MLIRAnalysis
 )

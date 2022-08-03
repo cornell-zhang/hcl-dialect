@@ -9,6 +9,7 @@
 #ifndef HETEROCL_DIALECT
 #define HETEROCL_DIALECT
 
+include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/OpBase.td"
 
 //===----------------------------------------------------------------------===//
@@ -23,6 +24,7 @@ def HeteroCL_Dialect : Dialect {
         illustrate the basic setup required to develop MLIR-based tools without
         working inside of the LLVM source tree.
     }];
+    let useDefaultTypePrinterParser = 1;
     let cppNamespace = "::mlir::hcl";
 }
 

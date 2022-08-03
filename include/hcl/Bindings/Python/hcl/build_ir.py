@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 from hcl_mlir.dialects import affine, arith, builtin
 from hcl_mlir.dialects import hcl as hcl_d
-from hcl_mlir.dialects import math, memref, scf, std, tensor
+from hcl_mlir.dialects import math, memref, scf, func, tensor
 from hcl_mlir.ir import *
 from hcl_mlir.exceptions import *
 
@@ -86,7 +86,8 @@ def is_struct_type(dtype):
 
 def is_hcl_mlir_type(dtype):
     return (
-        is_floating_point_type(dtype) or is_integer_type(dtype) or is_fixed_type(dtype)
+        is_floating_point_type(dtype) or is_integer_type(
+            dtype) or is_fixed_type(dtype)
     )
 
 
@@ -125,7 +126,8 @@ def get_mlir_type(dtype):
             raise DTypeError("Unrecognized data type: {}".format(dtype))
     else:
         raise DTypeError(
-            "Unrecognized data type format: {} of Type({})".format(dtype, type(dtype))
+            "Unrecognized data type format: {} of Type({})".format(
+                dtype, type(dtype))
         )
 
 
@@ -309,7 +311,8 @@ def get_type_rank(dtype):
         elif isinstance(dtype, F64Type):
             base += 3
         else:
-            raise DTypeError("Unrecognized floating point type: {}".format(dtype))
+            raise DTypeError(
+                "Unrecognized floating point type: {}".format(dtype))
         return base
     else:
         raise DTypeError("Unrecognized type: {}".format(dtype))
@@ -329,20 +332,23 @@ def cast_types(lhs, rhs):
     if isinstance(ltype, F64Type):
         # integer or real floating type to double
         res_type = F64Type.get()
-        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+        DTypeWarning("Casting value {} from {} to {}".format(
+            rhs, rtype, res_type)).warn()
         return lhs, CastOp(rhs, res_type)
     # 3) Otherwise, if lhs is float
     elif isinstance(ltype, F32Type):
         # integer type to float
         res_type = F32Type.get()
-        DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+        DTypeWarning("Casting value {} from {} to {}".format(
+            rhs, rtype, res_type)).warn()
         return lhs, CastOp(rhs, res_type)
     # 4) Otherwise, if lhs is integer.
     elif isinstance(ltype, (IntegerType, IndexType)):
         # 4.1) lhs is int or index, rhs is int of lower rank, rhs gets promoted
         if isinstance(rtype, IntegerType):
             res_type = ltype
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(
+                rhs, rtype, res_type)).warn()
             return lhs, CastOp(rhs, res_type)
         # 4.2) lhs is index, rhs is also index, nothing to do
         elif isinstance(rtype, IndexType):
@@ -350,16 +356,22 @@ def cast_types(lhs, rhs):
         # 4.3) lhs is int or index, rhs is fixed point of lower rank
         # e.g. Int(100) + Fixed(3, 2) -> Fixed(100 + 2, 2)
         elif is_signed_fixed_type(rtype):
-            res_type = hcl_d.FixedType.get(ltype.width + rtype.frac, rtype.frac)
-            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type)).warn()
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+            res_type = hcl_d.FixedType.get(
+                ltype.width + rtype.frac, rtype.frac)
+            DTypeWarning("Casting value {} from {} to {}".format(
+                lhs, ltype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(
+                rhs, rtype, res_type)).warn()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
         # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
         elif is_unsigned_fixed_type(rtype):
-            res_type = hcl_d.UFixedType.get(ltype.width + rtype.frac, rtype.frac)
-            DTypeWarning("Casting value {} from {} to {}".format(lhs, ltype, res_type)).warn()
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+            res_type = hcl_d.UFixedType.get(
+                ltype.width + rtype.frac, rtype.frac)
+            DTypeWarning("Casting value {} from {} to {}".format(
+                lhs, ltype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(
+                rhs, rtype, res_type)).warn()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
             # unexpected type
@@ -369,14 +381,16 @@ def cast_types(lhs, rhs):
         # 5.1) lhs is fixed point, rhs is integer or fixed point of lower rank, cast rhs to lhs
         if is_integer_type(rtype) or is_fixed_type(rtype):
             res_type = ltype
-            DTypeWarning("Casting value {} from {} to {}".format(rhs, rtype, res_type)).warn()
+            DTypeWarning("Casting value {} from {} to {}".format(
+                rhs, rtype, res_type)).warn()
             return lhs, CastOp(rhs, res_type)
         else:
             # unexpected type
             raise DTypeError("Unexpected type: {}".format(rtype))
     else:
         raise DTypeError(
-            "Type conversion failed, lhs type: {}, rhs type: {}".format(ltype, rtype)
+            "Type conversion failed, lhs type: {}, rhs type: {}".format(
+                ltype, rtype)
         )
 
 
@@ -797,7 +811,8 @@ class ConstantOp(ExprOp):
                     self.val = np.fix(self.val) % sb
                 np_dtype = np.int64
             else:
-                raise DTypeError("Unrecognized data type: {}".format(self.dtype))
+                raise DTypeError(
+                    "Unrecognized data type: {}".format(self.dtype))
 
             self.val = np.array(self.val, dtype=np_dtype)
             if is_integer_type(self.dtype) or is_fixed_type(self.dtype):
@@ -867,10 +882,12 @@ class ConstantOp(ExprOp):
                         value_attr = BoolAttr.get(self.val)
                     else:
                         if self.val == 0xFFFFFFFFFFFFFFFF:
-                            attr_type = IntegerType.get_signless(self.dtype.width)
+                            attr_type = IntegerType.get_signless(
+                                self.dtype.width)
                             self.val = -1
                         else:
-                            attr_type = IntegerType.get_signless(self.dtype.width)
+                            attr_type = IntegerType.get_signless(
+                                self.dtype.width)
                         value_attr = IntegerAttr.get(attr_type, self.val)
                 elif isinstance(self.dtype, F16Type):
                     value_attr = FloatAttr.get(F16Type.get(), self.val)
@@ -967,7 +984,8 @@ class TensorSlice(ExprOp):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
             # TODO(Niansong): I think this is doable actually
-            raise NotImpelementedError("Writing to a slice of tensor is not allowed.")
+            raise NotImpelementedError(
+                "Writing to a slice of tensor is not allowed.")
         elif len(self.indices + indices) == len(self.shape):
             new_indices = []
             for index in indices:
@@ -992,7 +1010,7 @@ class TensorOp(ExprOp):
     def build(self):
         if self.op == memref.AllocOp:
             self.built_op = self.op(
-                self.memref_type, [], [], None, ip=GlobalInsertionPoint.get()
+                self.memref_type, [], [], ip=GlobalInsertionPoint.get()
             )
             if is_unsigned_type(self.dtype):
                 self.built_op.attributes["unsigned"] = UnitAttr.get()
@@ -1071,7 +1089,8 @@ class TensorOp(ExprOp):
             indices = (indices,)
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
-            raise NotImpelementedError("Writing to a slice of tensor is not allowed.")
+            raise NotImpelementedError(
+                "Writing to a slice of tensor is not allowed.")
         elif len(indices) == len(self.shape):
             # format indices
             new_indices = []
@@ -1105,7 +1124,8 @@ class UnaryOp(ExprOp):
             elif is_fixed_type(dtype):
                 self.op = op["fixed"]
             else:
-                raise DTypeError("Unsupported types for unary op: {}".format(dtype))
+                raise DTypeError(
+                    "Unsupported types for unary op: {}".format(dtype))
         else:
             self.op = op
         if flags.BUILD_INPLACE:
@@ -1132,7 +1152,8 @@ class BinaryOp(ExprOp):
             elif is_fixed_type(dtype):
                 self.op = op["fixed"]
             else:
-                raise DTypeError("Unsupported types for binary op: {}".format(dtype))
+                raise DTypeError(
+                    "Unsupported types for binary op: {}".format(dtype))
         else:
             self.op = op
         if flags.BUILD_INPLACE:
@@ -1337,7 +1358,8 @@ class LeftShiftOp(BinaryOp):
             lhs = CastOp(lhs, new_type)
             rhs = CastOp(rhs, new_type)
         elif isinstance(rhs, CastOp):
-            new_type = IntegerType.get_signless(lhs.dtype.width + rhs.dtype.width)
+            new_type = IntegerType.get_signless(
+                lhs.dtype.width + rhs.dtype.width)
             lhs = CastOp(lhs, new_type)
             rhs = CastOp(rhs, new_type)
         else:
@@ -1529,7 +1551,8 @@ class CastOp(ExprOp):
         else:
             op = builtin.UnrealizedConversionCastOp
             DTypeWarning(
-                "Unrealized conversion cast: {} -> {}".format(self.val.dtype, res_type)
+                "Unrealized conversion cast: {} -> {}".format(
+                    self.val.dtype, res_type)
             ).warn()
 
         super().__init__(op, res_type)
@@ -1664,7 +1687,8 @@ class SetBitOp(ExprOp):
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         if isinstance(self.num, LoadOp):
-            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+            self.built_op = StoreOp(
+                self.num, self.num.tensor, self.num.indices)
         flags.BIT_OP = True
         return self.built_op
 
@@ -1745,7 +1769,8 @@ class SetSliceOp(ExprOp):
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
         if isinstance(self.num, LoadOp):
-            self.built_op = StoreOp(self.num, self.num.tensor, self.num.indices)
+            self.built_op = StoreOp(
+                self.num, self.num.tensor, self.num.indices)
         flags.BIT_OP = True
         return self.built_op
 
@@ -1813,7 +1838,8 @@ class StoreOp(ExprOp):
         val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
             DTypeWarning(
-                "StoreOp has different input types. Cast from {} to {}.".format(val.dtype, to_tensor.dtype)
+                "StoreOp has different input types. Cast from {} to {}.".format(
+                    val.dtype, to_tensor.dtype)
             ).warn()
             val = CastOp(val, to_tensor.dtype)
         self.val = val
@@ -1874,7 +1900,7 @@ class StoreOp(ExprOp):
 class CallOp(ExprOp):
     def __init__(self, dtype, func_name, inputs):
         # here we only accept one result
-        super().__init__(std.CallOp, dtype)
+        super().__init__(func.CallOp, dtype)
         self.func_name = func_name
         self.inputs = inputs
         if flags.BUILD_INPLACE:
@@ -1896,7 +1922,7 @@ class SelectOp(ExprOp):
     """Ternary operation"""
 
     def __init__(self, cond, true_val, false_val):
-        super().__init__(std.SelectOp)
+        super().__init__(arith.SelectOp)
         # turn py builtin op to hcl op
         true_val = get_hcl_op(true_val)
         false_val = get_hcl_op(false_val)
@@ -2190,7 +2216,8 @@ class ASTVisitor:
             GlobalInsertionPoint.save(if_op.else_block)
             false_val = self.visit(expr.false_val).result
             if isinstance(if_op, affine.AffineIfOp):
-                affine.AffineYieldOp([false_val], ip=GlobalInsertionPoint.get())
+                affine.AffineYieldOp(
+                    [false_val], ip=GlobalInsertionPoint.get())
             else:  # scf.IfOp
                 scf.YieldOp([false_val], ip=GlobalInsertionPoint.get())
             GlobalInsertionPoint.restore()
@@ -2311,7 +2338,8 @@ class ASTVisitor:
         if is_unsigned_type(dtype):
             dtype = IntegerType.get_signless(dtype.width)
         memref_type = MemRefType.get((1,), dtype)
-        rv = memref.AllocOp(memref_type, [], [], None, ip=GlobalInsertionPoint.get())
+        rv = memref.AllocOp(memref_type, [], [],
+                            ip=GlobalInsertionPoint.get())
         prefix = expr.prefix
         init_val = expr.init_val
         reduce_op = expr.reduce_op
@@ -2334,7 +2362,8 @@ class ASTVisitor:
                 dtype, IntegerAttr.get(dtype, init_val), ip=GlobalInsertionPoint.get()
             )
         elif is_fixed_type(dtype):
-            value_attr = IntegerAttr.get(IntegerType.get_signless(32), init_val)
+            value_attr = IntegerAttr.get(
+                IntegerType.get_signless(32), init_val)
             zero_value = arith.ConstantOp(
                 IntegerType.get_signless(32), value_attr, ip=GlobalInsertionPoint.get()
             )
@@ -2342,7 +2371,8 @@ class ASTVisitor:
                 dtype, zero_value.result, ip=GlobalInsertionPoint.get()
             )
         else:
-            raise DTypeError("Unrecognized data type in reduction op: {}".format(dtype))
+            raise DTypeError(
+                "Unrecognized data type in reduction op: {}".format(dtype))
         if is_unsigned_type(expr.dtype):
             zero_value.attributes["unsigned"] = UnitAttr.get()
 
@@ -2482,7 +2512,8 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
             step,
             lbMapAttr,
             ubMapAttr,
-            name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
+            name=(StringAttr.get("") if name in [
+                  "", None] else StringAttr.get(name)),
             stage=("" if stage == "" else StringAttr.get(stage)),
             reduction=(UnitAttr.get() if reduction else None),
             ip=ip,
@@ -2503,7 +2534,8 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
             lb_expr,
             ub_expr,
             step,
-            name=(StringAttr.get("") if name in ["", None] else StringAttr.get(name)),
+            name=(StringAttr.get("") if name in [
+                  "", None] else StringAttr.get(name)),
             stage=("" if stage == "" else StringAttr.get(stage)),
             reduction=(UnitAttr.get() if reduction else None),
             ip=ip,
@@ -2542,7 +2574,8 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
                 res = AndOp(res, single_cond)
                 res.build()
             cond_result = res.result
-        if_op = scf.IfOp(cond_result, hasElse=hasElse, results_=resultType, ip=ip)
+        if_op = scf.IfOp(cond_result, hasElse=hasElse,
+                         results_=resultType, ip=ip)
         if yieldOp:
             scf.YieldOp([], ip=InsertionPoint(if_op.then_block))
             if hasElse:
@@ -2557,7 +2590,8 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
             if not isinstance(
                 cond.lhs.dtype, (IntegerType, IndexType)
             ) or not isinstance(cond.rhs.dtype, (IntegerType, IndexType)):
-                raise HCLValueError("`affine.if` can only support integer comparison")
+                raise HCLValueError(
+                    "`affine.if` can only support integer comparison")
             # only support affine expressions now (i.e. calculations on iteration variables)
             if cond.arg == 0:  # eq
                 # lhs==rhs
@@ -2565,11 +2599,13 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
                 new_conds.append(cond.lhs - cond.rhs)
             elif cond.arg == 1:  # ne
                 # lhs>rhs and lhs<rhs
-                raise MLIRLimitationError("ne is not supported for `affine.if`")
+                raise MLIRLimitationError(
+                    "ne is not supported for `affine.if`")
             elif cond.arg == 2:  # slt
                 # lhs<rhs -> rhs-lhs>0 -> rhs-lhs>=1 -> rhs-lhs-1>=0
                 eq_flags.append(False)
-                new_conds.append(cond.rhs - cond.lhs - ConstantOp(cond.lhs.dtype, 1))
+                new_conds.append(cond.rhs - cond.lhs -
+                                 ConstantOp(cond.lhs.dtype, 1))
             elif cond.arg == 3:  # sle
                 # lhs<=rhs -> rhs-lhs>=0
                 eq_flags.append(False)
@@ -2577,13 +2613,15 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
             elif cond.arg == 4:  # sgt
                 # lhs>rhs -> lhs-rhs-1>=0
                 eq_flags.append(False)
-                new_conds.append(cond.lhs - cond.rhs - ConstantOp(cond.lhs.dtype, 1))
+                new_conds.append(cond.lhs - cond.rhs -
+                                 ConstantOp(cond.lhs.dtype, 1))
             elif cond.arg == 5:  # sge
                 # lhs>=rhs -> lhs-rhs>=0
                 eq_flags.append(False)
                 new_conds.append(cond.lhs - cond.rhs)
             else:
-                raise HCLValueError("Unknown predicate of CmpOp: {}".format(cond.arg))
+                raise HCLValueError(
+                    "Unknown predicate of CmpOp: {}".format(cond.arg))
 
             if cond.built_op is not None:
                 cond.built_op.operation.erase()
@@ -2645,7 +2683,8 @@ def get_affine_loop_nests(func):
             band = []
             loop = op
             while True:
-                band.append({"name": loop.attributes["loop_name"], "body": loop})
+                band.append(
+                    {"name": loop.attributes["loop_name"], "body": loop})
                 for loop in loop.body.operations:
                     if isinstance(loop, affine.AffineForOp):
                         break

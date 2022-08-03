@@ -7,7 +7,7 @@
 #ifndef HCLTOLLVM_PASSES_H
 #define HCLTOLLVM_PASSES_H
 
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassRegistry.h"
 
@@ -17,10 +17,13 @@ namespace mlir {
 namespace hcl {
 
 // HeteroCL Dialect -> LLVM Dialect
-void registerHCLToLLVMLoweringPass();
 std::unique_ptr<OperationPass<ModuleOp>> createHCLToLLVMLoweringPass();
-
 bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context);
+
+void registerHCLConversionPasses();
+
+#define GEN_PASS_CLASSES
+#include "hcl/Conversion/Passes.h.inc"
 
 } // namespace hcl
 } // namespace mlir

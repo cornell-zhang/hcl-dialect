@@ -16,8 +16,8 @@
 namespace mlir {
 namespace hcl {
 
-static ParseResult parseCustomizationOp(OpAsmParser &parser,
-                                        OperationState &result) {
+ParseResult CustomizationOp::parse(OpAsmParser &parser,
+                                   OperationState &result) {
   auto buildFuncType =
       [](Builder &builder, ArrayRef<Type> argTypes, ArrayRef<Type> results,
          function_interface_impl::VariadicFlag,
@@ -27,25 +27,23 @@ static ParseResult parseCustomizationOp(OpAsmParser &parser,
       parser, result, /*allowVariadic=*/false, buildFuncType);
 }
 
-static void print(CustomizationOp op, OpAsmPrinter &p) {
-  FunctionType fnType = op.getType();
-  function_interface_impl::printFunctionOp(
-      p, op, fnType.getInputs(), /*isVariadic=*/false, fnType.getResults());
+void CustomizationOp::print(OpAsmPrinter &p) {
+  function_interface_impl::printFunctionOp(p, *this, /*isVariadic=*/false);
 }
 
-static LogicalResult verify(CustomizationOp op) {
+LogicalResult CustomizationOp::verify() {
   // If this function is external there is nothing to do.
-  if (op.isExternal())
+  if (isExternal())
     return success();
 
   // Verify that the argument list of the function and the arg list of the entry
   // block line up.  The trait already verified that the number of arguments is
   // the same between the signature and the block.
-  auto fnInputTypes = op.getType().getInputs();
-  Block &entryBlock = op.front();
+  auto fnInputTypes = getFunctionType().getInputs();
+  Block &entryBlock = front();
   for (unsigned i = 0, e = entryBlock.getNumArguments(); i != e; ++i)
     if (fnInputTypes[i] != entryBlock.getArgument(i).getType())
-      return op.emitOpError("type of entry block argument #")
+      return emitOpError("type of entry block argument #")
              << i << '(' << entryBlock.getArgument(i).getType()
              << ") must match the type of the corresponding argument in "
              << "function signature(" << fnInputTypes[i] << ')';

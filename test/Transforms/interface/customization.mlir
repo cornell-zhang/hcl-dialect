@@ -17,7 +17,7 @@ module {
         hcl.partition(%C: memref<?x?x!hcl.Type>, "CompletePartition", 2)
         hcl.end
     }
-    func @top(%A: memref<64x32xi32>, %B: memref<32x64xi32>, %C: memref<64x64xi32>) -> memref<64x64xi32>
+    func.func @top(%A: memref<64x32xi32>, %B: memref<32x64xi32>, %C: memref<64x64xi32>) -> memref<64x64xi32>
     {
         %s1 = hcl.create_op_handle "s1"
         %i1 = hcl.create_loop_handle %s1, "i1"

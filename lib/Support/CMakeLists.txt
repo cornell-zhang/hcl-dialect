@@ -7,10 +7,10 @@ add_mlir_library(MLIRHCLSupport
   MLIRIR
   MLIRParser
   MLIRPass
-  MLIRSPIRV
-  MLIRTranslation
+  MLIRSPIRVDialect
+  MLIRTranslateLib
   MLIRHeteroCL
-  MLIRMemRef
+  MLIRMemRefDialect
   MLIRAnalysis
   MLIRAffineAnalysis
   )

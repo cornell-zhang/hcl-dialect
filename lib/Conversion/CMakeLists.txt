@@ -1,7 +1,7 @@
 if (CUDA_BACKEND)
-  file(GLOB globbed *.cpp EXCEPT NVVMToCubin.cpp)
-else()
   file(GLOB globbed *.cpp)
+else()
+  file(GLOB globbed *.cpp EXCEPT NVVMToCubin.cpp)
 endif()
 
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)

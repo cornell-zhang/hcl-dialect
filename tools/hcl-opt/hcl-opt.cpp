@@ -6,10 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if defined(CUDA_ENABLED)
-#define CUDA_BACKEND_ENABLED
-#endif
-
 #include <iostream>
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/GPU/Passes.h"
@@ -40,7 +36,7 @@
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Conversion/HCLToNVVM.h"
 
-#ifdef CUDA_BACKEND_ENABLED
+#if CUDA_BACKEND_ENABLED
 #include "hcl/Conversion/NVVMToCubin.h"
 #endif
 
@@ -241,10 +237,13 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::createLowerToCFGPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createStripDebugInfoPass());
-    #ifdef CUDA_BACKEND_ENABLED
+    #if CUDA_BACKEND_ENABLED
       mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
       gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
       gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
+      pm.addPass(mlir::createGpuToLLVMConversionPass());
+    #else
+      llvm::errs() << "GPU backend is not enabled\n";
     #endif
   }
 

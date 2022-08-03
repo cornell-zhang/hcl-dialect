@@ -10,19 +10,14 @@
 // adds that blob as a string attribute of the module.
 //
 //===----------------------------------------------------------------------===//
-#if defined(CUDA_ENABLED)
-#define CUDA_BACKEND_ENABLED
-#endif
-
 #include "mlir/Dialect/GPU/Passes.h"
 
-#include "hcl/Conversion/NVVMToCubin.h"
+#if CUDA_BACKEND_ENABLED
 #include "mlir/Pass/Pass.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "llvm/Support/TargetSelect.h"
-
-#ifdef CUDA_BACKEND_ENABLED
+#include "hcl/Conversion/NVVMToCubin.h"
 #include <cuda.h>
 
 using namespace mlir;

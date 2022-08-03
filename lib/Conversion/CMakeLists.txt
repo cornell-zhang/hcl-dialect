@@ -21,6 +21,7 @@ add_mlir_dialect_library(MLIRHCLConversion
 )
 
 if (CUDA_BACKEND)
-  target_compile_definitions(MLIRHCLConversion PRIVATE CUDA_ENABLED)
+  target_compile_definitions(obj.MLIRHCLConversion PRIVATE CUDA_BACKEND_ENABLED=1)
   target_include_directories(MLIRHCLConversion PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  message(STATUS "CUDA enabled for MLIRHCLConversion")
 endif()

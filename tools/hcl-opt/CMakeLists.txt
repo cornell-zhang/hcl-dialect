@@ -24,4 +24,8 @@ add_llvm_executable(hcl-opt hcl-opt.cpp)
 llvm_update_compile_flags(hcl-opt)
 target_link_libraries(hcl-opt PRIVATE ${LIBS})
 
+if (CUDA_BACKEND)
+  target_compile_definitions(hcl-opt PRIVATE CUDA_BACKEND_ENABLED=1)
+endif()
+
 mlir_check_all_link_libraries(hcl-opt)

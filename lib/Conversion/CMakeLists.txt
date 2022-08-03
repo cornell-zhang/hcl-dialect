@@ -2,6 +2,7 @@ file(GLOB globbed *.cpp)
 
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 
+#TODO(Niansong): Can we split this into two parts?
 add_mlir_dialect_library(MLIRHCLConversion
     ${globbed}
 
@@ -22,10 +23,6 @@ add_mlir_dialect_library(MLIRHCLConversion
     MLIRHCLSupport
 )
 
-# if (HCL_GPU_ENABLED)
-# target_include_directories(MLIRHCLConversion PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-# endif()
-
 # Configure CUDA language support. Using check_language first allows us to
 # give a custom error message.
 include(CheckLanguage)
@@ -35,6 +32,6 @@ if (CMAKE_CUDA_COMPILER)
   target_compile_definitions(MLIRHCLConversion PRIVATE HCL_GPU_ENABLED=1)
   target_include_directories(MLIRHCLConversion PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 else()
-message(SEND_ERROR
-    "Building mlir with cuda support requires a working CUDA install")
+  message(SEND_WARNING "MLIRHCLConversion is not configured to support CUDA.")
+  target_compile_definitions(MLIRHCLConversion PRIVATE HCL_GPU_ENABLED=0)
 endif()

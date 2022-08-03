@@ -6,7 +6,7 @@
 // CHECK: #map3 = affine_map<(d0) -> (d0 * 4)>
 // CHECK: #map4 = affine_map<(d0) -> (d0 * 8)>
 module {
-    func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>) -> memref<1024x1024xf32>
+    func.func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>) -> memref<1024x1024xf32>
     {
         %C = memref.alloc() : memref<1024x1024xf32>
         // CHECK: affine.for %[[ARG:.*]] = 0 to 1024 {
@@ -26,7 +26,7 @@ module {
         } { loop_name = "i", op_name = "s" }
         return %C : memref<1024x1024xf32>
     }
-    func @matrix_multiply(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+    func.func @matrix_multiply(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
     {
         %s = hcl.create_op_handle "s"
         %l1 = hcl.create_loop_handle %s, "i"

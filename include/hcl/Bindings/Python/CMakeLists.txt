@@ -65,7 +65,6 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
   EMBED_CAPI_LINK_LIBS
     MLIRCAPIIR
     MLIRCAPIDebug
-    MLIRCAPIRegistration
     MLIRHCLCAPI
     MLIRHCLCAPIEmitHLSCpp
   PRIVATE_LINK_LIBS
@@ -83,10 +82,8 @@ declare_mlir_python_extension(HCLMLIRPythonExtensions.Main
 set(_source_components
   HCLMLIRPythonSources
   HCLMLIRPythonExtensions
-  MLIRPythonSources.Core
-  MLIRPythonSources.Dialects
-  MLIRPythonSources.ExecutionEngine
-  MLIRPythonSources.Passes
+  MLIRPythonSources
+  MLIRPythonExtension.RegisterEverything
 )
 
 add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI
@@ -94,6 +91,8 @@ add_mlir_python_common_capi_library(HCLMLIRAggregateCAPI
   INSTALL_DESTINATION python_packages/hcl_core/hcl_mlir/_mlir_libs
   OUTPUT_DIRECTORY "${HCL_MLIR_PYTHON_PACKAGES_DIR}/hcl_core/hcl_mlir/_mlir_libs"
   RELATIVE_INSTALL_ROOT "../../../.."
+  DECLARED_HEADERS
+    MLIRPythonCAPI.HeaderSources
   DECLARED_SOURCES
     ${_source_components}
 )

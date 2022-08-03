@@ -4,10 +4,11 @@ import io
 from hcl_mlir.ir import Context, Module
 from hcl_mlir.dialects import hcl as hcl_d
 
+
 def test_codegen():
     mlir_code = """
     module {
-        func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
+        func.func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>, %C: memref<1024x1024xf32>)
         {
             affine.for %i = 0 to 1024 {
                 affine.for %j = 0 to 1024 {
@@ -36,6 +37,7 @@ def test_codegen():
         print("Done HLS code generation")
     else:
         raise RuntimeError("HLS codegen failed")
+
 
 if __name__ == "__main__":
     test_codegen()

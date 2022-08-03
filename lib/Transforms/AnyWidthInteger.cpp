@@ -13,15 +13,16 @@
 
 #include "PassDetail.h"
 
-#include "hcl/Support/Utils.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 
@@ -31,8 +32,8 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void updateTopFunctionSignature(FuncOp &funcOp) {
-  FunctionType functionType = funcOp.getType();
+void updateTopFunctionSignature(func::FuncOp &funcOp) {
+  FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
   SmallVector<Type, 8> arg_types;
@@ -75,16 +76,14 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
   // Get signedness hint information
   std::string itypes = "";
   if (funcOp->hasAttr("itypes")) {
-    itypes =
-        funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
+    itypes = funcOp->getAttr("itypes").cast<StringAttr>().getValue().str();
   }
   std::string otypes = "";
   if (funcOp->hasAttr("otypes")) {
-    otypes =
-        funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
+    otypes = funcOp->getAttr("otypes").cast<StringAttr>().getValue().str();
   }
 
-  // Update FuncOp's block argument types
+  // Update func::FuncOp's block argument types
   // Also build loop nest to cast the input args
   SmallVector<Value, 4> newMemRefs;
   SmallVector<Value, 4> blockArgs;
@@ -114,10 +113,10 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
     }
   }
 
-  // Update FuncOp's return types
+  // Update func::FuncOp's return types
   SmallVector<Operation *, 4> returnOps;
   funcOp.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<ReturnOp>(op)) {
+    if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
       returnOps.push_back(op);
     }
   });
@@ -165,8 +164,8 @@ void updateTopFunctionSignature(FuncOp &funcOp) {
 bool applyAnyWidthInteger(ModuleOp &mod) {
   // Find top-level function
   bool isFoundTopFunc = false;
-  FuncOp *topFunc;
-  for (FuncOp func : mod.getOps<FuncOp>()) {
+  func::FuncOp *topFunc;
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     if (func->hasAttr("top")) {
       isFoundTopFunc = true;
       topFunc = &func;

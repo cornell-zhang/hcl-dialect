@@ -11,12 +11,13 @@ set(LIBS
         ${conversion_libs}
         MLIRExecutionEngine
         MLIRLLVMCommonConversion
-        MLIRLLVMIR
+        MLIRLLVMDialect
         MLIRLLVMToLLVMIRTranslation
         MLIRTargetLLVMIRExport
         MLIRIR
         MLIROptLib
         MLIRHeteroCL
+        MLIRHCLConversion
         MLIRHCLPasses
         )
 add_llvm_executable(hcl-opt hcl-opt.cpp)

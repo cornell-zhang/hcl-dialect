@@ -2,7 +2,7 @@
 
 module {
     // CHECK: func @test(%arg0: memref<1024x512x!hcl.Fixed<12, 6>>, %arg1: memref<512x1024x!hcl.UFixed<12, 2>>) {
-    func @test(%A: memref<1024x512x!hcl.Fixed<12,6>>, %B: memref<512x1024x!hcl.UFixed<12,2>>)
+    func.func @test(%A: memref<1024x512x!hcl.Fixed<12,6>>, %B: memref<512x1024x!hcl.UFixed<12,2>>)
     {
         affine.for %i = 0 to 1024 {
             affine.for %j = 0 to 1024 {

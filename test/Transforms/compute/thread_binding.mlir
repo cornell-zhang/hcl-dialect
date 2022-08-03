@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @vector_add(%A: memref<256xf32>, %B: memref<256xf32>, %C: memref<256xf32>)
+    func.func @vector_add(%A: memref<256xf32>, %B: memref<256xf32>, %C: memref<256xf32>)
     {
         %s = hcl.create_op_handle "s"
         %li = hcl.create_loop_handle %s, "i"

@@ -7,7 +7,7 @@
 #ifndef HCL_C_DIALECT_HLSCPP_H
 #define HCL_C_DIALECT_HLSCPP_H
 
-#include "mlir-c/Registration.h"
+#include "mlir-c/RegisterEverything.h"
 
 #ifdef __cplusplus
 extern "C" {

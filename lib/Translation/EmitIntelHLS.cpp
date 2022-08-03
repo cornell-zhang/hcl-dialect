@@ -9,11 +9,11 @@
 #include "hcl/Support/Utils.h"
 #include "hcl/Translation/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineValueMap.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/InitAllDialects.h"
-#include "mlir/Translation.h"
+#include "mlir/Tools/mlir-translate/Translation.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
@@ -129,7 +129,7 @@ private:
                       bool isReadOnly = false, std::string name = "");
   unsigned emitNestedLoopHead(Value val);
   void emitNestedLoopTail(unsigned rank);
-  void emitFunction(FuncOp func, bool isAccessor = false);
+  void emitFunction(func::FuncOp func, bool isAccessor = false);
   void emitInfoAndNewLine(Operation *op);
 
   /// MLIR component and HLS C++ pragma emitters.
@@ -301,7 +301,7 @@ public:
   bool visitOp(arith::NegFOp op) { return emitter.emitUnary(op, "-"), true; }
 
   /// Special operations.
-  bool visitOp(ReturnOp op) { return true; }
+  bool visitOp(func::ReturnOp op) { return true; }
   bool visitOp(arith::ConstantOp op) { return emitter.emitConstant(op), true; }
   bool visitOp(arith::IndexCastOp op) {
     return emitter.emitCast<arith::IndexCastOp>(op), true;
@@ -949,7 +949,7 @@ void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\n";
 }
 
-void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
+void ModuleEmitter::emitFunction(func::FuncOp func, bool isAccessor) {
 
   if (func.getBlocks().size() != 1)
     emitError(func, "has zero or more than one basic blocks.");
@@ -973,8 +973,7 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
   }
   std::string itypes = "";
   if (func->hasAttr("itypes"))
-    itypes =
-        func->getAttr("itypes").cast<StringAttr>().getValue().str();
+    itypes = func->getAttr("itypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
       itypes += "x";
@@ -1004,13 +1003,13 @@ void ModuleEmitter::emitFunction(FuncOp func, bool isAccessor) {
   auto args = func.getArguments();
   std::string otypes = "";
   if (func->hasAttr("otypes"))
-    otypes =
-        func->getAttr("otypes").cast<StringAttr>().getValue().str();
+    otypes = func->getAttr("otypes").cast<StringAttr>().getValue().str();
   else {
     for (unsigned i = 0; i < func.getNumArguments(); ++i)
       otypes += "x";
   }
-  if (auto funcReturn = dyn_cast<ReturnOp>(func.front().getTerminator())) {
+  if (auto funcReturn =
+          dyn_cast<func::ReturnOp>(func.front().getTerminator())) {
     unsigned idx = 0;
     for (auto result : funcReturn.getOperands()) {
       if (std::find(args.begin(), args.end(), result) == args.end()) {
@@ -1104,7 +1103,7 @@ int main() {
   // generate initial buffers (function arguments)
   // TODO: can only support one function now!
   for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op))
+    if (auto func = dyn_cast<func::FuncOp>(op))
       emitFunction(func);
     else
       emitError(&op, "is unsupported operation.");
@@ -1125,7 +1124,7 @@ int main() {
   // generate accessors
   // TODO: can only support one function now!
   for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op))
+    if (auto func = dyn_cast<func::FuncOp>(op))
       emitFunction(func, true);
     else
       emitError(&op, "is unsupported operation.");
@@ -1144,7 +1143,7 @@ int main() {
   addIndent();
   // Emit function body.
   for (auto &op : *module.getBody()) {
-    if (auto func = dyn_cast<FuncOp>(op)) {
+    if (auto func = dyn_cast<func::FuncOp>(op)) {
       addIndent();
       emitBlock(func.front());
       reduceIndent();
@@ -1196,7 +1195,7 @@ void hcl::registerEmitIntelHLSTranslation() {
         // clang-format off
         registry.insert<
           mlir::hcl::HeteroCLDialect,
-          mlir::StandardOpsDialect,
+          mlir::func::FuncDialect,
           mlir::arith::ArithmeticDialect,
           mlir::tensor::TensorDialect,
           mlir::scf::SCFDialect,

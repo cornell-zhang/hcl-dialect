@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Support/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -94,7 +95,7 @@ bool hcl::setLoopNames(SmallVector<AffineForOp, 6> &forOps,
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
 
-LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
+LogicalResult hcl::getStage(func::FuncOp &func, AffineForOp &forOp,
                             StringRef op_name) {
   for (auto rootForOp : func.getOps<AffineForOp>()) {
     if (op_name ==
@@ -184,7 +185,7 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
       if (sizeNameArr == 0)
         nameArr.push_back(curr_loop);
     }
-    Block &body = forOp.region().front();
+    Block &body = forOp.getRegion().front();
     // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
     //   break;
 

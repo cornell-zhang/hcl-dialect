@@ -40,3 +40,6 @@ build
 # HLS
 *.log
 *.prj
+
+llvm-project
+tmp

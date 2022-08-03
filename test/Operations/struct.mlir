@@ -1,7 +1,7 @@
 // RUN: hcl-opt --lower-composite --fixed-to-integer --lower-to-llvm %s
 module {
 
-  func @basic () -> () {
+  func.func @basic () -> () {
     %1 = arith.constant 0 : i32
     %2 = arith.constant 1 : i32
     %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
@@ -11,7 +11,7 @@ module {
     return
   }
 
-  func @nested_struct() -> () {
+  func.func @nested_struct() -> () {
     %1 = arith.constant 0 : i32
     %2 = arith.constant 1 : i32
     %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
@@ -22,7 +22,7 @@ module {
     return
   }
 
-  func @struct_memref() -> () {
+  func.func @struct_memref() -> () {
     %1 = arith.constant 0 : i32
     %2 = arith.constant 1 : i32
     %3 = hcl.struct_construct(%1, %2) : i32, i32 -> !hcl.struct<i32, i32>
@@ -31,7 +31,7 @@ module {
   }
 
 
-  func @top(%arg0: memref<100xi8>, %arg1: memref<100x!hcl.Fixed<13, 11>>, %arg2: memref<100xf32>) attributes {itypes = "s__", otypes = ""} {
+  func.func @top(%arg0: memref<100xi8>, %arg1: memref<100x!hcl.Fixed<13, 11>>, %arg2: memref<100xf32>) attributes {itypes = "s__", otypes = ""} {
     %0 = memref.alloc() {name = "compute_3"} : memref<100x!hcl.struct<i8, !hcl.Fixed<13, 11>, f32>>
     affine.for %arg3 = 0 to 100 {
       %2 = affine.load %arg0[%arg3] {from = "compute_0"} : memref<100xi8>

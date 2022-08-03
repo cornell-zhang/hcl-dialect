@@ -58,6 +58,29 @@ void HeteroCLDialect::initialize() {
 // Extra methods
 //===----------------------------------------------------------------------===//
 
+void StructType::print(mlir::AsmPrinter &p) const {
+  p << "<";
+  llvm::interleaveComma(getElementTypes(), p);
+  p << '>';
+}
+
+Type StructType::parse(AsmParser &parser) {
+  if (parser.parseLess())
+    return Type();
+  SmallVector<mlir::Type, 1> elementTypes;
+  do {
+    mlir::Type elementType;
+    if (parser.parseType(elementType))
+      return nullptr;
+
+    elementTypes.push_back(elementType);
+  } while (succeeded(parser.parseOptionalComma()));
+
+  if (parser.parseGreater())
+    return Type();
+  return get(parser.getContext(), elementTypes);
+}
+
 LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
   // Check that the callee attribute was specified.
   auto fnAttr = (*this)->getAttrOfType<FlatSymbolRefAttr>("callee");
@@ -70,7 +93,7 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbolTable) {
                          << "' does not reference a valid customization";
 
   // Verify that the operand and result types match the callee.
-  auto fnType = fn.getType();
+  auto fnType = fn.getFunctionType();
   if (fnType.getNumInputs() != getNumOperands())
     return emitOpError("incorrect number of operands for callee");
 

@@ -10,6 +10,7 @@
 #define HCL_ATTRS
 
 include "hcl/Dialect/HeteroCLDialect.td"
+include "mlir/IR/EnumAttr.td"
 
 // https://mlir.llvm.org/docs/OpDefinitions/#enum-attributes
 def CompletePartition: I32EnumAttrCase<"CompletePartition", 0>;
@@ -70,15 +71,16 @@ def CmpFixedPredicateAttr : I64EnumAttr<
   let cppNamespace = "mlir::hcl";
 }
 
-def FooAttr : HeteroCL_Attr<"FooAttr"> {
-  let mnemonic = "FooAttr";
-  let parameters = (ins );
-  let printer = [{
-    $_printer << "FooAttr";
-  }];
-  let parser = [{
-    return get($_ctxt);
-  }];
-}
+// def FooAttr : HeteroCL_Attr<"FooAttr"> {
+//   let mnemonic = "FooAttr";
+//   let parameters = (ins );
+//   bit hasCustomAssemblyFormat = 1;
+//   let printer = [{
+//     $_printer << "FooAttr";
+//   }];
+//   let parser = [{
+//     return get($_ctxt);
+//   }];
+// }
 
 #endif // HCL_ATTRS

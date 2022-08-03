@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s --fixed-to-integer --jit | FileCheck %s
 module {
   memref.global "private" @fixed_gv : memref<2x2xi64> = dense<[[8, 0], [10, 20]]>
-  func @top() -> () {
+  func.func @top() -> () {
     %0 = hcl.get_global_fixed @fixed_gv : memref<2x2x!hcl.Fixed<32,2>>
     %1 = memref.alloc() : memref<2x2xi32>
     affine.for %arg0 = 0 to 2 {

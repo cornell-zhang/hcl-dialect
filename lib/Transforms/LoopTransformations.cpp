@@ -118,8 +118,9 @@ LogicalResult runSplitting(func::FuncOp &f, SplitOp &splitOp) {
   // 5) Loop normalization
   // Note: 5) & 6) are used for making the loop bound constants
   //       Otherwise, loops are not perfectly nested
-  normalizeAffineFor(tiledNest[0]);
-  normalizeAffineFor(tiledNest[1]);
+  if (failed(normalizeAffineFor(tiledNest[0])) ||
+      failed(normalizeAffineFor(tiledNest[1])))
+    return failure();
   auto ub = tiledNest[1].getUpperBound();
   auto ubMap = ub.getMap();
   if (ubMap.isConstant()) {
@@ -260,7 +261,8 @@ LogicalResult runTiling(func::FuncOp &f, TileOp &tileOp) {
   // Note: 5) & 6) are used for making the loop bound constants
   //       Otherwise, loops are not perfectly nested
   for (int i = 0; i < 4; ++i)
-    normalizeAffineFor(tiledNest[i]);
+    if (failed(normalizeAffineFor(tiledNest[i])))
+      return failure();
   // the tiled factor loops are the inner two
   for (int i = 2; i < 4; ++i) {
     auto ub = tiledNest[i].getUpperBound();

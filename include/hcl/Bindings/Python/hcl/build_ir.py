@@ -826,9 +826,9 @@ class ConstantOp(ExprOp):
             type_attr = TypeAttr.get(memref_type)
             const_tensor = memref.GlobalOp(
                 sym_name,
-                sym_visibility,
                 type_attr,
-                value_attr,
+                sym_visibility=sym_visibility,
+                initial_value=value_attr,
                 constant=True,
                 alignment=None,
                 ip=GlobalInsertionPoint.get_global(),

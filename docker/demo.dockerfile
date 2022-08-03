@@ -2,7 +2,15 @@ FROM centos:latest
 ENV DEBIAN_FRONTEND=noninteractive
 
 # install essentials
-RUN yum update -y && yum install -y python3-devel git wget cmake vim gdb gcc gcc-c++ kernel-devel make
+RUN yum update -y && yum install -y python3-devel git wget vim gdb gcc gcc-c++ kernel-devel make
+
+# install cmake
+wget https://github.com/Kitware/CMake/releases/download/v3.23.3/cmake-3.23.3.tar.gz
+tar -xzvf cmake-3.23.3.tar.gz
+cd cmake-3.23.3
+./bootstrap
+make -j`nproc`
+export PATH=$PATH:cmake-3.23.3/bin
 
 # install conda env
 WORKDIR /root/
@@ -14,7 +22,7 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
 
 RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
     cd llvm-project && \
-    git checkout tags/llvmorg-14.0.0 && \
+    git checkout tags/llvmorg-15.0.0-rc1 && \
     python3 -m pip install --upgrade pip && \
     python3 -m pip install -r mlir/python/requirements.txt && \
     mkdir build && cd build && \

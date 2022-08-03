@@ -2603,7 +2603,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
         targetFunc.front().addArgument(IndexType::get(f.getContext()),
                                        targetFunc.getLoc());
         // update previous CallOp
-        for (auto callOp : f.getOps<CallOp>()) {
+        for (auto callOp : f.getOps<func::CallOp>()) {
           if (callOp.getCallee() == targetFunc.getName()) {
             OpBuilder builder(callOp);
             auto targetUb = builder.create<arith::ConstantIndexOp>(
@@ -2701,8 +2701,8 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
       }
     }
     // Double check previous call operations
-    for (auto callOp : f.getOps<CallOp>()) {
-      for (auto func : mod.getOps<FuncOp>()) {
+    for (auto callOp : f.getOps<func::CallOp>()) {
+      for (auto func : mod.getOps<func::FuncOp>()) {
         if (callOp.getCallee() == func.getName()) {
           for (int i = 0, size = func.getNumArguments(); i < size; ++i) {
             auto callMemrefType =

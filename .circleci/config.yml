@@ -39,7 +39,7 @@ jobs:
           paths:
             - cmake-3.23.3
       - restore_cache:
-          key: llvm-15.0.0-rc1
+          key: llvm-15.0.0-rc
       - run:
           name: Build LLVM
           command: | # /home/circleci/hcl-dialect-prototype
@@ -61,7 +61,7 @@ jobs:
             fi;
             cd ../..
       - save_cache:
-          key: llvm-15.0.0-rc1
+          key: llvm-15.0.0-rc
           paths:
             - llvm-project
       - run:

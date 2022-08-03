@@ -4,8 +4,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef HCLNVVMTOCUBIIN_H 
-#define HCLNVVMTOCUBIIN_H
+#ifndef HCLNVVMTOCUBIN_PASSES_H 
+#define HCLNVVMTOCUBIN_PASSES_H
 
 #include "mlir/Dialect/GPU/GPUDialect.h"
 #include "mlir/Pass/Pass.h"
@@ -23,4 +23,4 @@ std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> createNVVMToCubinPass();
 } // namespace hcl
 } // namespace mlir
 
-#endif // HCLNVVMTOCUBIIN_H
+#endif // HCLNVVMTOCUBIN_PASSES_H

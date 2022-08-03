@@ -16,7 +16,6 @@ add_mlir_dialect_library(MLIRHCLConversion
 
     LINK_LIBS PUBLIC
     ${conversion_libs}
-    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     MLIRIR
     MLIRPass
     MLIRHeteroCL

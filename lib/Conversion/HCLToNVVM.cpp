@@ -116,10 +116,11 @@ bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context) {
   unsigned numBlockDims = 1;
   unsigned numThreadDims = 1;
   module.walk<WalkOrder::PreOrder>([&](AffineForOp forOp) {
-    std::cout << "in affine for loop" << std::endl;
+    // std::cout << "in affine for loop" << std::endl;
     if (failed(convertAffineLoopNestToGPULaunch(forOp, numBlockDims,
                                                 numThreadDims))) {
       // std::cout << "failed affine to gpu" << std::endl;
+      // TODO(Niansong): this might be wrong, I see a warning during build.
       return WalkResult::interrupt();
     }
   });

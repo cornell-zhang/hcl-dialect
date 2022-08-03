@@ -34,6 +34,7 @@
 
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Conversion/HCLToNVVM.h"
+#include "hcl/Conversion/NVVMToCubin.h"
 #include "hcl/Transforms/Passes.h"
 
 #include <iostream>
@@ -235,7 +236,7 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::createStripDebugInfoPass());
     mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
     gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
-    // gpuPM.addPass();
+    gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
   }
 
   if (enableNormalize) {

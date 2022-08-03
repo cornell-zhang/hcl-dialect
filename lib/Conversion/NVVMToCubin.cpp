@@ -10,6 +10,10 @@
 // adds that blob as a string attribute of the module.
 //
 //===----------------------------------------------------------------------===//
+#if defined(CUDA_ENABLED)
+#define CUDA_BACKEND_ENABLED
+#endif
+
 #include "mlir/Dialect/GPU/Passes.h"
 
 #include "hcl/Conversion/NVVMToCubin.h"
@@ -18,6 +22,7 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "llvm/Support/TargetSelect.h"
 
+#ifdef CUDA_BACKEND_ENABLED
 #include <cuda.h>
 
 using namespace mlir;
@@ -141,3 +146,5 @@ std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> createNVVMToCubinPass() {
 }
 } // namespace hcl
 } // namespace mlir
+
+#endif // CUDA_BACKEND_ENABLED

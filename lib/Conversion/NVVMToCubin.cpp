@@ -10,6 +10,7 @@
 // adds that blob as a string attribute of the module.
 //
 //===----------------------------------------------------------------------===//
+#include "hcl/Conversion/NVVMToCubin.h"
 #include "mlir/Dialect/GPU/Passes.h"
 
 #if HCL_GPU_ENABLED
@@ -130,17 +131,27 @@ SerializeToCubinPass::serializeISA(const std::string &isa) {
 
 // Register pass to serialize GPU kernel functions to a CUBIN binary annotation.
 void mlir::registerGpuSerializeToCubinPass() {
-  PassRegistration<SerializeToCubinPass> registerSerializeToCubin(
-      [] {
-        // Initialize LLVM NVPTX backend.
-        LLVMInitializeNVPTXTarget();
-        LLVMInitializeNVPTXTargetInfo();
-        LLVMInitializeNVPTXTargetMC();
-        LLVMInitializeNVPTXAsmPrinter();
+  PassRegistration<SerializeToCubinPass> registerSerializeToCubin([] {
+    // Initialize LLVM NVPTX backend.
+    LLVMInitializeNVPTXTarget();
+    LLVMInitializeNVPTXTargetInfo();
+    LLVMInitializeNVPTXTargetMC();
+    LLVMInitializeNVPTXAsmPrinter();
 
-        return std::make_unique<SerializeToCubinPass>();
-      });
+    return std::make_unique<SerializeToCubinPass>();
+  });
 }
+
+std::unique_ptr<OperationPass<mlir::gpu::GPUModuleOp>> createNVVMToCubinPass() {
+  // Initialize LLVM NVPTX backend.
+  LLVMInitializeNVPTXTarget();
+  LLVMInitializeNVPTXTargetInfo();
+  LLVMInitializeNVPTXTargetMC();
+  LLVMInitializeNVPTXAsmPrinter();
+
+  return std::make_unique<SerializeToCubinPass>();
+}
+
 #else  // HCL_GPU_ENABLED
 void mlir::registerGpuSerializeToCubinPass() {}
 #endif // HCL_GPU_ENABLED

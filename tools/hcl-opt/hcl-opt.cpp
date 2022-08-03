@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::createStripDebugInfoPass());
     mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
     gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
-    // pm.addPass(mlir::gpu::SerializeToCubinPass());
+    // gpuPM.addPass();
   }
 
   if (enableNormalize) {

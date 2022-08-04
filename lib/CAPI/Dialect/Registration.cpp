@@ -32,6 +32,7 @@ void hclMlirRegisterAllDialects(MlirContext context) {
 }
 
 void hclMlirRegisterAllPasses() {
+
   // General passes
   mlir::registerTransformsPasses();
 
@@ -47,12 +48,10 @@ void hclMlirRegisterAllPasses() {
   mlir::registerTransformsPasses();
 
   mlir::hcl::registerHCLPasses();
-  mlir::hcl::registerHCLToLLVMLoweringPass();
+  mlir::hcl::registerHCLConversionPasses();
 
   // GPU backend passes
   // TODO(Niansong): Add GPU backend passes when GPU backend is ready.
   mlir::hcl::registerAffineToGPULoweringPass();
   mlir::hcl::registerGPUToNVVMLoweringPass();
-  
-  mlir::hcl::registerHCLConversionPasses();
 }

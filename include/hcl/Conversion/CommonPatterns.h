@@ -6,14 +6,14 @@
 
 #ifndef COMMONPATTERNS_H
 #define COMMONPATTERNS_H
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "llvm/Support/Debug.h"
 
 #include "hcl/Dialect/HeteroCLOps.h"
@@ -67,8 +67,8 @@ public:
 
       // Insert a newline after each of the inner dimensions of the shape.
       if (i != e - 1)
-        rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
-                                newLineCst);
+        rewriter.create<func::CallOp>(loc, printfRef,
+                                      rewriter.getIntegerType(32), newLineCst);
       rewriter.create<scf::YieldOp>(loc);
       rewriter.setInsertionPointToStart(loop.getBody());
     }
@@ -79,8 +79,9 @@ public:
         rewriter.create<memref::LoadOp>(loc, printOp.input(), loopIvs);
     // Cast element to f64
     auto casted = castToF64(rewriter, elementLoad, hasUnsignedAttr);
-    rewriter.create<CallOp>(loc, printfRef, rewriter.getIntegerType(32),
-                            ArrayRef<Value>({formatSpecifierCst, casted}));
+    rewriter.create<func::CallOp>(
+        loc, printfRef, rewriter.getIntegerType(32),
+        ArrayRef<Value>({formatSpecifierCst, casted}));
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);
@@ -93,13 +94,38 @@ private:
   static Value castToF64(ConversionPatternRewriter &rewriter, const Value &src,
                          bool hasUnsignedAttr) {
     Type t = src.getType();
+    size_t iwidth = t.getIntOrFloatBitWidth(); // input bitwidth
     Type F64Type = rewriter.getF64Type();
     Value casted;
     if (t.isa<IntegerType>()) {
       if (t.isUnsignedInteger() or hasUnsignedAttr) {
-        casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type, src);
+        Value widthAdjusted;
+        Type targetIntType = rewriter.getIntegerType(64);
+        if (iwidth < 64) {
+          widthAdjusted =
+              rewriter.create<arith::ExtUIOp>(src.getLoc(), targetIntType, src);
+        } else if (iwidth > 64) {
+          widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
+                                                           targetIntType, src);
+        } else {
+          widthAdjusted = src;
+        }
+        casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type,
+                                                  widthAdjusted);
       } else { // signed and signless integer
-        casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type, src);
+        Value widthAdjusted;
+        Type targetIntType = rewriter.getIntegerType(64);
+        if (iwidth < 64) {
+          widthAdjusted =
+              rewriter.create<arith::ExtSIOp>(src.getLoc(), targetIntType, src);
+        } else if (iwidth > 64) {
+          widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
+                                                           targetIntType, src);
+        } else {
+          widthAdjusted = src;
+        }
+        casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type,
+                                                  widthAdjusted);
       }
     } else if (t.isa<FloatType>()) {
       unsigned width = t.cast<FloatType>().getWidth();
@@ -215,7 +241,7 @@ public:
     // Cast index to i32
     Type itype = rewriter.getIntegerType(width);
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, index, itype);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, itype, index);
     Value bitmask =
         rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
@@ -229,7 +255,8 @@ public:
     // (e.g. input && 111101111)
     Value Val0Res =
         rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
-    Value trueRes = rewriter.create<SelectOp>(loc, val, Val1Res, Val0Res);
+    Value trueRes =
+        rewriter.create<arith::SelectOp>(loc, val, Val1Res, Val0Res);
     op->getOperand(0).replaceAllUsesWith(trueRes);
     rewriter.eraseOp(op);
     return success();
@@ -251,17 +278,16 @@ public:
     Type itype = rewriter.getIntegerType(iwidth);
     Type i1 = rewriter.getI1Type();
     Value idx_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, idx, itype);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, itype, idx);
     Value shifted =
         rewriter.create<mlir::arith::ShRSIOp>(loc, input, idx_casted);
-    Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, shifted, i1);
+    Value singleBit = rewriter.create<mlir::arith::TruncIOp>(loc, i1, shifted);
     op->getResult(0).replaceAllUsesWith(singleBit);
     rewriter.eraseOp(op);
     return success();
   }
 };
 
-// Another way to implement GetIntSliceOp with just shifting
 class GetIntSliceOpLowering : public ConversionPattern {
 public:
   explicit GetIntSliceOpLowering(MLIRContext *context)
@@ -276,8 +302,8 @@ public:
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
     Type itype = rewriter.getIntegerType(iwidth);
     Location loc = op->getLoc();
-    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, lo, itype);
-    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, hi, itype);
+    Value lo_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, itype, lo);
+    Value hi_casted = rewriter.create<mlir::arith::IndexCastOp>(loc, itype, hi);
     Value width = rewriter.create<mlir::arith::ConstantIntOp>(
         loc, input.getType().getIntOrFloatBitWidth() - 1, iwidth);
     Value lshift_width =
@@ -319,14 +345,14 @@ public:
         rewriter.create<mlir::arith::ConstantIntOp>(loc, iwidth, iwidth);
     Type int_type = rewriter.getIntegerType(iwidth);
     Value lo_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, lo, int_type);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, int_type, lo);
     Value hi_casted =
-        rewriter.create<mlir::arith::IndexCastOp>(loc, hi, int_type);
+        rewriter.create<mlir::arith::IndexCastOp>(loc, int_type, hi);
     Value const1 =
         rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, int_type);
     Value val_ext =
-        rewriter.create<mlir::arith::ExtUIOp>(loc, val, input.getType());
-    
+        rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
+
     // Step 1: get higher slice - shift right, then shift left
     Value hi_shift_width =
         rewriter.create<mlir::arith::AddIOp>(loc, hi_casted, const1);
@@ -348,8 +374,8 @@ public:
     Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, iwidth);
     Value condition = rewriter.create<mlir::arith::CmpIOp>(
         loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
-    Value lo_slice =
-        rewriter.create<SelectOp>(loc, condition, lo_slice_possible, zero);
+    Value lo_slice = rewriter.create<arith::SelectOp>(loc, condition,
+                                                      lo_slice_possible, zero);
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
@@ -367,6 +393,5 @@ public:
 
 } // namespace hcl
 } // namespace mlir
-
 
 #endif // COMMONPATTERNS_H

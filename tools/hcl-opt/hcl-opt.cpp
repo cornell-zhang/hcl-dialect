@@ -7,8 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/Dialect/GPU/GPUDialect.h"
-#include "mlir/Dialect/GPU/Passes.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::hcl::createAffineToGPULoweringPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
     pm.addPass(mlir::createLowerAffinePass());
-    pm.addPass(mlir::createLowerToCFGPass());
+    // pm.addPass(mlir::createLowerToCFGPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createStripDebugInfoPass());
 #if CUDA_BACKEND_ENABLED

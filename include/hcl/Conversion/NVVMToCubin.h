@@ -7,7 +7,7 @@
 #ifndef HCLNVVMTOCUBIN_PASSES_H 
 #define HCLNVVMTOCUBIN_PASSES_H
 
-#include "mlir/Dialect/GPU/GPUDialect.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassRegistry.h"
 

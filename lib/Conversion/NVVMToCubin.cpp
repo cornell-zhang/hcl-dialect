@@ -10,7 +10,7 @@
 // adds that blob as a string attribute of the module.
 //
 //===----------------------------------------------------------------------===//
-#include "mlir/Dialect/GPU/Passes.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
 
 #if CUDA_BACKEND_ENABLED
 #include "mlir/Pass/Pass.h"

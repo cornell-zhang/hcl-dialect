@@ -12,9 +12,9 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPU.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
-#include "mlir/Conversion/SCFToStandard/SCFToStandard.h"
-#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVM.h"
-#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
+// #include "mlir/Conversion/SCFToStandard/SCFToStandard.h"
+// #include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVM.h"
+// #include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
@@ -27,12 +27,11 @@
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
-#include "mlir/Dialect/GPU/GPUDialect.h"
-#include "mlir/Dialect/GPU/ParallelLoopMapper.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/GPU/Transforms/ParallelLoopMapper.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
@@ -111,7 +110,7 @@ bool applyAffineToGPULoweringPass(ModuleOp &module, MLIRContext &context) {
   RewritePatternSet patterns(&context);
 
   target.addLegalDialect<gpu::GPUDialect>();
-  target.addLegalDialect<scf::SCFDialect, StandardOpsDialect>();
+  target.addLegalDialect<scf::SCFDialect>();
 
   unsigned numBlockDims = 1;
   unsigned numThreadDims = 1;
@@ -155,7 +154,7 @@ bool applyGPUToNVVMLoweringPass(ModuleOp &module, MLIRContext &context) {
                                                           patterns);
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
   // populateMathToLLVMConversionPatterns(typeConverter, patterns);
-  populateStdToLLVMConversionPatterns(typeConverter, patterns);
+  // populateStdToLLVMConversionPatterns(typeConverter, patterns);
   populateGpuToNVVMConversionPatterns(typeConverter, patterns);
   // populateGpuToLLVMConversionPatterns(typeConverter, patterns);
 

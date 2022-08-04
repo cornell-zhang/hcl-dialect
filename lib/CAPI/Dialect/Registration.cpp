@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,10 +12,10 @@
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
+#include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/StandardOps/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
@@ -23,7 +23,7 @@
 
 void hclMlirRegisterAllDialects(MlirContext context) {
   mlir::DialectRegistry registry;
-  registry.insert<mlir::hcl::HeteroCLDialect, mlir::StandardOpsDialect,
+  registry.insert<mlir::hcl::HeteroCLDialect, mlir::func::FuncDialect,
                   mlir::arith::ArithmeticDialect, mlir::tensor::TensorDialect,
                   mlir::AffineDialect, mlir::math::MathDialect,
                   mlir::memref::MemRefDialect, mlir::linalg::LinalgDialect>();
@@ -43,8 +43,8 @@ void hclMlirRegisterAllPasses() {
   mlir::arith::registerArithmeticPasses();
   mlir::LLVM::registerLLVMPasses();
   mlir::memref::registerMemRefPasses();
-  mlir::registerStandardPasses();
   mlir::registerLinalgPasses();
+  mlir::registerTransformsPasses();
 
   mlir::hcl::registerHCLPasses();
   mlir::hcl::registerHCLToLLVMLoweringPass();
@@ -53,4 +53,6 @@ void hclMlirRegisterAllPasses() {
   // TODO(Niansong): Add GPU backend passes when GPU backend is ready.
   mlir::hcl::registerAffineToGPULoweringPass();
   mlir::hcl::registerGPUToNVVMLoweringPass();
+  
+  mlir::hcl::registerHCLConversionPasses();
 }

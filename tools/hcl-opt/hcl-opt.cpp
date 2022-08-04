@@ -6,10 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <iostream>
 #include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/Dialect/GPU/Passes.h"
 #include "mlir/Dialect/GPU/GPUDialect.h"
+#include "mlir/Dialect/GPU/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -17,13 +16,13 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Parser.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
-#include "mlir/Support/MlirOptMain.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
+#include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -41,7 +40,6 @@
 #endif
 
 #include "hcl/Transforms/Passes.h"
-
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
                                                 llvm::cl::desc("<input file>"),
@@ -124,15 +122,14 @@ static llvm::cl::opt<bool> moveReturnToInput(
     llvm::cl::desc("Move return values to input argument list"),
     llvm::cl::init(false));
 
-static llvm::cl::opt<bool> affineToGPU(
-    "affine-to-gpu",
-    llvm::cl::desc("Convert affine to GPU dialect"),
-    llvm::cl::init(false));
-
+static llvm::cl::opt<bool>
+    affineToGPU("affine-to-gpu",
+                llvm::cl::desc("Convert affine to GPU dialect"),
+                llvm::cl::init(false));
 
 int loadMLIR(mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module) {
-  module = parseSourceFile(inputFilename, &context);
+  module = parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
   if (!module) {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
     return 3;
@@ -156,8 +153,7 @@ int runJiTCompiler(mlir::ModuleOp module) {
 
   // Create an MLIR execution engine. The execution engine eagerly JIT-compiles
   // the module.
-  auto maybeEngine = mlir::ExecutionEngine::create(
-      module, /*llvmModuleBuilder=*/nullptr, optPipeline);
+  auto maybeEngine = mlir::ExecutionEngine::create(module);
   assert(maybeEngine && "failed to construct an execution engine");
   auto &engine = maybeEngine.get();
 
@@ -173,16 +169,19 @@ int runJiTCompiler(mlir::ModuleOp module) {
 
 int main(int argc, char **argv) {
   // Register dialects and passes in current context
+  mlir::DialectRegistry registry;
+  mlir::registerAllDialects(registry);
+  registry.insert<mlir::hcl::HeteroCLDialect>();
+
   mlir::MLIRContext context;
-  auto registry = context.getDialectRegistry();
-  mlir::registerAllDialects(context);
+  context.appendDialectRegistry(registry);
   context.allowUnregisteredDialects(true);
   context.printOpOnDiagnostic(true);
   context.loadAllAvailableDialects();
-  context.getOrLoadDialect<mlir::hcl::HeteroCLDialect>();
+
   mlir::registerAllPasses();
   mlir::hcl::registerHCLPasses();
-  mlir::hcl::registerHCLToLLVMLoweringPass();
+  mlir::hcl::registerHCLConversionPasses();
 
   // Parse pass names in main to ensure static initialization completed
   llvm::cl::ParseCommandLineOptions(argc, argv,
@@ -197,7 +196,7 @@ int main(int argc, char **argv) {
   // Operation agnostic passes
   mlir::PassManager pm(&context);
   // Operation specific passes
-  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+  mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
   }
@@ -237,14 +236,14 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::createLowerToCFGPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createStripDebugInfoPass());
-    #if CUDA_BACKEND_ENABLED
-      mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
-      gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass()); 
-      gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
-      pm.addPass(mlir::createGpuToLLVMConversionPass());
-    #else
-      llvm::errs() << "GPU backend is not enabled\n";
-    #endif
+#if CUDA_BACKEND_ENABLED
+    mlir::OpPassManager &gpuPM = pm.nest<mlir::gpu::GPUModuleOp>();
+    gpuPM.addPass(mlir::createLowerGpuOpsToNVVMOpsPass());
+    gpuPM.addPass(mlir::hcl::createNVVMToCubinPass());
+    pm.addPass(mlir::createGpuToLLVMConversionPass());
+#else
+    llvm::errs() << "GPU backend is not enabled\n";
+#endif
   }
 
   if (enableNormalize) {

@@ -11,6 +11,7 @@ add_mlir_dialect_library(MLIRHCLConversion
     MLIRHeteroCLOpsIncGen
     MLIRHeteroCLTypesIncGen
     MLIRHeteroCLPassesIncGen
+    MLIRHeteroCLConversionPassesIncGen
 
     LINK_LIBS PUBLIC
     ${conversion_libs}

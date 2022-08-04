@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s --fixed-to-integer
 
 module {
-  func @top(%0: memref<4x4x!hcl.Fixed<4, 2>>) -> () {
+  func.func @top(%0: memref<4x4x!hcl.Fixed<4, 2>>) -> () {
     hcl.print(%0) : memref<4x4x!hcl.Fixed<4, 2>>
     return
   }

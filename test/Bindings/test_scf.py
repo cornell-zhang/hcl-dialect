@@ -4,30 +4,30 @@ from hcl_mlir.ir import *
 from hcl_mlir.dialects import arith
 # from hcl_mlir.dialects import func
 from hcl_mlir.dialects import scf
-from hcl_mlir.dialects import builtin
+from hcl_mlir.dialects import func
 
 
 def constructAndPrintInModule(f):
-  print("\nTEST:", f.__name__)
-  with Context(), Location.unknown():
-    module = Module.create()
-    with InsertionPoint(module.body):
-      f()
-    print(module)
-  return f
+    print("\nTEST:", f.__name__)
+    with Context(), Location.unknown():
+        module = Module.create()
+        with InsertionPoint(module.body):
+            f()
+        print(module)
+    return f
 
 
 # CHECK-LABEL: TEST: testSimpleLoop
 @constructAndPrintInModule
 def testSimpleLoop():
-  index_type = IndexType.get()
+    index_type = IndexType.get()
 
-  @builtin.FuncOp.from_py_func(index_type, index_type, index_type)
-  def simple_loop(lb, ub, step):
-    loop = scf.ForOp(lb, ub, step, [lb, lb])
-    with InsertionPoint(loop.body):
-      scf.YieldOp(loop.inner_iter_args)
-    return
+    @func.FuncOp.from_py_func(index_type, index_type, index_type)
+    def simple_loop(lb, ub, step):
+        loop = scf.ForOp(lb, ub, step, [lb, lb])
+        with InsertionPoint(loop.body):
+            scf.YieldOp(loop.inner_iter_args)
+        return
 
 
 # CHECK: func @simple_loop(%[[ARG0:.*]]: index, %[[ARG1:.*]]: index, %[[ARG2:.*]]: index)
@@ -39,14 +39,14 @@ def testSimpleLoop():
 # CHECK-LABEL: TEST: testInductionVar
 @constructAndPrintInModule
 def testInductionVar():
-  index_type = IndexType.get()
+    index_type = IndexType.get()
 
-  @builtin.FuncOp.from_py_func(index_type, index_type, index_type)
-  def induction_var(lb, ub, step):
-    loop = scf.ForOp(lb, ub, step, [lb])
-    with InsertionPoint(loop.body):
-      scf.YieldOp([loop.induction_variable])
-    return
+    @func.FuncOp.from_py_func(index_type, index_type, index_type)
+    def induction_var(lb, ub, step):
+        loop = scf.ForOp(lb, ub, step, [lb])
+        with InsertionPoint(loop.body):
+            scf.YieldOp([loop.induction_variable])
+        return
 
 
 # CHECK: func @induction_var(%[[ARG0:.*]]: index, %[[ARG1:.*]]: index, %[[ARG2:.*]]: index)
@@ -56,17 +56,17 @@ def testInductionVar():
 
 @constructAndPrintInModule
 def testIfWithoutElse():
-  bool = IntegerType.get_signless(1)
-  i32 = IntegerType.get_signless(32)
+    bool = IntegerType.get_signless(1)
+    i32 = IntegerType.get_signless(32)
 
-  @builtin.FuncOp.from_py_func(bool)
-  def simple_if(cond):
-    if_op = scf.IfOp(cond)
-    with InsertionPoint(if_op.then_block):
-      one = arith.ConstantOp(i32, 1)
-      add = arith.AddIOp(one, one)
-      scf.YieldOp([])
-    return
+    @func.FuncOp.from_py_func(bool)
+    def simple_if(cond):
+        if_op = scf.IfOp(cond)
+        with InsertionPoint(if_op.then_block):
+            one = arith.ConstantOp(i32, 1)
+            add = arith.AddIOp(one, one)
+            scf.YieldOp([])
+        return
 
 
 # CHECK: func @simple_if(%[[ARG0:.*]]: i1)
@@ -78,22 +78,22 @@ def testIfWithoutElse():
 
 @constructAndPrintInModule
 def testIfWithElse():
-  bool = IntegerType.get_signless(1)
-  i32 = IntegerType.get_signless(32)
+    bool = IntegerType.get_signless(1)
+    i32 = IntegerType.get_signless(32)
 
-  @builtin.FuncOp.from_py_func(bool)
-  def simple_if_else(cond):
-    if_op = scf.IfOp(cond, [i32, i32], hasElse=True)
-    with InsertionPoint(if_op.then_block):
-      x_true = arith.ConstantOp(i32, 0)
-      y_true = arith.ConstantOp(i32, 1)
-      scf.YieldOp([x_true, y_true])
-    with InsertionPoint(if_op.else_block):
-      x_false = arith.ConstantOp(i32, 2)
-      y_false = arith.ConstantOp(i32, 3)
-      scf.YieldOp([x_false, y_false])
-    add = arith.AddIOp(if_op.results[0], if_op.results[1])
-    return
+    @func.FuncOp.from_py_func(bool)
+    def simple_if_else(cond):
+        if_op = scf.IfOp(cond, [i32, i32], hasElse=True)
+        with InsertionPoint(if_op.then_block):
+            x_true = arith.ConstantOp(i32, 0)
+            y_true = arith.ConstantOp(i32, 1)
+            scf.YieldOp([x_true, y_true])
+        with InsertionPoint(if_op.else_block):
+            x_false = arith.ConstantOp(i32, 2)
+            y_false = arith.ConstantOp(i32, 3)
+            scf.YieldOp([x_false, y_false])
+        add = arith.AddIOp(if_op.results[0], if_op.results[1])
+        return
 
 
 # CHECK: func @simple_if_else(%[[ARG0:.*]]: i1)

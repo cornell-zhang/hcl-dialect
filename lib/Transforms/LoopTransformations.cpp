@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -16,8 +16,8 @@
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
@@ -67,7 +67,7 @@ Attribute createZeroAttr(OpBuilder &builder, mlir::Type elementType) {
   return {};
 }
 
-LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
+LogicalResult runSplitting(func::FuncOp &f, SplitOp &splitOp) {
   // 1) Get the schedule
   unsigned int factor = splitOp.factor();
   auto loopHandle =
@@ -118,8 +118,9 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   // 5) Loop normalization
   // Note: 5) & 6) are used for making the loop bound constants
   //       Otherwise, loops are not perfectly nested
-  normalizeAffineFor(tiledNest[0]);
-  normalizeAffineFor(tiledNest[1]);
+  if (failed(normalizeAffineFor(tiledNest[0])) ||
+      failed(normalizeAffineFor(tiledNest[1])))
+    return failure();
   auto ub = tiledNest[1].getUpperBound();
   auto ubMap = ub.getMap();
   if (ubMap.isConstant()) {
@@ -194,7 +195,7 @@ LogicalResult runSplitting(FuncOp &f, SplitOp &splitOp) {
   return success();
 }
 
-LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
+LogicalResult runTiling(func::FuncOp &f, TileOp &tileOp) {
   // 1) Get the schedule
   unsigned int x_factor = tileOp.x_factor();
   unsigned int y_factor = tileOp.y_factor();
@@ -260,7 +261,8 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   // Note: 5) & 6) are used for making the loop bound constants
   //       Otherwise, loops are not perfectly nested
   for (int i = 0; i < 4; ++i)
-    normalizeAffineFor(tiledNest[i]);
+    if (failed(normalizeAffineFor(tiledNest[i])))
+      return failure();
   // the tiled factor loops are the inner two
   for (int i = 2; i < 4; ++i) {
     auto ub = tiledNest[i].getUpperBound();
@@ -334,7 +336,7 @@ LogicalResult runTiling(FuncOp &f, TileOp &tileOp) {
   return success();
 }
 
-LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
+LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   // 1) Get the schedule
   const auto loopsToReorder = reorderOp.loops(); // operand_range
   auto loopHandle =
@@ -443,7 +445,7 @@ LogicalResult runReordering(FuncOp &f, ReorderOp &reorderOp) {
   return success();
 }
 
-LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
+LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
   auto optional_factor = unrollOp.factor();
   unsigned int factor;
@@ -484,7 +486,7 @@ LogicalResult runUnrolling(FuncOp &f, UnrollOp &unrollOp) {
   return success();
 }
 
-LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
+LogicalResult runParallel(func::FuncOp &f, ParallelOp &parallelOp) {
   // 1) Get the schedule
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp());
@@ -518,7 +520,7 @@ LogicalResult runParallel(FuncOp &f, ParallelOp &parallelOp) {
   return success();
 }
 
-LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
+LogicalResult runPipelining(func::FuncOp &f, PipelineOp &pipelineOp) {
   // 1) Get the schedule
   auto optional_ii = pipelineOp.ii();
   unsigned int ii;
@@ -558,7 +560,7 @@ LogicalResult runPipelining(FuncOp &f, PipelineOp &pipelineOp) {
   return success();
 }
 
-LogicalResult runThreadBind(FuncOp &f, ThreadBindOp &threadBindOp) {
+LogicalResult runThreadBind(func::FuncOp &f, ThreadBindOp &threadBindOp) {
   // 1) Get the schedule
   auto target_dim = threadBindOp.dim();
   auto loopHandle =
@@ -674,7 +676,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
       opToSink.push_back(inductionVariable.getDefiningOp());
     }
     replaceAllUsesInRegionWith(loops[idx - 1].getInductionVar(),
-                               inductionVariable, loops.back().region());
+                               inductionVariable, loops.back().getRegion());
   }
 
   // 4. Move the operations from the innermost just above the second-outermost
@@ -710,7 +712,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
 
 // Notice hcl.fuse (fuses nested loops) is different from affine.fuse,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
-LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
+LogicalResult runFusing(func::FuncOp &f, FuseOp &fuseOp) {
   // 1) Get the schedule
   const auto loopsToFuse = fuseOp.loops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToFuse.size();
@@ -805,7 +807,7 @@ LogicalResult runFusing(FuncOp &f, FuseOp &fuseOp) {
   return success();
 }
 
-LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
+LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
   // 1) Get the schedule
   const auto loop_name =
       dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
@@ -949,7 +951,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
         load->getAttr("from").cast<StringAttr>().getValue().str() ==
             producer_name) {
       replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
-                                 consumerFor.region());
+                                 consumerFor.getRegion());
       opToRemove.push_back(load);
     }
     return WalkResult::advance();
@@ -964,7 +966,7 @@ LogicalResult runComputeAt(FuncOp &f, ComputeAtOp &computeAtOp) {
   return success();
 }
 
-bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
+bool findArray(func::FuncOp &f, const Value &target, Value &ret_array) {
   if (!target.getDefiningOp()) { // in func args
     for (auto arg : f.getArguments()) {
       if (target == arg) { // found the corresponding array
@@ -980,7 +982,8 @@ bool findArray(FuncOp &f, const Value &target, Value &ret_array) {
 }
 
 // https://github.com/hanchenye/scalehls/blob/master/lib/Transforms/Directive/ArrayPartition.cpp
-LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
+LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
+                           Value &array) {
   // 1) Get the schedule
   // auto memref = partitionOp.target(); // return a Value type
   auto kind = partitionOp.partition_kind();
@@ -1076,7 +1079,7 @@ LogicalResult runPartition(FuncOp &f, PartitionOp &partitionOp, Value &array) {
   return success();
 }
 
-LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
+LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   auto target = reuseAtOp.target(); // return a Value type
   auto loopHandle =
@@ -1517,7 +1520,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
                                     memAffineIndices, rewriter.getContext());
     rewriter.create<AffineStoreOp>(
         op->getLoc(), op.getOperand(0) /*valueToStore*/,
-        op.getOperand(1) /*memref*/, affineMap, op.indices());
+        op.getOperand(1) /*memref*/, affineMap, op.getIndices());
     opToRemove.push_back(op);
     return WalkResult::advance();
   });
@@ -1951,7 +1954,7 @@ LogicalResult runReuseAt(FuncOp &f, ReuseAtOp &reuseAtOp) {
   return success();
 }
 
-LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
+LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
   // 1) Get the schedule
   auto target = bufferAtOp.target(); // return a Value type
   auto loopHandle =
@@ -2223,7 +2226,7 @@ LogicalResult runBufferAt(FuncOp &f, BufferAtOp &bufferAtOp) {
   return success();
 }
 
-LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
+LogicalResult runReshape(func::FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
   auto newType = reshapeOp.output().getType().dyn_cast<MemRefType>();
@@ -2262,7 +2265,7 @@ LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
                                       memAffineIndices, rewriter.getContext());
       rewriter.create<AffineStoreOp>(
           op->getLoc(), op.getOperand(0) /*valueToStore*/,
-          op.getOperand(1) /*memref*/, affineMap, op.indices());
+          op.getOperand(1) /*memref*/, affineMap, op.getIndices());
       // remove original op
       opToRemove.push_back(op);
     } else if (auto op = dyn_cast<AffineLoadOp>(user)) {
@@ -2283,8 +2286,9 @@ LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
       std::reverse(memAffineIndices.begin(), memAffineIndices.end());
       auto affineMap = AffineMap::get(oldRank, 0 /* symbols */,
                                       memAffineIndices, rewriter.getContext());
-      auto load = rewriter.create<AffineLoadOp>(
-          op->getLoc(), op.getOperand(0) /*memref*/, affineMap, op.indices());
+      auto load = rewriter.create<AffineLoadOp>(op->getLoc(),
+                                                op.getOperand(0) /*memref*/,
+                                                affineMap, op.getIndices());
       // remove original op
       op.getResult().replaceAllUsesWith(load);
       opToRemove.push_back(op);
@@ -2305,7 +2309,7 @@ LogicalResult runReshape(FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
 }
 
 LogicalResult
-runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
+runInterKernelDataPlacement(std::map<std::string, func::FuncOp> &funcMap,
                             Value &arrayToStream, int fifo_depth = -1) {
   // Construct new array type (add stream attribute)
   auto arrayType = arrayToStream.getType().dyn_cast<MemRefType>();
@@ -2327,7 +2331,7 @@ runInterKernelDataPlacement(std::map<std::string, FuncOp> &funcMap,
   // Set new types in stage functions
   for (auto user : arrayToStream.getUsers()) {
     // first locate the CallOp
-    if (auto callOp = dyn_cast<CallOp>(user)) {
+    if (auto callOp = dyn_cast<func::CallOp>(user)) {
       // get stage function
       auto stage = funcMap[callOp.getCallee().str().substr(6)];
       for (unsigned argIdx = 0, e = user->getNumOperands(); argIdx < e;
@@ -2395,8 +2399,13 @@ void getInputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
       for (unsigned argIdx = 1, e = op->getNumOperands(); argIdx < e;
            ++argIdx) {
         auto operand = op.getOperand(argIdx);
-        if (operand.getDefiningOp())
+        auto memrefType = operand.getType().template dyn_cast<MemRefType>();
+        if (operand.getDefiningOp()) {
+          if (memrefType && memrefType.getRank() == 1 &&
+              memrefType.getShape()[0] == 1)
+            continue; // sum reg needn't to be moved
           opToMove.insert(operand.getDefiningOp());
+        }
       }
     }
   });
@@ -2416,8 +2425,12 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
     } else {
       if (allMemrefs.size() == 1)
         return WalkResult::advance();
+      auto memrefType = target.getType().template dyn_cast<MemRefType>();
       if (target.getDefiningOp()) {
         memrefToRemove.push_back(target);
+        if (memrefType && memrefType.getRank() == 1 &&
+            memrefType.getShape()[0] == 1)
+          return WalkResult::advance(); // sum reg needn't to be moved
         opToMove.insert(target.getDefiningOp());
       }
     }
@@ -2429,7 +2442,7 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
   }
 }
 
-LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
+LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
   // 1) Get the schedule
   auto stages = outlineOp.stages();
   SmallVector<AffineForOp> rootForOps;
@@ -2462,45 +2475,271 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<Value> newMemrefs(allMemrefs);
 
   // 5) If the function has been built, directly call it
-  if (outlineOp->hasAttr("merge")) {
-    FuncOp targetFunc;
+  if (outlineOp->hasAttr("unify")) {
+    func::FuncOp targetFunc;
     auto preFuncName =
-        outlineOp->getAttr("merge").cast<StringAttr>().getValue();
-    for (FuncOp func : mod.getOps<FuncOp>()) {
+        outlineOp->getAttr("unify").cast<StringAttr>().getValue();
+    for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
       if (func.getName() == preFuncName) {
         targetFunc = func;
         break;
       }
     }
+    assert(targetFunc && "Cannot find the target function");
     OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
-    if (outlineOp->hasAttr("param")) {
-      auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-      for (auto loopNameAttr : loopNames) {
-        auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-        AffineForOp forOp = rootForOps[0];
-        getLoop(forOp, loopName);
-        auto idx = call_builder.create<arith::ConstantIndexOp>(
-            rootForOps[rootForOps.size() - 1].getLoc(),
-            forOp.getConstantUpperBound());
-        allMemrefs.push_back(idx);
+    for (auto srcForOpItem : llvm::enumerate(rootForOps)) {
+      int srcIdx = srcForOpItem.index();
+      auto srcForOp = srcForOpItem.value();
+      SmallVector<AffineForOp> srcLoops;
+      getLoops(srcForOp, srcLoops);
+      SmallVector<AffineForOp> targetLoops;
+      for (auto targetForOpItem :
+           llvm::enumerate(targetFunc.getOps<AffineForOp>())) {
+        int targetIdx = targetForOpItem.index();
+        if (targetIdx == srcIdx) {
+          auto targetForOp = targetForOpItem.value();
+          getLoops(targetForOp, targetLoops);
+          break;
+        }
+      }
+      assert(targetLoops.size() == srcLoops.size() && "Loop mismatch");
+      for (auto it : llvm::zip(srcLoops, targetLoops)) {
+        auto srcLoop = std::get<0>(it);
+        auto targetLoop = std::get<1>(it);
+        if (targetLoop.hasConstantUpperBound()) {
+          if (srcLoop.getConstantUpperBound() !=
+              targetLoop.getConstantUpperBound()) {
+            auto srcUb = call_builder.create<arith::ConstantIndexOp>(
+                srcLoop.getLoc(), srcLoop.getConstantUpperBound());
+            allMemrefs.push_back(srcUb);
+            // update function arguments
+            auto arg = targetFunc.front().addArgument(
+                IndexType::get(f.getContext()), srcLoop.getLoc());
+            // update previous CallOp
+            for (auto callOp : f.getOps<func::CallOp>()) {
+              if (callOp.getCallee() == targetFunc.getName()) {
+                OpBuilder builder(callOp);
+                auto targetUb = builder.create<arith::ConstantIndexOp>(
+                    targetLoop.getLoc(), targetLoop.getConstantUpperBound());
+                callOp->insertOperands(callOp.getNumOperands(), {targetUb});
+              }
+            }
+            // update target loop bound
+            targetLoop.setUpperBound({arg},
+                                     call_builder.getSymbolIdentityMap());
+          } else {
+            // no need to parameterize
+          }
+        } else {
+          if (srcLoop.hasConstantUpperBound()) {
+            auto srcUb = call_builder.create<arith::ConstantIndexOp>(
+                srcLoop.getLoc(), srcLoop.getConstantUpperBound());
+            allMemrefs.push_back(srcUb);
+          }
+        }
       }
     }
-    // Fix array types
-    for (auto item : llvm::enumerate(allMemrefs)) {
-      auto targetType = targetFunc.getArgument(item.index()).getType();
-      if (item.value().getType() != targetType) {
-        outlineOp.emitWarning(
-            "Change memref type to match function argument type!");
-        item.value().setType(targetType);
+    // update if structure
+    SmallVector<AffineIfOp> srcIfOps;
+    for (auto rootForOp : rootForOps) {
+      rootForOp.walk([&](AffineIfOp ifOp) { srcIfOps.push_back(ifOp); });
+    }
+    SmallVector<AffineIfOp> targetIfOps;
+    for (auto rootForOp : targetFunc.getOps<AffineForOp>()) {
+      rootForOp.walk([&](AffineIfOp ifOp) { targetIfOps.push_back(ifOp); });
+    }
+    assert(srcIfOps.size() == targetIfOps.size() && "IfOp mismatch");
+    bool isDifferent = false;
+    bool isSet = true;
+    for (auto it : llvm::zip(srcIfOps, targetIfOps)) {
+      auto srcIfOp = std::get<0>(it);
+      auto targetIfOp = std::get<1>(it);
+      auto srcConds = srcIfOp.getIntegerSet().getConstraints();
+      auto targetConds = targetIfOp.getIntegerSet().getConstraints();
+      SmallVector<AffineExpr> newConds;
+      int srcCst = 0;
+      int targetCst = 0;
+      for (auto itCond : llvm::zip(srcConds, targetConds)) {
+        auto srcCond = std::get<0>(itCond);
+        auto targetCond = std::get<1>(itCond);
+        auto getConstant = [&](AffineExpr cond) {
+          int cst = 0;
+          cond.walk([&](AffineExpr expr) {
+            if (expr.isa<AffineBinaryOpExpr>() &&
+                expr.getKind() == AffineExprKind::Add) {
+              auto binExpr = expr.cast<AffineBinaryOpExpr>();
+              if (binExpr.getRHS().isa<AffineConstantExpr>()) {
+                cst = binExpr.getRHS().cast<AffineConstantExpr>().getValue();
+                return WalkResult::interrupt();
+              }
+            }
+            return WalkResult::advance();
+          });
+          return cst;
+        };
+        srcCst = getConstant(srcCond);
+        targetCst = getConstant(targetCond);
+        // build new condition
+        if (srcCst != targetCst) {
+          isDifferent = true;
+          if (!targetCond.isFunctionOfSymbol(0)) { // has not been parameterized
+            isSet = false;
+            auto newCond = targetCond -
+                           call_builder.getAffineConstantExpr(targetCst) +
+                           call_builder.getAffineSymbolExpr(0);
+            newConds.push_back(newCond);
+            // outlineOp.emitWarning("Parameterize if condition of ")
+            //     << targetCond << " as " << newCond;
+          }
+        } else {
+          newConds.push_back(targetCond);
+        }
+      }
+      if (isDifferent) {
+        // update function arguments
+        auto ifCst = call_builder.create<arith::ConstantIndexOp>(
+            targetFunc.getLoc(), srcCst);
+        allMemrefs.push_back(ifCst);
+      }
+      if (!isSet) {
+        targetFunc.front().addArgument(IndexType::get(f.getContext()),
+                                       targetFunc.getLoc());
+        // update previous CallOp
+        for (auto callOp : f.getOps<func::CallOp>()) {
+          if (callOp.getCallee() == targetFunc.getName()) {
+            OpBuilder builder(callOp);
+            auto targetUb = builder.create<arith::ConstantIndexOp>(
+                targetFunc.getLoc(), targetCst);
+            callOp->insertOperands(callOp.getNumOperands(), {targetUb});
+          }
+        }
+        // update if operands
+        auto newCondSet = IntegerSet::get(
+            targetIfOp.getIntegerSet().getNumDims() /*dimCount*/,
+            1 /*symbolCount*/, newConds /*ArrayRef<AffineExpr> constraints*/,
+            targetIfOp.getIntegerSet().getEqFlags());
+        SmallVector<Value> operands = targetIfOp.getOperands();
+        operands.push_back(targetFunc.front().getArgument(
+            targetFunc.front().getNumArguments() - 1));
+        targetIfOp.setConditional(newCondSet, operands);
+      }
+    }
+    // Recursively update array types
+    SmallVector<Value> newAllMemrefs(allMemrefs);
+    for (auto *op : opToMove) {
+      if (llvm::isa<memref::AllocOp>(op))
+        newAllMemrefs.push_back(llvm::cast<memref::AllocOp>(op).getResult());
+    }
+    SmallVector<Value> newFuncArgs;
+    for (auto arg : targetFunc.getArguments()) {
+      newFuncArgs.push_back(arg);
+    }
+    for (auto alloc : targetFunc.getOps<memref::AllocOp>()) {
+      newFuncArgs.push_back(alloc.getResult());
+    }
+    bool isChanged = true;
+    while (isChanged) {
+      isChanged = false;
+      for (auto item : llvm::enumerate(llvm::zip(newAllMemrefs, newFuncArgs))) {
+        auto idx = item.index();
+        auto srcMemref = std::get<0>(item.value());
+        auto targetMemref = std::get<1>(item.value());
+        auto funcArgType = targetMemref.getType().dyn_cast<MemRefType>();
+        auto arrayType = srcMemref.getType().dyn_cast<MemRefType>();
+        if (!funcArgType || !arrayType) { // not a memref (index type)
+          assert(funcArgType == arrayType && "Type mismatch");
+          continue;
+        }
+        mlir::Type elementType = arrayType.getElementType();
+        assert(elementType == funcArgType.getElementType() && "Type mismatch");
+        auto funcArgShape = funcArgType.getShape();
+        auto arrayShape = arrayType.getShape();
+        SmallVector<int64_t> newShape;
+        // pick the larger shape
+        for (auto shape : llvm::enumerate(arrayShape)) {
+          if (shape.value() < funcArgShape[shape.index()]) {
+            newShape.push_back(funcArgShape[shape.index()]);
+          } else {
+            newShape.push_back(shape.value());
+          }
+        }
+        assert(arrayType.getLayout().getAffineMap() ==
+                   funcArgType.getLayout().getAffineMap() &&
+               "Layout mismatch");
+        auto newType =
+            MemRefType::get(newShape, elementType, arrayType.getLayout(),
+                            arrayType.getMemorySpace());
+        if (newType != arrayType) {
+          if (!srcMemref.getDefiningOp()) {
+            outlineOp.emitError("Change memref of ")
+                << srcMemref << " to a new type " << newType;
+          } else {
+            outlineOp.emitWarning("Change memref of ")
+                << srcMemref << " to a new type " << newType;
+          }
+          srcMemref.setType(newType);
+          isChanged = true;
+        }
+        if (newType != funcArgType) {
+          outlineOp.emitWarning("Change argument ")
+              << targetMemref << " of function " << targetFunc.getName()
+              << " to a new type " << newType;
+          targetMemref.setType(newType);
+          isChanged = true;
+        }
+        // update previous call operations
+        if (idx < allMemrefs.size()) {
+          for (auto callOp : f.getOps<func::CallOp>()) {
+            if (callOp.getCallee() == targetFunc.getName() &&
+                callOp.getOperand(idx).getType() != newType) {
+              if (!srcMemref.getDefiningOp())
+                outlineOp.emitError("Change argument ")
+                    << callOp.getOperand(idx) << " of CallOp " << callOp
+                    << " to a new type " << newType;
+              callOp.getOperand(idx).setType(newType);
+            }
+          }
+        }
+      }
+    }
+    // Double check previous call operations
+    for (auto callOp : f.getOps<func::CallOp>()) {
+      for (auto func : mod.getOps<func::FuncOp>()) {
+        if (callOp.getCallee() == func.getName()) {
+          for (int i = 0, size = func.getNumArguments(); i < size; ++i) {
+            auto callMemrefType =
+                callOp.getOperand(i).getType().dyn_cast<MemRefType>();
+            auto funcMemrefType =
+                func.getArgument(i).getType().dyn_cast<MemRefType>();
+            if (callMemrefType != funcMemrefType) {
+              outlineOp.emitWarning("Argument ")
+                  << i << " of CallOp " << callOp
+                  << " is not the same type as argument " << i
+                  << " of function " << func.getName() << "\n";
+              func.front().getArgument(i).setType(
+                  callOp.getOperand(i).getType());
+              auto resultTypes =
+                  func.front().getTerminator()->getOperandTypes();
+              auto inputTypes = func.front().getArgumentTypes();
+              func.setType(Builder(func.getContext())
+                               .getFunctionType(inputTypes, resultTypes));
+            }
+          }
+          break;
+        }
       }
     }
     // Fix function type
-    auto resultTypes = f.front().getTerminator()->getOperandTypes();
-    auto inputTypes = f.front().getArgumentTypes();
+    auto resultTypes = targetFunc.front().getTerminator()->getOperandTypes();
+    auto inputTypes = targetFunc.front().getArgumentTypes();
+    targetFunc.setType(Builder(targetFunc.getContext())
+                           .getFunctionType(inputTypes, resultTypes));
+    resultTypes = f.front().getTerminator()->getOperandTypes();
+    inputTypes = f.front().getArgumentTypes();
     f.setType(Builder(f.getContext()).getFunctionType(inputTypes, resultTypes));
     // Call the function
-    call_builder.create<CallOp>(rootForOps[rootForOps.size() - 1].getLoc(),
-                                targetFunc, allMemrefs);
+    call_builder.create<func::CallOp>(
+        rootForOps[rootForOps.size() - 1].getLoc(), targetFunc, allMemrefs);
     for (auto rootForOp : rootForOps) {
       rootForOp.erase();
     }
@@ -2513,12 +2752,6 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   SmallVector<mlir::Type> TypeArr;
   for (auto memref : newMemrefs)
     TypeArr.push_back(memref.getType());
-  if (outlineOp->hasAttr("param")) {
-    auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-    int size = loopNames.size();
-    for (int i = 0; i < size; ++i)
-      TypeArr.push_back(IndexType::get(f.getContext()));
-  }
   int axis = -1;
   if (outlineOp->hasAttr("axis")) {
     // Suppose only one stage is given
@@ -2538,7 +2771,7 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
     func_name += "_" + op_name;
   }
   auto func =
-      builder.create<FuncOp>(f.getLoc(), StringRef(func_name), funcType);
+      builder.create<func::FuncOp>(f.getLoc(), StringRef(func_name), funcType);
   func.setPrivate();
   // used for generating HLS ap_int/fixed types
   func->setAttr("bit", builder.getUnitAttr());
@@ -2571,24 +2804,11 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
   func->setAttr("itypes", StringAttr::get(func.getContext(), itypes));
   Block *entryBlock = func.addEntryBlock();
   builder.setInsertionPointToStart(entryBlock);
-  auto ret = builder.create<ReturnOp>(func->getLoc());
+  auto ret = builder.create<func::ReturnOp>(func->getLoc());
 
-  // 7) Create callop in the main function
-  OpBuilder call_builder(targetForOp);
-  if (outlineOp->hasAttr("param")) {
-    auto loopNames = outlineOp->getAttr("param").cast<ArrayAttr>().getValue();
-    for (auto loopNameAttr : loopNames) {
-      auto loopName = loopNameAttr.cast<StringAttr>().getValue();
-      AffineForOp forOp = rootForOps[0];
-      getLoop(forOp, loopName);
-      auto idx = call_builder.create<arith::ConstantIndexOp>(
-          targetForOp.getLoc(), forOp.getConstantUpperBound());
-      allMemrefs.push_back(idx);
-      // update loop bound
-      auto affineMap = builder.getSymbolIdentityMap();
-      forOp.setUpperBound({func.getArgument(allMemrefs.size() - 1)}, affineMap);
-    }
-  } else if (outlineOp->hasAttr("axis")) {
+  if (outlineOp->hasAttr("axis")) {
+    // 7) Create callop in the main function
+    OpBuilder call_builder(targetForOp);
     call_builder = OpBuilder(&(targetForOp.getBody()->back()));
     AffineForOp innerLoop = rootForOps[0];
     int cntAxis = 0;
@@ -2602,34 +2822,24 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       }
       cntAxis++;
     }
-  }
-  call_builder.create<CallOp>(targetForOp.getLoc(), func, allMemrefs);
-
-  // 8) Move original stage to the new function
-  if (outlineOp->hasAttr("axis")) {
+    call_builder.create<func::CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    // 8) Move original stage to the new function
     auto &targetBody = targetForOp.getBody()->getOperations();
     auto &funcBody = func.front().getOperations();
     // the last two ops are yield and callop
     funcBody.splice(funcBody.begin(), targetBody, targetBody.begin(),
                     std::prev(std::prev(targetBody.end())));
-  } else {
-    for (auto rootForOp : rootForOps) {
-      rootForOp->moveBefore(ret);
+    for (auto *op : opToMove) {
+      op->moveBefore(rootForOps[0]);
     }
-  }
-  for (auto *op : opToMove) {
-    op->moveBefore(rootForOps[0]);
-  }
-
-  // 9) Update memrefs
-  if (outlineOp->hasAttr("axis")) {
+    // 9) Update memrefs
     for (auto item : llvm::enumerate(newMemrefs)) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();
       replaceAllUsesInRegionWith(oldMemref, newMemref, func.getBody());
     }
-    AffineForOp innerLoop = rootForOps[0];
-    int cntAxis = 0;
+    innerLoop = rootForOps[0];
+    cntAxis = 0;
     while (cntAxis <= axis) {
       replaceAllUsesInRegionWith(innerLoop.getInductionVar(),
                                  func.getArgument(newMemrefs.size() + cntAxis),
@@ -2643,11 +2853,22 @@ LogicalResult runOutline(ModuleOp &mod, FuncOp &f, OutlineOp &outlineOp) {
       cntAxis++;
     }
   } else {
+    // 7) Create callop in the main function
+    OpBuilder call_builder(targetForOp);
+    call_builder.create<func::CallOp>(targetForOp.getLoc(), func, allMemrefs);
+    // 8) Move original stage to the new function
+    for (auto rootForOp : rootForOps) {
+      rootForOp->moveBefore(ret);
+    }
+    for (auto *op : opToMove) {
+      op->moveBefore(rootForOps[0]);
+    }
+    // 9) Update memrefs
     for (auto item : llvm::enumerate(newMemrefs)) {
       auto newMemref = func.getArgument(item.index());
       auto oldMemref = item.value();
       for (auto rootForOp : rootForOps)
-        replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.region());
+        replaceAllUsesInRegionWith(oldMemref, newMemref, rootForOp.getRegion());
     }
   }
 
@@ -2670,7 +2891,7 @@ void updateMemrefAccess(Operation *&user, SmallVector<AffineExpr> &dimExprs) {
   }
 }
 
-LogicalResult runReform(FuncOp &f, ReformOp &reformOp, Value &array) {
+LogicalResult runReform(func::FuncOp &f, ReformOp &reformOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
   auto oldShape = oldType.getShape();
@@ -2712,7 +2933,8 @@ bool isHCLOp(Operation &op) {
                    InterKernelToOp>(op);
 }
 
-void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
+void eraseScheduleOp(func::FuncOp &f,
+                     SmallVector<Operation *, 10> &opToRemove) {
   std::reverse(opToRemove.begin(), opToRemove.end());
   for (Operation *op : opToRemove) {
     op->erase();
@@ -2729,7 +2951,7 @@ void eraseScheduleOp(FuncOp &f, SmallVector<Operation *, 10> &opToRemove) {
 }
 
 void applyCustomization(
-    FuncOp &top_func,
+    func::FuncOp &top_func,
     std::map<std::string, hcl::CustomizationOp> &customizationMap,
     SmallVector<Operation *, 10> &opToRemove) {
   auto builder = OpBuilder::atBlockTerminator(&(top_func.getBody().front()));
@@ -2758,7 +2980,7 @@ void applyCustomization(
 }
 
 bool applyLoopTransformationOnSingleFunction(
-    ModuleOp &mod, FuncOp &f,
+    ModuleOp &mod, func::FuncOp &f,
     std::map<std::string, hcl::CustomizationOp> &customizationMap) {
   SmallVector<Operation *, 10> opToRemove;
   applyCustomization(f, customizationMap, opToRemove);
@@ -2857,7 +3079,7 @@ bool applyLoopTransformation(ModuleOp &mod) {
     customizationMap[c.getName().str()] = c;
   }
   // apply schedule
-  for (FuncOp f : mod.getOps<FuncOp>()) {
+  for (func::FuncOp f : mod.getOps<func::FuncOp>()) {
     applyLoopTransformationOnSingleFunction(mod, f, customizationMap);
   }
   return true;

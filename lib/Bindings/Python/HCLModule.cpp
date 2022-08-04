@@ -18,7 +18,6 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
-#include "mlir-c/Dialect/Standard.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"

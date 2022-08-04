@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-    func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>) -> memref<1024x1024xf32>
+    func.func @gemm(%A: memref<1024x512xf32>, %B: memref<512x1024xf32>) -> memref<1024x1024xf32>
     {
         %C = memref.alloc() : memref<1024x1024xf32>
         // CHECK: affine.for %[[ARG:.*]] = 0 to 1024 {

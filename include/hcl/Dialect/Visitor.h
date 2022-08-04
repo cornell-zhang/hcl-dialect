@@ -11,10 +11,10 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -46,8 +46,8 @@ public:
             memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
             memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
             // Tensor-related statements.
-            tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp, SplatOp,
-            memref::DimOp, memref::RankOp,
+            tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp,
+            tensor::SplatOp, memref::DimOp, memref::RankOp,
             // Unary expressions.
             math::CosOp, math::SinOp, math::TanhOp, math::SqrtOp, math::RsqrtOp,
             math::ExpOp, math::Exp2Op, math::PowFOp, math::LogOp, math::Log2Op,
@@ -64,7 +64,7 @@ public:
             arith::ShRSIOp, arith::ShRUIOp, hcl::GetIntBitOp, hcl::SetIntBitOp,
             hcl::GetIntSliceOp, hcl::SetIntSliceOp, hcl::BitReverseOp,
             // Special operations.
-            CallOp, ReturnOp, SelectOp, ConstantOp, arith::ConstantOp,
+            func::CallOp, func::ReturnOp, arith::SelectOp, arith::ConstantOp,
             arith::TruncIOp, arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp,
             arith::ExtFOp, arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
             arith::FPToSIOp, arith::FPToUIOp, arith::BitcastOp,
@@ -141,7 +141,7 @@ public:
   HANDLE(tensor::ExtractOp);
   HANDLE(tensor::InsertOp);
   HANDLE(memref::TensorStoreOp);
-  HANDLE(SplatOp);
+  HANDLE(tensor::SplatOp);
   HANDLE(memref::DimOp);
   HANDLE(memref::RankOp);
 
@@ -203,10 +203,9 @@ public:
   HANDLE(hcl::LogicalOrOp);
 
   // Special operations.
-  HANDLE(CallOp);
-  HANDLE(ReturnOp);
-  HANDLE(SelectOp);
-  HANDLE(ConstantOp);
+  HANDLE(func::CallOp);
+  HANDLE(func::ReturnOp);
+  HANDLE(arith::SelectOp);
   HANDLE(arith::ConstantOp);
   HANDLE(arith::TruncIOp);
   HANDLE(arith::TruncFOp);

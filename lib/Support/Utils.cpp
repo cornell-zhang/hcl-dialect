@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Support/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -32,8 +33,7 @@ void hcl::setLoopName(AffineForOp &forOp, std::string loop_name) {
 }
 
 void hcl::setStageName(AffineForOp &forOp, StringRef op_name) {
-  forOp->setAttr("op_name",
-                 StringAttr::get(forOp->getContext(), op_name));
+  forOp->setAttr("op_name", StringAttr::get(forOp->getContext(), op_name));
 }
 
 std::vector<std::string> hcl::split_names(const std::string &arg_names) {
@@ -95,7 +95,7 @@ bool hcl::setLoopNames(SmallVector<AffineForOp, 6> &forOps,
 // Memory and loop analysis utils
 //===----------------------------------------------------------------------===//
 
-LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
+LogicalResult hcl::getStage(func::FuncOp &func, AffineForOp &forOp,
                             StringRef op_name) {
   for (auto rootForOp : func.getOps<AffineForOp>()) {
     if (op_name ==
@@ -107,36 +107,50 @@ LogicalResult hcl::getStage(FuncOp &func, AffineForOp &forOp,
   return failure();
 }
 
-void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
-                       AffineForOp &retForOp, int &retDepth);
+void recursivelyFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
+                         AffineForOp &retForOp, int &retDepth,
+                         SmallVector<AffineForOp> &loops);
 
-void recursiveFindLoopWithIf(AffineIfOp ifOp, int depth, StringRef loop_name,
-                             AffineForOp &retForOp, int &retDepth) {
+void recursivelyFindLoopWithIf(AffineIfOp ifOp, int depth, StringRef loop_name,
+                               AffineForOp &retForOp, int &retDepth,
+                               SmallVector<AffineForOp> &loops) {
   for (auto nextForOp : ifOp.getThenBlock()->getOps<AffineForOp>())
-    recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+    recursivelyFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth,
+                        loops);
   for (auto nextIfOp : ifOp.getThenBlock()->getOps<AffineIfOp>())
-    recursiveFindLoopWithIf(nextIfOp, depth, loop_name, retForOp, retDepth);
+    recursivelyFindLoopWithIf(nextIfOp, depth, loop_name, retForOp, retDepth,
+                              loops);
 }
 
-void recursiveFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
-                       AffineForOp &retForOp, int &retDepth) {
+void recursivelyFindLoop(AffineForOp forOp, int depth, StringRef loop_name,
+                         AffineForOp &retForOp, int &retDepth,
+                         SmallVector<AffineForOp> &loops) {
+  loops.push_back(forOp);
   if (getLoopName(forOp) == loop_name) {
     retForOp = forOp;
     retDepth = depth;
     return;
   }
   for (auto nextForOp : forOp.getOps<AffineForOp>())
-    recursiveFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth);
+    recursivelyFindLoop(nextForOp, depth + 1, loop_name, retForOp, retDepth,
+                        loops);
   for (auto ifOp : forOp.getOps<AffineIfOp>())
-    recursiveFindLoopWithIf(ifOp, depth, loop_name, retForOp, retDepth);
+    recursivelyFindLoopWithIf(ifOp, depth, loop_name, retForOp, retDepth,
+                              loops);
 }
 
 int hcl::getLoop(AffineForOp &forOp, StringRef loop_name) {
   // return the axis id
   AffineForOp currentLoop = forOp;
   int cnt = -1;
-  recursiveFindLoop(currentLoop, 0, loop_name, forOp, cnt);
+  SmallVector<AffineForOp> loops;
+  recursivelyFindLoop(currentLoop, 0, loop_name, forOp, cnt, loops);
   return cnt;
+}
+
+void hcl::getLoops(AffineForOp &forOp, SmallVector<AffineForOp> &forOpList) {
+  int cnt = -1;
+  recursivelyFindLoop(forOp, 0, "_placeholder_", forOp, cnt, forOpList);
 }
 
 bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
@@ -171,7 +185,7 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
       if (sizeNameArr == 0)
         nameArr.push_back(curr_loop);
     }
-    Block &body = forOp.region().front();
+    Block &body = forOp.getRegion().front();
     // if (body.begin() != std::prev(body.end(), 2)) // perfectly nested
     //   break;
 

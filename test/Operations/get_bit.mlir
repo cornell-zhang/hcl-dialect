@@ -1,7 +1,7 @@
 // RUN: hcl-opt %s --jit 
 module {
   memref.global "private" @gv0 : memref<10xi8> = dense<[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]>
-  func @top() -> () attributes {bit, itypes = "s", otypes = "s", top} {
+  func.func @top() -> () attributes {bit, itypes = "s", otypes = "s", top} {
     %0 = memref.get_global @gv0 : memref<10xi8>
     affine.for %arg1 = 0 to 10 {
       %1 = affine.load %0[%arg1] : memref<10xi8>

@@ -1,7 +1,7 @@
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 module {
-  func @top(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
+  func.func @top(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
     %0 = memref.alloc() {name = "C"} : memref<10x32xi32>
     %3 = hcl.create_op_handle "C"
     %1 = hcl.create_loop_handle %3, "i"
@@ -44,7 +44,7 @@ module {
     hcl.outline (%7, %11)
     return %8 : memref<10x32xi32>
   }
-  func @top2(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
+  func.func @top2(%arg0: memref<10x32xi32>) -> memref<10x32xi32> attributes {itypes = "s", otypes = "s"} {
     %0 = memref.alloc() {name = "C1"} : memref<10x32xi32>
     %3 = hcl.create_op_handle "C1"
     %1 = hcl.create_loop_handle %3, "i"
@@ -82,9 +82,9 @@ module {
       } {loop_name = "j"}
     } {loop_name = "i", op_name = "E1"}
     // CHECK: call @Stage_C1
-    hcl.outline (%3) {param = ["i", "j"]}
+    hcl.outline (%3)
     // CHECK: call @Stage_C1
-    hcl.outline (%7) {param = ["i", "j"], merge="Stage_C1"}
+    hcl.outline (%7) {unify="Stage_C1"}
     // CHECK: affine.for %[[ARG:.*]] = 0 to 10 {
     // CHECK:   affine.for %[[ARG1:.*]] = 0 to 32 {
     // CHECK:     call @Stage_E1

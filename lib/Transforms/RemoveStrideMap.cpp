@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,6 +11,7 @@
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
@@ -19,7 +20,7 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void removeStrideMap(FuncOp &func) {
+void removeStrideMap(func::FuncOp &func) {
   SmallVector<Operation *, 8> allocOps;
   func.walk([&](Operation *op) {
     if (auto alloc = dyn_cast<memref::AllocOp>(op)) {
@@ -40,7 +41,7 @@ void removeStrideMap(FuncOp &func) {
     op->getResult(0).setType(newMemRefType);
   }
 
-  FunctionType functionType = func.getType();
+  FunctionType functionType = func.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
   SmallVector<Type, 8> arg_types;
@@ -82,7 +83,7 @@ void removeStrideMap(FuncOp &func) {
 
 /// Pass entry point
 bool applyRemoveStrideMap(ModuleOp &module) {
-  for (FuncOp func : module.getOps<FuncOp>()) {
+  for (func::FuncOp func : module.getOps<func::FuncOp>()) {
     removeStrideMap(func);
   }
   return true;

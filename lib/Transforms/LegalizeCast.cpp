@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,6 +12,7 @@
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -19,7 +20,7 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void legalizeCast(FuncOp &func) {
+void legalizeCast(func::FuncOp &func) {
   SmallVector<Operation *, 8> IntToFPOps;
   func.walk([&](Operation *op) {
     if (auto intToFloatCastOp = dyn_cast<arith::SIToFPOp>(op)) {
@@ -34,7 +35,7 @@ void legalizeCast(FuncOp &func) {
     auto res = op->getResult(0);
     Location loc = op->getLoc();
     OpBuilder rewriter(op);
-    size_t twidth = res.getType().getIntOrFloatBitWidth(); // target width
+    size_t twidth = res.getType().getIntOrFloatBitWidth();   // target width
     size_t iwidth = input.getType().getIntOrFloatBitWidth(); // input width
     bool isSigned;
     if (auto intToFloatCastOp = dyn_cast<arith::SIToFPOp>(op)) {
@@ -48,18 +49,18 @@ void legalizeCast(FuncOp &func) {
     Type targetIntType = IntegerType::get(op->getContext(), twidth);
     if (iwidth > twidth) {
       // If the input is wider than the target, we need to truncate it.
-      Value truncated = rewriter.create<arith::TruncIOp>(loc, targetIntType,
-                                                        input);
+      Value truncated =
+          rewriter.create<arith::TruncIOp>(loc, targetIntType, input);
       op->setOperand(0, truncated);
     } else if (iwidth < twidth) {
       // If the input is narrower than the target, we need to extend it.
       if (isSigned) {
-        Value extended = rewriter.create<arith::ExtSIOp>(loc, targetIntType,
-                                                         input);
+        Value extended =
+            rewriter.create<arith::ExtSIOp>(loc, targetIntType, input);
         op->setOperand(0, extended);
       } else {
-        Value extended = rewriter.create<arith::ExtUIOp>(loc, targetIntType,
-                                                         input);
+        Value extended =
+            rewriter.create<arith::ExtUIOp>(loc, targetIntType, input);
         op->setOperand(0, extended);
       }
     } else {
@@ -67,10 +68,10 @@ void legalizeCast(FuncOp &func) {
     }
   }
 }
-   
+
 /// Pass entry point
 bool applyLegalizeCast(ModuleOp &module) {
-  for (FuncOp func : module.getOps<FuncOp>()) {
+  for (func::FuncOp func : module.getOps<func::FuncOp>()) {
     legalizeCast(func);
   }
   return true;
@@ -80,11 +81,12 @@ bool applyLegalizeCast(ModuleOp &module) {
 } // namespace mlir
 
 namespace {
-struct HCLLegalizeCastTransformation : public LegalizeCastBase<HCLLegalizeCastTransformation> {
+struct HCLLegalizeCastTransformation
+    : public LegalizeCastBase<HCLLegalizeCastTransformation> {
   void runOnOperation() override {
     auto mod = getOperation();
     if (!applyLegalizeCast(mod)) {
-        signalPassFailure();
+      signalPassFailure();
     }
   }
 };

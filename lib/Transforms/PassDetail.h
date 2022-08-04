@@ -1,12 +1,13 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef HCL_MLIR_PASSDETAIL_H
 #define HCL_MLIR_PASSDETAIL_H
 
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {

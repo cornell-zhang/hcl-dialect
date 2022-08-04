@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Copyright 2020-2021 The HCL-MLIR Authors.
+// Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,6 +22,7 @@
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
@@ -30,7 +31,7 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
-void lowerBitReverseOps(FuncOp &func) {
+void lowerBitReverseOps(func::FuncOp &func) {
   SmallVector<Operation *, 8> bitReverseOps;
   func.walk([&](Operation *op) {
     if (auto bitReverseOp = dyn_cast<BitReverseOp>(op)) {
@@ -48,7 +49,7 @@ void lowerBitReverseOps(FuncOp &func) {
     Value const_width_i32 = rewriter.create<mlir::arith::ConstantIntOp>(
         loc, iwidth - 1, rewriter.getI32Type());
     Value const_width = rewriter.create<mlir::arith::IndexCastOp>(
-        loc, const_width_i32, rewriter.getIndexType());
+        loc, rewriter.getIndexType(), const_width_i32);
     SmallVector<Value> const_0_indices;
     const_0_indices.push_back(rewriter.create<arith::ConstantIndexOp>(loc, 0));
 
@@ -63,8 +64,8 @@ void lowerBitReverseOps(FuncOp &func) {
     buildAffineLoopNest(
         rewriter, loc, lbs, ubs, steps,
         [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
-          Value res =
-              nestedBuilder.create<AffineLoadOp>(loc, resultMemRef, const_0_indices);
+          Value res = nestedBuilder.create<AffineLoadOp>(loc, resultMemRef,
+                                                         const_0_indices);
           // Get the bit at the width - current position
           Value reverse_idx = nestedBuilder.create<mlir::arith::SubIOp>(
               loc, const_width, ivs[0]);
@@ -73,10 +74,12 @@ void lowerBitReverseOps(FuncOp &func) {
               loc, one_bit_type, input, reverse_idx);
           // Set the bit at the current position
           nestedBuilder.create<mlir::hcl::SetIntBitOp>(loc, res, ivs[0], bit);
-          nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef, const_0_indices);
+          nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef,
+                                              const_0_indices);
         });
     // Load the result from resultMemRef
-    Value res = rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0_indices);
+    Value res =
+        rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0_indices);
     op->getResult(0).replaceAllUsesWith(res);
   }
 
@@ -92,7 +95,7 @@ void lowerBitReverseOps(FuncOp &func) {
 
 /// Pass entry point
 bool applyLowerBitOps(ModuleOp &mod) {
-  for (FuncOp func : mod.getOps<FuncOp>()) {
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerBitReverseOps(func);
   }
   return true;

@@ -6,7 +6,7 @@ module {
   memref.global "private" @gv1 : memref<4x4xf32> = dense<[[1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0]]>
   memref.global "private" @gv2 : memref<4x4xf32> = dense<[[1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0]]>
 
-  func @matrix_multiply(%A: memref<4x4xf32>, %B: memref<4x4xf32>, %C: memref<4x4xf32>)
+  func.func @matrix_multiply(%A: memref<4x4xf32>, %B: memref<4x4xf32>, %C: memref<4x4xf32>)
   { 
     %s = hcl.create_op_handle "s"
     %li = hcl.create_loop_handle %s, "i"
@@ -34,7 +34,7 @@ module {
     return
   }
 
-  func @top() -> () {
+  func.func @top() -> () {
     %0 = memref.get_global @gv0 : memref<4x4xf32>
     %1 = memref.get_global @gv0 : memref<4x4xf32>
     %2 = memref.get_global @gv0 : memref<4x4xf32>

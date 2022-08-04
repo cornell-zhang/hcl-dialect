@@ -6,15 +6,15 @@ This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](htt
 
 ### Preliminary tools
 - gcc >= 5.4
-- cmake >= 3.13.4
+- cmake >= 3.19
 - python >= 3.7
 
-### Install LLVM 14.0.0
-- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.0) or checkout the Github branch
+### Install LLVM 15.0.0-rc1
+- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-15.0.0-rc1) or checkout the Github branch
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout tags/llvmorg-14.0.0
+git checkout tags/llvmorg-15.0.0-rc1
 ```
 
 - Build
@@ -138,27 +138,16 @@ git clone --recursive https://github.com/cornell-zhang/heterocl.git heterocl-mli
 cd heterocl-mlir
 git checkout hcl-mlir
 
+# install dependencies
+python3 -m pip install -r python/requirements.txt
+
 # export the library
 export HCL_HOME=$(pwd)
 export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 
-# run tests in the HeteroCL repo
-python3 heterocl-mlir/tests/mlir/hcl-mlir/test_gemm.py
+# run regression tests in the HeteroCL repo
+cd tests && python3 -m pytest
 ```
-
-We retain the original Halide/TVM code and fully decoupled our frontend integration from the original HeteroCL implementation. All the MLIR frontend facilities are in the [`python/heterocl/mlir`](https://github.com/cornell-zhang/heterocl/tree/hcl-mlir/python/heterocl/mlir) folder. As a result, you can simply set the environment variable `HCLIR` to use different compilation flows. Examples are shown below.
-
-```sh
-# run original TVM flow (v1)
-# you should configure the LLVM environment inside the HeteroCL repo
-# but we strongly recommend not to do so since there may have some compatibility issues
-HCLIR=tvm python3 heterocl-mlir/tests/mlir/test_gemm.py
-
-# run HCL-MLIR flow (v2)
-HCLIR=mlir python3 heterocl-mlir/tests/mlir/test_gemm.py
-```
-
-Notice the integration is still in an early stage, so not all the functionalities of the original HeteroCL are supported. If you experience any questions, please feel free to raise an issue.
 
 
 ## Coding Style

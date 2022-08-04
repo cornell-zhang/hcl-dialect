@@ -2,7 +2,7 @@
 module {
   // 2.25, 2.50, 3.25, 6.25 
   memref.global "private" @fixed_gv : memref<2x2xi64> = dense<[[9, 10], [13, 25]]>
-  func @top() -> () {
+  func.func @top() -> () {
     %0 = hcl.get_global_fixed @fixed_gv : memref<2x2x!hcl.Fixed<32,2>>
     %1 = memref.alloc() : memref<2x2x!hcl.Fixed<16,1>>
     affine.for %arg0 = 0 to 2 {

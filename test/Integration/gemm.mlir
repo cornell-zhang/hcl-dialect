@@ -5,8 +5,8 @@
 // The reduction loop's result memref is manually promoted outside the loop nest.
 
 module {
-  func private @print_memref_f32(memref<*xf32>)
-  func @main() {
+  func.func private @print_memref_f32(memref<*xf32>)
+  func.func @main() {
     %cst = arith.constant 1.000000e+00 : f32
     %cst_0 = arith.constant 0.000000e+00 : f32
     %c32 = arith.constant 32 : index
@@ -51,7 +51,7 @@ module {
         memref.store %8, %2[%arg0, %arg1] {to = "C"} : memref<32x32xf32>
       } {loop_name = "j"}
     } {loop_name = "i", op_name = "C"}
-    call @print_memref_f32(%5) : (memref<*xf32>) -> ()
+    func.call @print_memref_f32(%5) : (memref<*xf32>) -> ()
     return
   }
 }

@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
@@ -233,7 +234,7 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::hcl::createAffineToGPULoweringPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
     pm.addPass(mlir::createLowerAffinePass());
-    // pm.addPass(mlir::createLowerToCFGPass());
+    pm.addPass(mlir::createConvertSCFToCFPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createStripDebugInfoPass());
 #if CUDA_BACKEND_ENABLED

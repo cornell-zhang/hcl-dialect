@@ -23,8 +23,10 @@
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/PDL/IR/PDLOps.h"
 #include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "llvm-c/ErrorHandling.h"
@@ -173,6 +175,8 @@ PYBIND11_MODULE(_hcl, m) {
   // Apply transform to a design.
   hcl_m.def("apply_transform", [](MlirModule &mlir_mod) {
     ModuleOp module = unwrap(mlir_mod);
+
+    // Apply Transform patterns.
     transform::TransformState state(
         module.getBodyRegion(), module,
         transform::TransformOptions().enableExpensiveChecks());
@@ -183,12 +187,32 @@ PYBIND11_MODULE(_hcl, m) {
       op.erase();
     }
 
+    // Collect PDL patterns to a temporary module.
+    OpBuilder b(module);
+    auto pdlModule = ModuleOp::create(b.getUnknownLoc());
+    b.setInsertionPointToStart(pdlModule.getBody());
+    for (auto op : llvm::make_early_inc_range(
+             module.getBody()->getOps<pdl::PatternOp>())) {
+      op->remove();
+      b.insert(op);
+    }
+
+    // Apply PDL patterns.
+    if (!pdlModule.getBody()->empty()) {
+      PDLPatternModule pdlPattern(pdlModule);
+      RewritePatternSet patternList(module->getContext());
+      patternList.add(std::move(pdlPattern));
+      if (failed(applyPatternsAndFoldGreedily(module.getBodyRegion(),
+                                              std::move(patternList))))
+        throw py::value_error("failed to apply the PDL pattern");
+    }
+
     // Simplify the loop structure after the transform.
     PassManager pm(module.getContext());
     pm.addNestedPass<func::FuncOp>(createSimplifyAffineStructuresPass());
     pm.addPass(createCanonicalizerPass());
     if (failed(pm.run(module)))
-      throw py::value_error("failed to apply the transform");
+      throw py::value_error("failed to apply the post-transform optimization");
   });
 
   // Declare customized types and attributes

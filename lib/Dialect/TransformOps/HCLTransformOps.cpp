@@ -25,12 +25,12 @@ public:
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// HCLGetParentLoopOp
+// HCLParentLoopOp
 //===----------------------------------------------------------------------===//
 
 DiagnosedSilenceableFailure
-transform::HCLGetParentLoopOp::apply(transform::TransformResults &results,
-                                     transform::TransformState &state) {
+transform::HCLParentLoopOp::apply(transform::TransformResults &results,
+                                  transform::TransformState &state) {
   SetVector<Operation *> parents;
   for (Operation *target : state.getPayloadOps(getTarget())) {
     AffineForOp loop;

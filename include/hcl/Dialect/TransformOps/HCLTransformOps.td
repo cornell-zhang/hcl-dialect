@@ -29,29 +29,73 @@ def HCLGetParentLoopOp : Op<Transform_Dialect, "hcl.get_parent_loop",
     present once.
   }];
 
-  let arguments =
-    (ins PDL_Operation:$target,
-         DefaultValuedAttr<Confined<I64Attr, [IntPositive]>,
-                           "1">:$num_loops);
+  let arguments = (ins PDL_Operation:$target, DefaultValuedAttr<
+                         Confined<I64Attr, [IntPositive]>, "1">:$num_loops);
   let results = (outs PDL_Operation:$parent);
 
   let assemblyFormat = "$target attr-dict";
 }
 
-def HCLLoopUnrollOp : Op<Transform_Dialect, "hcl.loop_unroll",
+def HCLUnrollOp : Op<Transform_Dialect, "hcl.unroll",
     [FunctionalStyleTransformOpTrait, MemoryEffectsOpInterface,
      TransformOpInterface, TransformEachOpTrait]> {
   let summary = "Unrolls the given loop with the given unroll factor";
   let description = [{
-     Unrolls each loop associated with the given handle to have up to the given
-     number of loop body copies per iteration. If the unroll factor is larger
-     than the loop trip count, the latter is used as the unroll factor instead.
-     Does not produce a new handle as the operation may result in the loop being
-     removed after a full unrolling.
+    Unrolls each loop associated with the given handle to have up to the given
+    number of loop body copies per iteration. If the unroll factor is larger
+    than the loop trip count, the latter is used as the unroll factor instead.
+    Does not produce a new handle as the operation may result in the loop being
+    removed after a full unrolling.
   }];
 
   let arguments = (ins PDL_Operation:$target,
                        Confined<I64Attr, [IntPositive]>:$factor);
+
+  let assemblyFormat = "$target attr-dict";
+
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::AffineForOp target, 
+        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+def HCLSplitOp : Op<Transform_Dialect, "hcl.split",
+    [FunctionalStyleTransformOpTrait, MemoryEffectsOpInterface,
+     TransformOpInterface, TransformEachOpTrait]> {
+  let summary = "Split the given loop with the given split factor";
+  let description = [{
+    Split each loop associated with the given handle to two loops. Produce two
+    handles cooresponding to the two loops generated.
+  }];
+
+  let arguments = (ins PDL_Operation:$target,
+                       Confined<I64Attr, [IntPositive]>:$factor);
+  let results = (outs PDL_Operation:$outer, PDL_Operation:$inner);
+
+  let assemblyFormat = "$target attr-dict";
+
+  let extraClassDeclaration = [{
+    ::mlir::DiagnosedSilenceableFailure applyToOne(
+        ::mlir::AffineForOp target, 
+        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformState &state);
+  }];
+}
+
+def HCLPipelineOp : Op<Transform_Dialect, "hcl.pipeline",
+    [FunctionalStyleTransformOpTrait, MemoryEffectsOpInterface,
+     TransformOpInterface, TransformEachOpTrait]> {
+  let summary = "Pipeline the given loop with the given initial interval";
+  let description = [{
+    Pipeline each loop associated with the given handle. Produce the pipelined
+    loop.
+  }];
+
+  let arguments = (ins PDL_Operation:$target,
+                       Confined<I64Attr, [IntPositive]>:$initialInterval);
+  let results = (outs PDL_Operation:$result);
 
   let assemblyFormat = "$target attr-dict";
 

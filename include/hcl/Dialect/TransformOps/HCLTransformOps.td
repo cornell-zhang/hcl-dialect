@@ -16,7 +16,7 @@ include "mlir/Dialect/PDL/IR/PDLTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpBase.td"
 
-def HCLGetParentLoopOp : Op<Transform_Dialect, "hcl.get_parent_loop",
+def HCLParentLoopOp : Op<Transform_Dialect, "hcl.parent_loop",
     [NavigationTransformOpTrait, MemoryEffectsOpInterface,
      DeclareOpInterfaceMethods<TransformOpInterface>]> {
   let summary = "Gets a handle to the parent 'for' loop of the given operation";

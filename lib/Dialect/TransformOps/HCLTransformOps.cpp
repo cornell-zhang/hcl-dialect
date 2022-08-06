@@ -54,18 +54,51 @@ transform::HCLGetParentLoopOp::apply(transform::TransformResults &results,
 }
 
 //===----------------------------------------------------------------------===//
-// HCLLoopUnrollOp
+// HCLUnrollOp
 //===----------------------------------------------------------------------===//
 
 DiagnosedSilenceableFailure
-transform::HCLLoopUnrollOp::applyToOne(AffineForOp target,
-                                       SmallVector<Operation *> &results,
-                                       transform::TransformState &state) {
+transform::HCLUnrollOp::applyToOne(AffineForOp target,
+                                   SmallVector<Operation *> &results,
+                                   transform::TransformState &state) {
   if (failed(loopUnrollByFactor(target, getFactor()))) {
     Diagnostic diag(target->getLoc(), DiagnosticSeverity::Note);
     diag << "op failed to unroll";
     return DiagnosedSilenceableFailure::silenceableFailure(std::move(diag));
   }
+  return DiagnosedSilenceableFailure(success());
+}
+
+//===----------------------------------------------------------------------===//
+// HCLSplitOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure
+transform::HCLSplitOp::applyToOne(AffineForOp target,
+                                  SmallVector<Operation *> &results,
+                                  transform::TransformState &state) {
+  SmallVector<AffineForOp, 2> splittedLoop;
+  if (failed(tilePerfectlyNested({target}, {(unsigned)getFactor()},
+                                 &splittedLoop))) {
+    Diagnostic diag(target->getLoc(), DiagnosticSeverity::Note);
+    diag << "op failed to split";
+    return DiagnosedSilenceableFailure::silenceableFailure(std::move(diag));
+  }
+  results.append({splittedLoop.front(), splittedLoop.back()});
+  return DiagnosedSilenceableFailure(success());
+}
+
+//===----------------------------------------------------------------------===//
+// HCLPipelineOp
+//===----------------------------------------------------------------------===//
+
+DiagnosedSilenceableFailure
+transform::HCLPipelineOp::applyToOne(AffineForOp target,
+                                     SmallVector<Operation *> &results,
+                                     transform::TransformState &state) {
+  Builder b(target.getContext());
+  target->setAttr("pipeline_ii", b.getI32IntegerAttr(getInitialInterval()));
+  results.push_back(target);
   return DiagnosedSilenceableFailure(success());
 }
 

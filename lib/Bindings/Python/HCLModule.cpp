@@ -21,7 +21,11 @@
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Transform/IR/TransformInterfaces.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
@@ -178,6 +182,13 @@ PYBIND11_MODULE(_hcl, m) {
         throw py::value_error("failed to apply the transform");
       op.erase();
     }
+
+    // Simplify the loop structure after the transform.
+    PassManager pm(module.getContext());
+    pm.addNestedPass<func::FuncOp>(createSimplifyAffineStructuresPass());
+    pm.addPass(createCanonicalizerPass());
+    if (failed(pm.run(module)))
+      throw py::value_error("failed to apply the transform");
   });
 
   // Declare customized types and attributes

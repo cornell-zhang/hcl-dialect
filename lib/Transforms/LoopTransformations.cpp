@@ -2487,6 +2487,8 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
     }
     assert(targetFunc && "Cannot find the target function");
     OpBuilder call_builder(rootForOps[rootForOps.size() - 1]);
+    SmallVector<std::pair<AffineForOp, int>> loops;
+    int cntIdx = allMemrefs.size();
     for (auto srcForOpItem : llvm::enumerate(rootForOps)) {
       int srcIdx = srcForOpItem.index();
       auto srcForOp = srcForOpItem.value();
@@ -2506,27 +2508,14 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
       for (auto it : llvm::zip(srcLoops, targetLoops)) {
         auto srcLoop = std::get<0>(it);
         auto targetLoop = std::get<1>(it);
-        if (targetLoop.hasConstantUpperBound()) {
+        // get current CallOp's operands
+        if (targetLoop.hasConstantUpperBound()) { // has not been parameterized
           if (srcLoop.getConstantUpperBound() !=
               targetLoop.getConstantUpperBound()) {
             auto srcUb = call_builder.create<arith::ConstantIndexOp>(
                 srcLoop.getLoc(), srcLoop.getConstantUpperBound());
             allMemrefs.push_back(srcUb);
-            // update function arguments
-            auto arg = targetFunc.front().addArgument(
-                IndexType::get(f.getContext()), srcLoop.getLoc());
-            // update previous CallOp
-            for (auto callOp : f.getOps<func::CallOp>()) {
-              if (callOp.getCallee() == targetFunc.getName()) {
-                OpBuilder builder(callOp);
-                auto targetUb = builder.create<arith::ConstantIndexOp>(
-                    targetLoop.getLoc(), targetLoop.getConstantUpperBound());
-                callOp->insertOperands(callOp.getNumOperands(), {targetUb});
-              }
-            }
-            // update target loop bound
-            targetLoop.setUpperBound({arg},
-                                     call_builder.getSymbolIdentityMap());
+            loops.push_back({targetLoop, -1});
           } else {
             // no need to parameterize
           }
@@ -2535,8 +2524,54 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
             auto srcUb = call_builder.create<arith::ConstantIndexOp>(
                 srcLoop.getLoc(), srcLoop.getConstantUpperBound());
             allMemrefs.push_back(srcUb);
+            int idx = -1;
+            for (auto item : llvm::enumerate(targetFunc.getArguments())) {
+              if (item.value() == targetLoop.getUpperBound().getOperand(0)) {
+                idx = item.index();
+                break;
+              }
+            }
+            assert(idx != -1 && "Not found target IV");
+            loops.push_back({targetLoop, idx});
+          } else {
+            assert(false && "Not supported");
           }
         }
+      }
+    }
+    // update previous CallOp
+    for (auto callOp : f.getOps<func::CallOp>()) {
+      if (callOp.getCallee() == targetFunc.getName()) {
+        OpBuilder builder(callOp);
+        int prevNumOperands = callOp.getNumOperands();
+        SmallVector<Value> prevOperands(callOp.getOperands());
+        int currIdx = cntIdx;
+        for (auto item : loops) {
+          auto targetLoop = item.first;
+          int idx = item.second;
+          auto targetUb = (idx == -1 ? builder.create<arith::ConstantIndexOp>(
+                                           targetLoop.getLoc(),
+                                           targetLoop.getConstantUpperBound())
+                                     : prevOperands[idx]);
+          if (currIdx < prevNumOperands) {
+            callOp->setOperand(currIdx++, targetUb);
+          } else {
+            callOp->insertOperands(callOp.getNumOperands(), {targetUb});
+          }
+        }
+      }
+    }
+    // update function arguments
+    int currIdx = cntIdx;
+    for (auto item : loops) {
+      auto targetLoop = item.first;
+      if (item.second == -1) { // has not been parameterized
+        auto arg = targetFunc.front().insertArgument(
+            currIdx++, IndexType::get(f.getContext()), targetLoop.getLoc());
+        // update target loop bound
+        targetLoop.setUpperBound({arg}, call_builder.getSymbolIdentityMap());
+      } else {
+        currIdx++;
       }
     }
     // update if structure

@@ -2585,7 +2585,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
     }
     assert(srcIfOps.size() == targetIfOps.size() && "IfOp mismatch");
     bool isDifferent = false;
-    bool isSet = true;
+    bool isParameterized = true;
     for (auto it : llvm::zip(srcIfOps, targetIfOps)) {
       auto srcIfOp = std::get<0>(it);
       auto targetIfOp = std::get<1>(it);
@@ -2618,7 +2618,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
         if (srcCst != targetCst) {
           isDifferent = true;
           if (!targetCond.isFunctionOfSymbol(0)) { // has not been parameterized
-            isSet = false;
+            isParameterized = false;
             auto newCond = targetCond -
                            call_builder.getAffineConstantExpr(targetCst) +
                            call_builder.getAffineSymbolExpr(0);
@@ -2636,7 +2636,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
             targetFunc.getLoc(), srcCst);
         allMemrefs.push_back(ifCst);
       }
-      if (!isSet) {
+      if (!isParameterized) {
         targetFunc.front().addArgument(IndexType::get(f.getContext()),
                                        targetFunc.getLoc());
         // update previous CallOp
@@ -2657,6 +2657,84 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
         operands.push_back(targetFunc.front().getArgument(
             targetFunc.front().getNumArguments() - 1));
         targetIfOp.setConditional(newCondSet, operands);
+      }
+    }
+    // different memory access indices with stride
+    SmallVector<AffineLoadOp> srcLoadOps;
+    for (auto rootForOp : rootForOps) {
+      rootForOp.walk(
+          [&](AffineLoadOp loadOp) { srcLoadOps.push_back(loadOp); });
+    }
+    SmallVector<AffineLoadOp> targetLoadOps;
+    for (auto rootForOp : targetFunc.getOps<AffineForOp>()) {
+      rootForOp.walk(
+          [&](AffineLoadOp loadOp) { targetLoadOps.push_back(loadOp); });
+    }
+    for (auto it : llvm::zip(srcLoadOps, targetLoadOps)) {
+      auto srcLoadOp = std::get<0>(it);
+      auto targetLoadOp = std::get<1>(it);
+      auto srcLoadMap = srcLoadOp.getAffineMap();
+      auto targetLoadMap = targetLoadOp.getAffineMap();
+      SmallVector<AffineExpr> newExprs;
+      isDifferent = false;
+      isParameterized = false;
+      if (srcLoadMap != targetLoadMap) {
+        for (auto item :
+             llvm::zip(srcLoadMap.getResults(), targetLoadMap.getResults())) {
+          auto expr = std::get<0>(item);
+          auto targetExpr = std::get<1>(item);
+          if (targetLoadMap.getNumSymbols() > 0 &&
+              targetExpr.isa<AffineBinaryOpExpr>() &&
+              targetExpr.getKind() == AffineExprKind::Mul) {
+            int cst = 1;
+            if (expr.isa<AffineBinaryOpExpr>() &&
+                expr.getKind() == AffineExprKind::Mul)
+              cst = expr.cast<AffineBinaryOpExpr>()
+                        .getRHS()
+                        .cast<AffineConstantExpr>()
+                        .getValue();
+            auto cstOp = call_builder.create<arith::ConstantIndexOp>(
+                targetFunc.getLoc(), cst);
+            if (!isParameterized)
+              allMemrefs.push_back(cstOp);
+            isParameterized = true;
+          } else if (expr.isa<AffineBinaryOpExpr>() &&
+                     expr.getKind() == AffineExprKind::Mul) {
+            auto cst = expr.cast<AffineBinaryOpExpr>()
+                           .getRHS()
+                           .cast<AffineConstantExpr>()
+                           .getValue();
+            auto cstOp = call_builder.create<arith::ConstantIndexOp>(
+                targetFunc.getLoc(), cst);
+            if (!isDifferent)
+              allMemrefs.push_back(cstOp);
+            isDifferent = true;
+            AffineExpr newExpr = expr.cast<AffineBinaryOpExpr>().getLHS() *
+                                 call_builder.getAffineSymbolExpr(0);
+            newExprs.push_back(newExpr);
+          } else {
+            newExprs.push_back(expr);
+          }
+        }
+        if (!isParameterized) {
+          auto arg = targetFunc.front().addArgument(
+              IndexType::get(f.getContext()), targetFunc.getLoc());
+          targetLoadOp->insertOperands(targetLoadOp.getNumOperands(), {arg});
+          auto map = AffineMap::get(targetLoadMap.getNumDims(), 1, newExprs,
+                                    targetFunc.getContext());
+          targetLoadOp->setAttr("map", AffineMapAttr::get(map));
+        }
+      }
+      // update previous CallOp
+      if (isDifferent && !isParameterized) {
+        for (auto callOp : f.getOps<func::CallOp>()) {
+          if (callOp.getCallee() == targetFunc.getName()) {
+            OpBuilder builder(callOp);
+            auto cst =
+                builder.create<arith::ConstantIndexOp>(targetFunc.getLoc(), 1);
+            callOp->insertOperands(callOp.getNumOperands(), {cst});
+          }
+        }
       }
     }
     // Recursively update array types

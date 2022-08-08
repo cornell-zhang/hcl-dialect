@@ -2534,7 +2534,9 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
             assert(idx != -1 && "Not found target IV");
             loops.push_back({targetLoop, idx});
           } else {
-            assert(false && "Not supported");
+            assert(srcLoop.getUpperBound().getMap() ==
+                       targetLoop.getUpperBound().getMap() &&
+                   "map mismatch");
           }
         }
       }

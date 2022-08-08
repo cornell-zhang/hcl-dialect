@@ -551,6 +551,20 @@ def HeteroCL_ReformOp : HeteroCL_Op<"reform">
     }];
 }
 
+def HeteroCL_CloneOp : HeteroCL_Op<"clone">
+{
+    let summary = "clone";
+    let description = [{
+        hcl.clone(target, op_handle_0, op_handle_1, ...)
+        Clone a function and replace the call operation's callee with the new functions
+    }];
+    let arguments = (ins FlatSymbolRefAttr:$target, Variadic<OpHandle>:$op_handles);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $target `,` $op_handles `)` attr-dict
+    }];
+}
+
 //===----------------------------------------------------------------------===//
 // Fixed-point operations
 //===----------------------------------------------------------------------===//

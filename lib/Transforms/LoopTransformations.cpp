@@ -950,9 +950,16 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
     if (load->hasAttr("from") &&
         load->getAttr("from").cast<StringAttr>().getValue().str() ==
             producer_name) {
-      replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
-                                 consumerFor.getRegion());
-      opToRemove.push_back(load);
+      // Check if load and targetStore are in the same block
+      if (load->getBlock() == targetStore->getBlock()) {
+        replaceAllUsesInRegionWith(load.getResult(), targetStore.getOperand(0),
+                                   consumerFor.getRegion());
+        opToRemove.push_back(load);
+        return WalkResult::interrupt();
+      } else {
+        opToRemove.pop_back(); // remove targetStore
+        return WalkResult::advance();
+      }
     }
     return WalkResult::advance();
   });
@@ -962,7 +969,6 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
   for (Operation *op : opToRemove) {
     op->erase();
   }
-
   return success();
 }
 

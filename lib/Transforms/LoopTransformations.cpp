@@ -956,8 +956,10 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
                                    consumerFor.getRegion());
         opToRemove.push_back(load);
         return WalkResult::interrupt();
-      } else {
-        opToRemove.pop_back(); // remove targetStore
+      } else { // load and targetStore are in different blocks
+        if (opToRemove.size() > 0) {
+          opToRemove.pop_back(); // remove targetStore
+        }
         return WalkResult::advance();
       }
     }

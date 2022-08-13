@@ -28,9 +28,9 @@
 #include "llvm/Support/ToolOutputFile.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
-
 #include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Transforms/Passes.h"
+#include "taskflow/taskflow.hpp"
 
 #include <iostream>
 
@@ -258,8 +258,20 @@ int main(int argc, char **argv) {
   outfile->os() << "\n";
 
   // run JiT
-  if (runJiT)
-    return runJiTCompiler(*module);
+  int ret = 0;
+  if (runJiT) {
+    tf::Executor executor;
+    tf::Taskflow taskflow;
+    auto task = taskflow.emplace(
+      [&] () {
+        ret = runJiTCompiler(*module);
+      }
+    );
+  
+    task.name("top");
+    executor.run(taskflow).wait();
+    return ret;
+  }
 
   return 0;
 }

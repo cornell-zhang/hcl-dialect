@@ -2034,8 +2034,31 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
                                             memAffineIndices);
       } else {
         SmallVector<Value> memAffineIndices;
-        for (auto forOp : nonReductionLoops)
-          memAffineIndices.push_back(forOp.getInductionVar());
+        for (int i = 0; i < (int)rank; ++i) {
+          AffineExpr baseExpr = originalLoadExprs[i][0];
+          // remove the reduction ivs from the baseExpr
+          if (baseExpr.isa<AffineDimExpr>()) {
+            memAffineIndices.push_back(dim2iv[baseExpr]);
+          } else if (baseExpr.isa<AffineBinaryOpExpr>()) {
+            auto expr = baseExpr.cast<AffineBinaryOpExpr>();
+            if (expr.getLHS().isa<AffineDimExpr>()) {
+              bool isReductionIV = reductionVars.count(dim2iv[expr.getLHS()]);
+              if (!isReductionIV) {
+                memAffineIndices.push_back(dim2iv[expr.getLHS()]);
+              }
+            }
+            if (expr.getRHS().isa<AffineDimExpr>()) {
+              bool isReductionIV = reductionVars.count(dim2iv[expr.getRHS()]);
+              if (!isReductionIV) {
+                memAffineIndices.push_back(dim2iv[expr.getRHS()]);
+              }
+            }
+          } else {
+            memAffineIndices.push_back(builder.create<arith::ConstantIndexOp>(
+                loc, baseExpr.dyn_cast<AffineConstantExpr>().getValue()));
+          }
+        }
+
         std::size_t size = memAffineIndices.size();
         for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
           memAffineIndices[j] =

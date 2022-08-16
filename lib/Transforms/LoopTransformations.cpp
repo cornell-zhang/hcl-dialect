@@ -1397,15 +1397,34 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
     for (int j = 0; j < (int)loadMap.getNumResults(); ++j) {
       AffineExpr expr = loadMap.getResult(j);
       if (axis == -1) {
+        llvm::outs() << "expr: " << expr << "\n";
         if (expr.isa<AffineDimExpr>()) {
           if (operands[operandIdx++] ==
               nonReductionLoops[loopAxis].getInductionVar()) {
             axis = j;
           }
         } else if (expr.isa<AffineBinaryOpExpr>()) {
-          if (operands[operandIdx++] ==
-              nonReductionLoops[loopAxis].getInductionVar())
+          // if the loadOp's AffineMap operand at operandIdx 
+          // is the induction var of the reuse loop, then
+          // the target reuse axis is the current j-th axis
+          auto targetIV = nonReductionLoops[loopAxis].getInductionVar();
+          if (operands[operandIdx] == targetIV)
             axis = j;
+          
+          // However, the reuse loop can be transformed
+          // so the induction var may not directly be the
+          // loadOp's AffineMap operand at operandIdx,
+          // instead, it is a result of affine.apply
+          if (auto applyOp = dyn_cast<AffineApplyOp>(operands[operandIdx].getDefiningOp())) {
+            for (auto applyOpOperand : applyOp.getOperands()) {
+              if (applyOpOperand == targetIV) {
+                axis = j;
+                break;
+              }
+            }
+          }
+
+          operandIdx++;
           int cntDim = 0;
           for (int i = 0; i < numDims; ++i)
             if (expr.isFunctionOfDim(i))

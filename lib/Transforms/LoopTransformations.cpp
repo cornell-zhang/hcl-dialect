@@ -1222,7 +1222,9 @@ LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
 
 LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
+  // target is the target tensor to reuse
   auto target = reuseAtOp.target(); // return a Value type
+  // the loop at which level the target tensor is reused
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(reuseAtOp.axis().getDefiningOp());
   const auto loop_name = loopHandle.loop_name();
@@ -1231,7 +1233,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
-  // 2) Find the requested stage
+  // 2) Find the requested stage (loop nest)
+  // the outermost loop of the target loop nest
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, op_name))) {
     f.emitError("Cannot find Stage ") << op_name.str();
@@ -1247,6 +1250,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 4) Find (non-)reduction loops
+  // collect info about nonReductionLoops, spatial loops, and reduction loops
   AffineLoopBand nonReductionLoops;
   AffineLoopBand previousShiftLoops;
   // InductionVar -> Loop upper bound
@@ -1286,13 +1290,21 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   int cntLoad = 0;
   DenseMap<AffineExpr, Value> dim2iv; // dim -> induction var
   reuseLoop.walk([&](AffineLoadOp loadOp) {
+    // Note: affine.load operation's affine map can have arbitrary operands
+    // e.g. affine.load %v[%v0 + %v1, %v2 + %v3] has this affine map:
+    // (d0, d1, d2, d3) -> (d0 + d1, d2 + d3)
+    // the affine map operands are: %v0, %v1, %v2, %v3
     if (loadOp.getOperand(0) != target)
       return WalkResult::advance();
     cntLoad++;
-    for (int i = 0; i < (int)rank; ++i)
+    for (int i = 0; i < (int)rank; ++i) {
+      // loadOp.getAffineMap().getResult(i) is the affine expression of the i-th
+      // dimension. Such as d0+d1, d1+d2
       originalLoadExprs[i].push_back(loadOp.getAffineMap().getResult(i));
+    }
     OpBuilder builder(loadOp);
     for (auto operandItem : llvm::enumerate(loadOp.getMapOperands())) {
+      // operandItem.value() is the i-th affine map operand.
       dim2iv[builder.getAffineDimExpr(operandItem.index())] =
           operandItem.value();
     }

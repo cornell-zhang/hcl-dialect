@@ -128,7 +128,7 @@ class DSLError(HCLError):
 class TensorError(HCLError):
     """A subclass for specifying tensor related exception"""
 
-    def __init__(self, msg, line):
+    def __init__(self, msg, line=None):
         category_str = bcolors.FAIL + "[Tensor]" + bcolors.ENDC
         HCLError.__init__(self, msg, line, category_str)
 

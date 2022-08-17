@@ -1397,32 +1397,33 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
     for (int j = 0; j < (int)loadMap.getNumResults(); ++j) {
       AffineExpr expr = loadMap.getResult(j);
       if (axis == -1) {
-        llvm::outs() << "expr: " << expr << "\n";
         if (expr.isa<AffineDimExpr>()) {
           if (operands[operandIdx++] ==
               nonReductionLoops[loopAxis].getInductionVar()) {
             axis = j;
           }
         } else if (expr.isa<AffineBinaryOpExpr>()) {
-          // if the loadOp's AffineMap operand at operandIdx 
-          // is the induction var of the reuse loop, then
-          // the target reuse axis is the current j-th axis
           auto targetIV = nonReductionLoops[loopAxis].getInductionVar();
-          if (operands[operandIdx] == targetIV)
+          if (operands[operandIdx] == targetIV) {
+            // if the loadOp's AffineMap operand at operandIdx
+            // is the induction var of the reuse loop, then
+            // the target reuse axis is the current j-th axis
             axis = j;
-          
-          // However, the reuse loop can be transformed
-          // so the induction var may not directly be the
-          // loadOp's AffineMap operand at operandIdx,
-          // instead, it is a result of affine.apply
-          if (auto applyOp = dyn_cast<AffineApplyOp>(operands[operandIdx].getDefiningOp())) {
-            for (auto applyOpOperand : applyOp.getOperands()) {
-              if (applyOpOperand == targetIV) {
-                axis = j;
-                break;
-              }
-            }
-          }
+          } 
+          // TODO(Niansong): this is still problematic 
+          // else if (auto applyOp = dyn_cast<AffineApplyOp>(
+          //                operands[operandIdx].getDefiningOp())) {
+            // However, the reuse loop can be transformed
+            // so the induction var may not directly be the
+            // loadOp's AffineMap operand at operandIdx,
+            // instead, it is a result of affine.apply
+          //   for (auto applyOpOperand : applyOp.getOperands()) {
+          //     if (applyOpOperand == targetIV) {
+          //       axis = j;
+          //       break;
+          //     }
+          //   }
+          // }
 
           operandIdx++;
           int cntDim = 0;
@@ -1995,8 +1996,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
         auto loadMap = originalLoadOp.getAffineMap();
         int operandIdx = 0;
         int loadRank = 0;
-        int RLCnt = 0; // reduction loop count
-        int SLCnt = 0; // shift loop count
+        int RLCnt = 0; // reduction loop count (shift buffer loops inside `axis`)
+        int SLCnt = 0; // shift loop count (shift buffer loops outside `axis`)
         for (int i = 0; i < (int)rank; ++i) {
           auto expr = loadMap.getResult(i);
           if (i < axis) {

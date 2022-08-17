@@ -986,7 +986,7 @@ class TensorSlice(ExprOp):
             # TODO(Niansong): I think this is doable actually
             raise NotImpelementedError(
                 "Writing to a slice of tensor is not allowed.")
-        elif len(self.indices + indices) == len(self.shape):
+        elif len(self.indices + indices) == len(self.full_shape):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
@@ -994,7 +994,8 @@ class TensorSlice(ExprOp):
                 new_indices.append(index)
             return StoreOp(expr, self.parent, list(self.indices) + new_indices)
         else:
-            raise TensorError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions," \
+                + f"indices=[{self.indices + indices}], shape={self.full_shape}")
 
 
 class TensorOp(ExprOp):

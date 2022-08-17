@@ -1847,7 +1847,9 @@ class StoreOp(ExprOp):
         self.to_tensor = to_tensor
         self.indices = []
         for index in indices:
-            if not isinstance(get_mlir_type(index.dtype), IndexType):
+            if isinstance(index, int):
+                index = ConstantOp(IndexType.get(), index)
+            elif not isinstance(get_mlir_type(index.dtype), IndexType):
                 DTypeWarning(
                     "StoreOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()

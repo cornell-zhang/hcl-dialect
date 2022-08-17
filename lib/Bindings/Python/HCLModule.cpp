@@ -24,6 +24,11 @@
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
 
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+#include "mlir/ExecutionEngine/OptUtils.h"
+#include "taskflow/taskflow.hpp"
+#include <pybind11/stl.h>
+
 namespace py = pybind11;
 using namespace mlir::python::adaptors;
 
@@ -138,6 +143,32 @@ static bool removeStrideMap(MlirModule &mlir_mod) {
 }
 
 //===----------------------------------------------------------------------===//
+// taskFlow Executor engine APIs
+//===----------------------------------------------------------------------===//
+static bool runTaskFlowExecutor(
+    std::map<std::string, MlirModule> &modules) {
+      
+      tf::Executor executor;
+      tf::Taskflow taskflow;
+      std::map<std::string, tf::Task> taskMap;
+
+      for (auto& [stage_id, mlir_mod]: modules ) {
+        auto mod = unwrap(mlir_mod);
+        auto maybeEngine = mlir::ExecutionEngine::create(mod);
+        assert(maybeEngine && "failed to construct an execution engine");
+
+        // Separate JIT execution engine for submodule
+        auto task = taskflow.emplace([&]() {
+          { std::cout << stage_id; }
+        });
+        taskMap[stage_id] = task;
+      }
+
+      executor.run(taskflow).wait(); 
+  return true;
+}
+
+//===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
 
@@ -177,6 +208,9 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
   hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
   hcl_m.def("move_return_to_input", &moveReturnToInput);
+
+  // TaskFlow backend APIs
+  hcl_m.def("tf_execute_tasks", &runTaskFlowExecutor);
 
   // Lowering APIs.
   hcl_m.def("lower_composite_type", &lowerCompositeType);

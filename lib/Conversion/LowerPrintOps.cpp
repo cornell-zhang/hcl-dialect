@@ -3,6 +3,16 @@
 // Copyright 2021-2022 The HCL-MLIR Authors.
 //
 //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+// LowerPrintOps.cpp defines a pass to lower PrintOp and PrintMemRefOp to
+// MLIR's utility printing functions or C printf functions. It also handles
+// Fixed-point values/memref casting to float.
+// We define our own memref printing and value printing operations to support 
+// following cases:
+// - Multiple values printed with format string.
+// - Print memref. Note that memref printing doesn't support formating.
+//===----------------------------------------------------------------------===//
+
 #include "hcl/Conversion/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
@@ -15,7 +25,6 @@ namespace mlir {
 namespace hcl {
 /// Pass entry point
 bool applyLowerPrintOps(ModuleOp &module) { return true; }
-
 } // namespace hcl
 } // namespace mlir
 

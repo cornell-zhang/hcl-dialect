@@ -20,14 +20,18 @@
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 
 #include "llvm-c/ErrorHandling.h"
 #include "llvm/Support/Signals.h"
+#include "llvm/Support/TargetSelect.h"
 
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "taskflow/taskflow.hpp"
+
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 namespace py = pybind11;
 using namespace mlir::python::adaptors;
@@ -146,22 +150,52 @@ static bool removeStrideMap(MlirModule &mlir_mod) {
 // taskFlow Executor engine APIs
 //===----------------------------------------------------------------------===//
 static bool runTaskFlowExecutor(
-    std::map<std::string, MlirModule> &modules) {
+    std::map<std::string, MlirModule> &modules,
+    std::map<std::string, std::vector<py::array_t<float>>> argsMap) {
       
       tf::Executor executor;
       tf::Taskflow taskflow;
       std::map<std::string, tf::Task> taskMap;
 
-      for (auto& [stage_id, mlir_mod]: modules ) {
+      for (auto& [stage, mlir_mod]: modules ) {
         auto mod = unwrap(mlir_mod);
+        mlir::registerLLVMDialectTranslation(*mod->getContext());
+
         auto maybeEngine = mlir::ExecutionEngine::create(mod);
-        assert(maybeEngine && "failed to construct an execution engine");
+        if (!maybeEngine)
+          throw std::runtime_error("maybeEngine failed");
+
+        // auto &engine = maybeEngine.get();
+        auto engine = std::move(*maybeEngine);
+        auto entryPoint = StringRef("top");
+        auto expectedFPtr = engine->lookupPacked(entryPoint);
+        if (!expectedFPtr)
+          throw std::runtime_error("not found entryPoint top");
+
+        auto modArgs = argsMap[stage];
+        void** args = (void **) malloc(sizeof(void *) * modArgs.size());;
+
+        size_t index = 0;
+        for (auto tensor: modArgs) {
+          py::buffer_info buf = tensor.request();
+          std::cout << stage << ".buffer #" << index << ": num of items " 
+            << buf.size << ", ndim=" << buf.ndim << std::endl;
+          args[index] = buf.ptr;
+          index++;
+        }
+
+        // void (*fptr)(void **) = *expectedFPtr;
+        // (*fptr)((void**)args);
+        llvm::Error error = engine->invokePacked(entryPoint, 
+            llvm::MutableArrayRef<void *>{args, (size_t)0});
+        if (error)
+          return false;
 
         // Separate JIT execution engine for submodule
         auto task = taskflow.emplace([&]() {
-          { std::cout << stage_id; }
+            std::cout << "stage " << stage;
         });
-        taskMap[stage_id] = task;
+        taskMap[stage] = task;
       }
 
       executor.run(taskflow).wait(); 

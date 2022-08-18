@@ -43,6 +43,7 @@ static FlatSymbolRefAttr getOrInsertPrintf(OpBuilder &rewriter,
                                                 /*isVarArg=*/true);
 
   // Insert the printf function into the body of the parent module.
+  OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPointToStart(module.getBody());
   rewriter.create<LLVM::LLVMFuncOp>(module.getLoc(), "printf", llvmFnType);
   return SymbolRefAttr::get(context, "printf");
@@ -99,8 +100,8 @@ void lowerPrintOpToPrintf(Operation *op) {
   for (auto value : op->getOperands()) {
     operands.push_back(value);
   }
-  builder.create<func::CallOp>(loc, printfRef, builder.getIntegerType(32),
-                               operands);
+  // builder.create<func::CallOp>(loc, printfRef, builder.getIntegerType(32),
+  //                              operands);
 }
 
 void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {
@@ -134,7 +135,7 @@ struct HCLLowerPrintOpsTransformation
     : public LowerPrintOpsBase<HCLLowerPrintOpsTransformation> {
   void runOnOperation() override {
     auto module = getOperation();
-    if (applyLowerPrintOps(module)) {
+    if (!applyLowerPrintOps(module)) {
       return signalPassFailure();
     }
   }

@@ -92,6 +92,10 @@ static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
                                            llvm::cl::desc("Remove stride map"),
                                            llvm::cl::init(false));
 
+static llvm::cl::opt<bool> lowerPrintOps("lower-print-ops",
+                                         llvm::cl::desc("Lower print ops"),
+                                         llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -191,6 +195,10 @@ int main(int argc, char **argv) {
 
   if (lowerComposite) {
     pm.addPass(mlir::hcl::createLowerCompositeTypePass());
+  }
+
+  if (lowerPrintOps) {
+    pm.addPass(mlir::hcl::createLowerPrintOpsPass());
   }
 
   if (fixedPointToInteger) {

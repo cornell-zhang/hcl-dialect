@@ -14,5 +14,4 @@ module {
         hcl.print(%c1_i32) : i32
         return
     }
-
 }

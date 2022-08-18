@@ -1,10 +1,7 @@
 add_mlir_library(MLIRHCLPasses
     LoopTransformations.cpp
-    FixedPointToInteger.cpp
     AnyWidthInteger.cpp
     MoveReturnToInput.cpp
-    LowerCompositeType.cpp
-    LowerBitOps.cpp
     Passes.cpp
     LegalizeCast.cpp
     RemoveStrideMap.cpp

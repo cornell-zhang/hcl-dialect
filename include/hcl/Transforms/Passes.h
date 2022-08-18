@@ -14,21 +14,15 @@ namespace mlir {
 namespace hcl {
 
 std::unique_ptr<OperationPass<ModuleOp>> createLoopTransformationPass();
-std::unique_ptr<OperationPass<ModuleOp>> createFixedPointToIntegerPass();
 std::unique_ptr<OperationPass<ModuleOp>> createAnyWidthIntegerPass();
 std::unique_ptr<OperationPass<ModuleOp>> createMoveReturnToInputPass();
-std::unique_ptr<OperationPass<ModuleOp>> createLowerCompositeTypePass();
-std::unique_ptr<OperationPass<ModuleOp>> createLowerBitOpsPass();
 std::unique_ptr<OperationPass<ModuleOp>> createLegalizeCastPass();
 std::unique_ptr<OperationPass<ModuleOp>> createRemoveStrideMapPass();
 
 bool applyLoopTransformation(ModuleOp &f);
 
-bool applyFixedPointToInteger(ModuleOp &module);
 bool applyAnyWidthInteger(ModuleOp &module);
 bool applyMoveReturnToInput(ModuleOp &module);
-bool applyLowerCompositeType(ModuleOp &module);
-bool applyLowerBitOps(ModuleOp &module);
 bool applyLegalizeCast(ModuleOp &module);
 bool applyRemoveStrideMap(ModuleOp &module);
 

@@ -1,4 +1,4 @@
-#include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/Passes.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithmeticToLLVM/ArithmeticToLLVM.h"
@@ -45,8 +45,8 @@ namespace {
 //     }
 //     bool hasUnsignedAttr = op->hasAttr("unsigned");
 
-//     // Get a symbol reference to the printf function, inserting it if necessary.
-//     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
+//     // Get a symbol reference to the printf function, inserting it if
+//     necessary. auto printfRef = getOrInsertPrintf(rewriter, parentModule);
 //     Value formatSpecifierCst = getOrCreateGlobalString(
 //         loc, rewriter, "frmt_spec", StringRef(format_str), parentModule);
 //     Value newLineCst = getOrCreateGlobalString(
@@ -71,7 +71,8 @@ namespace {
 //       // Insert a newline after each of the inner dimensions of the shape.
 //       if (i != e - 1)
 //         rewriter.create<func::CallOp>(loc, printfRef,
-//                                       rewriter.getIntegerType(32), newLineCst);
+//                                       rewriter.getIntegerType(32),
+//                                       newLineCst);
 //       rewriter.create<scf::YieldOp>(loc);
 //       rewriter.setInsertionPointToStart(loop.getBody());
 //     }
@@ -94,7 +95,8 @@ namespace {
 // private:
 //   /// To support printing MemRef with any element type, we cast
 //   /// Int, Float32 types to Float64.
-//   static Value castToF64(ConversionPatternRewriter &rewriter, const Value &src,
+//   static Value castToF64(ConversionPatternRewriter &rewriter, const Value
+//   &src,
 //                          bool hasUnsignedAttr) {
 //     Type t = src.getType();
 //     size_t iwidth = t.getIntOrFloatBitWidth(); // input bitwidth
@@ -106,10 +108,12 @@ namespace {
 //         Type targetIntType = rewriter.getIntegerType(64);
 //         if (iwidth < 64) {
 //           widthAdjusted =
-//               rewriter.create<arith::ExtUIOp>(src.getLoc(), targetIntType, src);
+//               rewriter.create<arith::ExtUIOp>(src.getLoc(), targetIntType,
+//               src);
 //         } else if (iwidth > 64) {
 //           widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
-//                                                            targetIntType, src);
+//                                                            targetIntType,
+//                                                            src);
 //         } else {
 //           widthAdjusted = src;
 //         }
@@ -120,10 +124,12 @@ namespace {
 //         Type targetIntType = rewriter.getIntegerType(64);
 //         if (iwidth < 64) {
 //           widthAdjusted =
-//               rewriter.create<arith::ExtSIOp>(src.getLoc(), targetIntType, src);
+//               rewriter.create<arith::ExtSIOp>(src.getLoc(), targetIntType,
+//               src);
 //         } else if (iwidth > 64) {
 //           widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(),
-//                                                            targetIntType, src);
+//                                                            targetIntType,
+//                                                            src);
 //         } else {
 //           widthAdjusted = src;
 //         }
@@ -135,7 +141,8 @@ namespace {
 //       if (width < 64) {
 //         casted = rewriter.create<arith::ExtFOp>(src.getLoc(), F64Type, src);
 //       } else if (width > 64) {
-//         casted = rewriter.create<arith::TruncFOp>(src.getLoc(), F64Type, src);
+//         casted = rewriter.create<arith::TruncFOp>(src.getLoc(), F64Type,
+//         src);
 //       } else {
 //         casted = src;
 //       }
@@ -157,8 +164,9 @@ namespace {
 //     // Create a function declaration for printf, the signature is:
 //     //   * `i32 (i8*, ...)`
 //     auto llvmI32Ty = IntegerType::get(context, 32);
-//     auto llvmI8PtrTy = LLVM::LLVMPointerType::get(IntegerType::get(context, 8));
-//     auto llvmFnType = LLVM::LLVMFunctionType::get(llvmI32Ty, llvmI8PtrTy,
+//     auto llvmI8PtrTy = LLVM::LLVMPointerType::get(IntegerType::get(context,
+//     8)); auto llvmFnType = LLVM::LLVMFunctionType::get(llvmI32Ty,
+//     llvmI8PtrTy,
 //                                                   /*isVarArg=*/true);
 
 //     // Insert the printf function into the body of the parent module.
@@ -168,7 +176,8 @@ namespace {
 //     return SymbolRefAttr::get(context, "printf");
 //   }
 
-//   /// Return a value representing an access into a global string with the given
+//   /// Return a value representing an access into a global string with the
+//   given
 //   /// name, creating the string if necessary.
 //   static Value getOrCreateGlobalString(Location loc, OpBuilder &builder,
 //                                        StringRef name, StringRef value,
@@ -193,8 +202,8 @@ namespace {
 //         builder.getIntegerAttr(builder.getIndexType(), 0));
 //     return builder.create<LLVM::GEPOp>(
 //         loc,
-//         LLVM::LLVMPointerType::get(IntegerType::get(builder.getContext(), 8)),
-//         globalPtr, ArrayRef<Value>({cst0, cst0}));
+//         LLVM::LLVMPointerType::get(IntegerType::get(builder.getContext(),
+//         8)), globalPtr, ArrayRef<Value>({cst0, cst0}));
 //   }
 // };
 

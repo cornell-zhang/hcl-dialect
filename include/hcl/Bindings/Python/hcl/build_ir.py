@@ -1426,6 +1426,7 @@ class MathExpOp(UnaryOp):
 
 class PrintOp(ExprOp):
     def __init__(self, val):
+        self.val = val
         self.operands = [v.result for v in val]
         super().__init__(hcl_d.PrintOp)
         if flags.BUILD_INPLACE:
@@ -1435,9 +1436,13 @@ class PrintOp(ExprOp):
         self.built_op = self.op(
             self.operands, ip=GlobalInsertionPoint.get()
         )
-        # TODO(Niansong): handle unsigned mixed with signed
-        if is_unsigned_type(self.dtype):
-            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        sign_str = ""
+        for v in self.val:
+            if is_unsigned_type(v.dtype):
+                sign_str += "u"
+            else:
+                sign_str += "_"
+        self.built_op.attributes["signedness"] = StringAttr.get(sign_str)
         return self.built_op
 
 

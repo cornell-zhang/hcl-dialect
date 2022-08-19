@@ -84,6 +84,9 @@ void removeStrideMap(func::FuncOp &func) {
 /// Pass entry point
 bool applyRemoveStrideMap(ModuleOp &module) {
   for (func::FuncOp func : module.getOps<func::FuncOp>()) {
+    if (func.getBlocks().empty()) {
+      continue;
+    }
     removeStrideMap(func);
   }
   return true;

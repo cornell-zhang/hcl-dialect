@@ -67,3 +67,6 @@ llvm_config.add_tool_substitutions(tools, tool_dirs)
 llvm_config.with_environment('PYTHONPATH', [
     os.path.join(config.mlir_binary_dir, 'tools/hcl/python_packages/hcl_core'),
 ], append_path=True)
+llvm_config.with_environment('LLVM_BUILD_DIR', 
+    os.path.join(config.llvm_tools_dir, ".."),
+    append_path=True)

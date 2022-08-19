@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s --jit | FileCheck %s
+// RUN: hcl-opt %s --lower-print-ops --jit | FileCheck %s
 // Input: 0x0000
 // By setting the third bit to 1, we get
 // Output: 0x0004
@@ -16,7 +16,8 @@ module {
       affine.store %1, %res[%arg1] : memref<1xi32>
     } 
 // CHECK: 4
-    hcl.print(%res) {format="%.0f \n"}: memref<1xi32>
+    %v = affine.load %res[0] : memref<1xi32>
+    hcl.print(%v) {format="%d\n"}: i32
     return
   }
 }

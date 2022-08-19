@@ -1,4 +1,4 @@
-// RUN: hcl-opt -jit %s | FileCheck %s
+// RUN: hcl-opt --lower-print-ops --jit %s | FileCheck %s
 
 module {
 
@@ -6,11 +6,11 @@ module {
 
   func.func @top() -> () {
     %0 = memref.get_global @gv0 : memref<4x4xf32>
-// CHECK: 1.000000 2.000000 3.000000 4.000000
-// CHECK: 1.000000 2.000000 3.000000 4.000000
-// CHECK: 1.000000 2.000000 3.000000 4.000000
-// CHECK: 1.000000 2.000000 3.000000 4.000000
-    hcl.print(%0) : memref<4x4xf32>
+// CHECK: 1,   2,   3,   4
+// CHECK: 1,   2,   3,   4
+// CHECK: 1,   2,   3,   4
+// CHECK: 1,   2,   3,   4
+    hcl.print_memref(%0) : memref<4x4xf32>
     return
   }
 }

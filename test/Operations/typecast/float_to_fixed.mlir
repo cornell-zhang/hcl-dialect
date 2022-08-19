@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s --fixed-to-integer --jit | FileCheck %s
+// RUN: hcl-opt %s --fixed-to-integer --lower-print-ops --jit | FileCheck %s
 module {
   memref.global "private" @float_gv : memref<2x2xf32> = dense<[[2.234, 1.223], [5.261, 1.2]]>
   func.func @top() -> () {
@@ -11,12 +11,10 @@ module {
         affine.store %4, %1[%arg0, %arg1] : memref<2x2x!hcl.Fixed<32, 2>>
       }
     }
-    hcl.print(%1) {format = "%.2f \n"} : memref<2x2x!hcl.Fixed<32,2>> 
+    hcl.print_memref(%1) : memref<2x2x!hcl.Fixed<32,2>> 
     return
   }
 }
 
-// CHECK: 2.00
-// CHECK: 1.00
-// CHECK: 5.25
-// CHECK: 1.00
+// CHECK: 2,   1
+// CHECK: 5.25,   1

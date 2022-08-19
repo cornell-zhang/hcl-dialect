@@ -896,3 +896,12 @@ Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src,
   }
   return casted;
 }
+
+bool mlir::hcl::getEnv(const std::string &key, std::string &value) {
+  char *env = std::getenv(key.c_str());
+  if (env) {
+    value = env;
+    return true;
+  }
+  return false;
+}

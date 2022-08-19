@@ -198,6 +198,7 @@ Value castToF64(OpBuilder &rewriter, const Value &src, bool hasUnsignedAttr);
 namespace mlir {
 namespace hcl {
 bool replace(std::string& str, const std::string& from, const std::string& to);
+bool getEnv(const std::string &key, std::string &value);
 
 } // namespace hcl
 } // namespace mlir

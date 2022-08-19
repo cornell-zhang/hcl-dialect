@@ -801,3 +801,63 @@ Value hcl::castIntMemRef(OpBuilder &builder, Location loc,
       });
   return newMemRef;
 }
+
+
+bool mlir::hcl::replace(std::string& str, const std::string& from, const std::string& to) {
+    size_t start_pos = str.find(from);
+    if(start_pos == std::string::npos)
+        return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
+}
+
+Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src, bool hasUnsignedAttr) {
+  Type t = src.getType();
+  size_t iwidth = t.getIntOrFloatBitWidth(); // input bitwidth
+  Type F64Type = rewriter.getF64Type();
+  Value casted;
+  if (t.isa<IntegerType>()) {
+    if (t.isUnsignedInteger() or hasUnsignedAttr) {
+      Value widthAdjusted;
+      Type targetIntType = rewriter.getIntegerType(64);
+      if (iwidth < 64) {
+        widthAdjusted =
+            rewriter.create<arith::ExtUIOp>(src.getLoc(), targetIntType, src);
+      } else if (iwidth > 64) {
+        widthAdjusted =
+            rewriter.create<arith::TruncIOp>(src.getLoc(), targetIntType, src);
+      } else {
+        widthAdjusted = src;
+      }
+      casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64Type,
+                                                widthAdjusted);
+    } else { // signed and signless integer
+      Value widthAdjusted;
+      Type targetIntType = rewriter.getIntegerType(64);
+      if (iwidth < 64) {
+        widthAdjusted =
+            rewriter.create<arith::ExtSIOp>(src.getLoc(), targetIntType, src);
+      } else if (iwidth > 64) {
+        widthAdjusted =
+            rewriter.create<arith::TruncIOp>(src.getLoc(), targetIntType, src);
+      } else {
+        widthAdjusted = src;
+      }
+      casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64Type,
+                                                widthAdjusted);
+    }
+  } else if (t.isa<FloatType>()) {
+    unsigned width = t.cast<FloatType>().getWidth();
+    if (width < 64) {
+      casted = rewriter.create<arith::ExtFOp>(src.getLoc(), F64Type, src);
+    } else if (width > 64) {
+      casted = rewriter.create<arith::TruncFOp>(src.getLoc(), F64Type, src);
+    } else {
+      casted = src;
+    }
+  } else {
+    llvm::errs() << src.getLoc() << "could not cast value of type "
+                 << src.getType() << " to F64.\n";
+  }
+  return casted;
+}

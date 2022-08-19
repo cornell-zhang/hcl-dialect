@@ -17,9 +17,11 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Support/Utils.h"
+#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include <string> 
+#include <string>
 
 using namespace mlir;
 using namespace hcl;
@@ -30,8 +32,7 @@ namespace hcl {
 /// Helper functions to decalare C printf function and format string
 /// Return a symbol reference to the printf function, inserting it into the
 /// module if necessary.
-LLVM::LLVMFuncOp getOrInsertPrintf(OpBuilder &rewriter,
-                                           ModuleOp module) {
+LLVM::LLVMFuncOp getOrInsertPrintf(OpBuilder &rewriter, ModuleOp module) {
   auto *context = module.getContext();
   for (auto func : module.getOps<LLVM::LLVMFuncOp>()) {
     if (func.getName() == "printf")
@@ -48,14 +49,14 @@ LLVM::LLVMFuncOp getOrInsertPrintf(OpBuilder &rewriter,
   // Insert the printf function into the body of the parent module.
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPointToStart(module.getBody());
-  return rewriter.create<LLVM::LLVMFuncOp>(module.getLoc(), "printf", llvmFnType);
+  return rewriter.create<LLVM::LLVMFuncOp>(module.getLoc(), "printf",
+                                           llvmFnType);
 }
 
 /// Return a value representing an access into a global string with the given
 /// name, creating the string if necessary.
-Value getOrCreateGlobalString(Location loc, OpBuilder &builder,
-                                     StringRef name, StringRef value,
-                                     ModuleOp module) {
+Value getOrCreateGlobalString(Location loc, OpBuilder &builder, StringRef name,
+                              StringRef value, ModuleOp module) {
   // Create the global at the entry of the module.
   LLVM::GlobalOp global;
   if (!(global = module.lookupSymbol<LLVM::GlobalOp>(name))) {
@@ -86,21 +87,26 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   ModuleOp parentModule = op->getParentOfType<ModuleOp>();
 
   // If the PrintOp has string attribute, it is the format string
-  std::string format_str = "%f \0";
+  std::string format_str = "%.4f \0";
   if (op->hasAttr("format")) {
     format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
+    replace(format_str, "%d", "%.0f");
   }
+  bool hasUnsignedAttr = op->hasAttr("unsigned");
   // Get a symbol reference to the printf function, inserting it if
   // necessary. Create global strings for format and new line
   auto printfRef = getOrInsertPrintf(builder, parentModule);
-  Value formatSpecifierCst = getOrCreateGlobalString(
-      loc, builder, "frmt_spec" + std::to_string(idx), StringRef(format_str), parentModule);
+  Value formatSpecifierCst =
+      getOrCreateGlobalString(loc, builder, "frmt_spec" + std::to_string(idx),
+                              StringRef(format_str), parentModule);
 
   // Create a call to printf with the format string and the values to print.
   SmallVector<Value, 4> operands;
   operands.push_back(formatSpecifierCst);
   for (auto value : op->getOperands()) {
-    operands.push_back(value);
+    // Note: llvm.mlir.printf only works with f64 type, so we need to cast the
+    // value.
+    operands.push_back(castToF64(builder, value, hasUnsignedAttr));
   }
   builder.create<LLVM::CallOp>(loc, printfRef, operands);
 }

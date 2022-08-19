@@ -6,10 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Support/Utils.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
-
+#include "hcl/Support/Utils.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 using namespace mlir;
 using namespace hcl;
 
@@ -823,29 +825,27 @@ Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src,
     if (t.isUnsignedInteger() or hasUnsignedAttr) {
       Value widthAdjusted;
       if (iwidth < 64) {
-        widthAdjusted =
-            rewriter.create<arith::ExtUIOp>(src.getLoc(), I64, src);
+        widthAdjusted = rewriter.create<arith::ExtUIOp>(src.getLoc(), I64, src);
       } else if (iwidth > 64) {
         widthAdjusted =
             rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
       } else {
         widthAdjusted = src;
       }
-      casted = rewriter.create<arith::UIToFPOp>(src.getLoc(), F64,
-                                                widthAdjusted);
+      casted =
+          rewriter.create<arith::UIToFPOp>(src.getLoc(), F64, widthAdjusted);
     } else { // signed and signless integer
       Value widthAdjusted;
       if (iwidth < 64) {
-        widthAdjusted =
-            rewriter.create<arith::ExtSIOp>(src.getLoc(), I64, src);
+        widthAdjusted = rewriter.create<arith::ExtSIOp>(src.getLoc(), I64, src);
       } else if (iwidth > 64) {
         widthAdjusted =
             rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
       } else {
         widthAdjusted = src;
       }
-      casted = rewriter.create<arith::SIToFPOp>(src.getLoc(), F64,
-                                                widthAdjusted);
+      casted =
+          rewriter.create<arith::SIToFPOp>(src.getLoc(), F64, widthAdjusted);
     }
   } else if (t.isa<FloatType>()) {
     unsigned width = t.cast<FloatType>().getWidth();

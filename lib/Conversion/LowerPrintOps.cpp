@@ -90,7 +90,10 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   std::string format_str = "%.4f \0";
   if (op->hasAttr("format")) {
     format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
-    replace(format_str, "%d", "%.0f");
+    bool replaced = true;
+    while (replaced) {
+      replaced = replace(format_str, "%d", "%.0f");
+    }
   }
   bool hasUnsignedAttr = op->hasAttr("unsigned");
   // Get a symbol reference to the printf function, inserting it if

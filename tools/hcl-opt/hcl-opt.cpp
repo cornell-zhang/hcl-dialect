@@ -197,12 +197,13 @@ int main(int argc, char **argv) {
     pm.addPass(mlir::hcl::createLowerCompositeTypePass());
   }
 
-  if (lowerPrintOps) {
-    pm.addPass(mlir::hcl::createLowerPrintOpsPass());
-  }
-
   if (fixedPointToInteger) {
     pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
+  }
+
+  // lowerPrintOps should be run after lowering fixed point to integer
+  if (lowerPrintOps) {
+    pm.addPass(mlir::hcl::createLowerPrintOpsPass());
   }
 
   if (anyWidthInteger) {

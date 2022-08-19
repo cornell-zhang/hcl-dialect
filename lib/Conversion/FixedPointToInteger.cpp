@@ -266,10 +266,10 @@ void updateReturnOp(func::FuncOp &funcOp) {
  * Create a float64 memref to store the real value
  * of hcl.print's operand memref
  */
-void lowerPrintOp(func::FuncOp &funcOp) {
+void lowerPrintMemRefOp(func::FuncOp &funcOp) {
   SmallVector<Operation *, 4> printOps;
   funcOp.walk([&](Operation *op) {
-    if (auto new_op = dyn_cast<PrintOp>(op)) {
+    if (auto new_op = dyn_cast<PrintMemRefOp>(op)) {
       // Only lower fixed-point prints
       MemRefType memRefType =
           new_op->getOperand(0).getType().cast<MemRefType>();
@@ -309,6 +309,33 @@ void lowerPrintOp(func::FuncOp &funcOp) {
           nestedBuilder.create<AffineStoreOp>(loc, realV, newMemRef, ivs);
         });
     printOp->setOperand(0, newMemRef);
+  }
+}
+
+void lowerPrintOp(func::FuncOp &funcOp) {
+  SmallVector<Operation *, 4> printOps;
+  funcOp.walk([&](Operation *op) {
+    if (auto new_op = dyn_cast<PrintOp>(op)) {
+      // Only lower fixed-point prints
+      for (auto operand : new_op->getOperands()) {
+        if (operand.getType().isa<FixedType, UFixedType>()) {
+          printOps.push_back(op);
+          break;
+        }
+      }
+    }
+  });
+
+  for (auto *printOp : printOps) {
+    for (auto opr : llvm::enumerate(printOp->getOperands())) {
+      if (opr.value().getType().isa<FixedType, UFixedType>()) {
+        OpBuilder builder(printOp);
+        Value oldValue = opr.value();
+        bool is_unsigned = opr.value().getType().isa<UFixedType>();
+        Value newValue = castToF64(builder, oldValue, is_unsigned);
+        printOp->setOperand(opr.index(), newValue);
+      }
+    }
   }
 }
 
@@ -1164,6 +1191,7 @@ void visitRegion(Region &region) {
 bool applyFixedPointToInteger(ModuleOp &mod) {
 
   for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
+    lowerPrintMemRefOp(func);
     lowerPrintOp(func);
     markFixedArithOps(func);
     markFixedCastOps(func);

@@ -19,6 +19,7 @@
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include <string> 
 
 using namespace mlir;
 using namespace hcl;
@@ -29,11 +30,13 @@ namespace hcl {
 /// Helper functions to decalare C printf function and format string
 /// Return a symbol reference to the printf function, inserting it into the
 /// module if necessary.
-static FlatSymbolRefAttr getOrInsertPrintf(OpBuilder &rewriter,
+LLVM::LLVMFuncOp getOrInsertPrintf(OpBuilder &rewriter,
                                            ModuleOp module) {
   auto *context = module.getContext();
-  if (module.lookupSymbol<LLVM::LLVMFuncOp>("printf"))
-    return SymbolRefAttr::get(context, "printf");
+  for (auto func : module.getOps<LLVM::LLVMFuncOp>()) {
+    if (func.getName() == "printf")
+      return func;
+  }
 
   // Create a function declaration for printf, the signature is:
   //   * `i32 (i8*, ...)`
@@ -45,13 +48,12 @@ static FlatSymbolRefAttr getOrInsertPrintf(OpBuilder &rewriter,
   // Insert the printf function into the body of the parent module.
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPointToStart(module.getBody());
-  rewriter.create<LLVM::LLVMFuncOp>(module.getLoc(), "printf", llvmFnType);
-  return SymbolRefAttr::get(context, "printf");
+  return rewriter.create<LLVM::LLVMFuncOp>(module.getLoc(), "printf", llvmFnType);
 }
 
 /// Return a value representing an access into a global string with the given
 /// name, creating the string if necessary.
-static Value getOrCreateGlobalString(Location loc, OpBuilder &builder,
+Value getOrCreateGlobalString(Location loc, OpBuilder &builder,
                                      StringRef name, StringRef value,
                                      ModuleOp module) {
   // Create the global at the entry of the module.
@@ -78,7 +80,7 @@ static Value getOrCreateGlobalString(Location loc, OpBuilder &builder,
       globalPtr, ArrayRef<Value>({cst0, cst0}));
 }
 
-void lowerPrintOpToPrintf(Operation *op) {
+void lowerPrintOpToPrintf(Operation *op, int idx) {
   OpBuilder builder(op);
   auto loc = op->getLoc();
   ModuleOp parentModule = op->getParentOfType<ModuleOp>();
@@ -92,7 +94,7 @@ void lowerPrintOpToPrintf(Operation *op) {
   // necessary. Create global strings for format and new line
   auto printfRef = getOrInsertPrintf(builder, parentModule);
   Value formatSpecifierCst = getOrCreateGlobalString(
-      loc, builder, "frmt_spec", StringRef(format_str), parentModule);
+      loc, builder, "frmt_spec" + std::to_string(idx), StringRef(format_str), parentModule);
 
   // Create a call to printf with the format string and the values to print.
   SmallVector<Value, 4> operands;
@@ -100,8 +102,7 @@ void lowerPrintOpToPrintf(Operation *op) {
   for (auto value : op->getOperands()) {
     operands.push_back(value);
   }
-  // builder.create<func::CallOp>(loc, printfRef, builder.getIntegerType(32),
-  //                              operands);
+  builder.create<LLVM::CallOp>(loc, printfRef, operands);
 }
 
 void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {
@@ -111,8 +112,8 @@ void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {
       printOps.push_back(printOp);
     }
   });
-  for (auto printOp : printOps) {
-    lowerPrintOpToPrintf(printOp);
+  for (auto v : llvm::enumerate(printOps)) {
+    lowerPrintOpToPrintf(v.value(), v.index());
   }
   std::reverse(printOps.begin(), printOps.end());
   for (auto printOp : printOps) {

@@ -114,6 +114,20 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   builder.create<LLVM::CallOp>(loc, printfRef, operands);
 }
 
+void lowerPrintMemRef(Operation* op) {
+  OpBuilder builder(op);
+  auto loc = op->getLoc();
+  ModuleOp parentModule = op->getParentOfType<ModuleOp>();
+  builder.setInsertionPointToStart(parentModule.getBody());
+  auto srcMemRefType = op->getOperand(0).getType().cast<MemRefType>();
+  auto pointerType = UnrankedMemRefType::get(
+      srcMemRefType.getElementType(), srcMemRefType.getMemorySpace());
+  FunctionType printMemRefType = FunctionType::get(builder.getContext(),
+      {pointerType}, {});
+  auto printFuncDecl = builder.create<func::FuncOp>(
+      loc, "print_memref", printMemRefType);
+}
+
 void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {
   SmallVector<Operation *, 4> printOps;
   funcOp.walk([&](Operation *op) {
@@ -130,10 +144,27 @@ void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {
   }
 }
 
+void PrintMemRefOpLoweringDispatcher(func::FuncOp &funcOp) {
+  SmallVector<Operation *, 4> printMemRefOps;
+  funcOp.walk([&](Operation *op) {
+    if (auto printMemRefOp = dyn_cast<PrintMemRefOp>(op)) {
+      printMemRefOps.push_back(printMemRefOp);
+    }
+  });
+  for (auto printMemRefOp : printMemRefOps) {
+    lowerPrintMemRef(printMemRefOp);
+  }
+  std::reverse(printMemRefOps.begin(), printMemRefOps.end());
+  for (auto printMemRefOp : printMemRefOps) {
+    printMemRefOp->erase();
+  }
+}
+
 /// Pass entry point
 bool applyLowerPrintOps(ModuleOp &module) {
   for (func::FuncOp func : module.getOps<func::FuncOp>()) {
     PrintOpLoweringDispatcher(func);
+    PrintMemRefOpLoweringDispatcher(func);
   }
   return true;
 }

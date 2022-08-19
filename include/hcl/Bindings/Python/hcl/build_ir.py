@@ -1424,9 +1424,22 @@ class MathExpOp(UnaryOp):
         super().__init__(math.ExpOp, F32Type.get(), val)
 
 
-class PrintOp(UnaryOp):
-    def __init__(self, val, dtype):
-        super().__init__(hcl_d.PrintOp, get_mlir_type(dtype), val)
+class PrintOp(ExprOp):
+    def __init__(self, val):
+        self.operands = [v.result for v in val]
+        super().__init__(hcl_d.PrintOp)
+        if flags.BUILD_INPLACE:
+            self.build()
+    
+    def build(self):
+        self.built_op = self.op(
+            self.operands, ip=GlobalInsertionPoint.get()
+        )
+        # TODO(Niansong): handle unsigned mixed with signed
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
+        return self.built_op
+
 
 class PrintMemRefOp(UnaryOp):
     def __init__(self, val, dtype):

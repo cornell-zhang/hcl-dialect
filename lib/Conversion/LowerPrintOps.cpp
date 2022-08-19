@@ -95,7 +95,10 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
       replaced = replace(format_str, "%d", "%.0f");
     }
   }
-  bool hasUnsignedAttr = op->hasAttr("unsigned");
+  std::string sign_str;
+  if (op->hasAttr("signedness")) {
+    sign_str = op->getAttr("signedness").cast<StringAttr>().getValue().str();
+  }
   // Get a symbol reference to the printf function, inserting it if
   // necessary. Create global strings for format and new line
   auto printfRef = getOrInsertPrintf(builder, parentModule);
@@ -106,10 +109,16 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   // Create a call to printf with the format string and the values to print.
   SmallVector<Value, 4> operands;
   operands.push_back(formatSpecifierCst);
-  for (auto value : op->getOperands()) {
+  for (auto enum_value : llvm::enumerate(op->getOperands())) {
     // Note: llvm.mlir.printf only works with f64 type, so we need to cast the
     // value.
-    operands.push_back(castToF64(builder, value, hasUnsignedAttr));
+    auto value = enum_value.value();
+    auto idx = enum_value.index();
+    bool is_unsigned = false;
+    if (idx < sign_str.size()) {
+      is_unsigned = sign_str[idx] == 'u';
+    }
+    operands.push_back(castToF64(builder, value, is_unsigned));
   }
   builder.create<LLVM::CallOp>(loc, printfRef, operands);
 }

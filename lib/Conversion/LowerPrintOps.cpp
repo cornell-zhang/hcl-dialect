@@ -114,18 +114,46 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   builder.create<LLVM::CallOp>(loc, printfRef, operands);
 }
 
-void lowerPrintMemRef(Operation* op) {
+void lowerPrintMemRef(Operation *op) {
   OpBuilder builder(op);
   auto loc = op->getLoc();
   ModuleOp parentModule = op->getParentOfType<ModuleOp>();
   builder.setInsertionPointToStart(parentModule.getBody());
   auto srcMemRefType = op->getOperand(0).getType().cast<MemRefType>();
-  auto pointerType = UnrankedMemRefType::get(
-      srcMemRefType.getElementType(), srcMemRefType.getMemorySpace());
-  FunctionType printMemRefType = FunctionType::get(builder.getContext(),
-      {pointerType}, {});
-  auto printFuncDecl = builder.create<func::FuncOp>(
-      loc, "print_memref", printMemRefType);
+  auto srcElementType = srcMemRefType.getElementType();
+  bool unsign = op->hasAttr("unsigned");
+  std::string funcName;
+  if (srcElementType.isa<FloatType>() && srcElementType.getIntOrFloatBitWidth() == 32) {
+    funcName = "printMemrefF32";
+  } else if (srcElementType.isa<FloatType>() &&
+             srcElementType.getIntOrFloatBitWidth() == 64) {
+    funcName = "printMemrefF64";
+  } else if (srcElementType.isa<IntegerType>()) {
+    funcName = "printMemrefI64";
+  } else {
+    op->emitError("unsupported type for printMemref");
+  }
+  auto pointerType =
+      UnrankedMemRefType::get(srcElementType, srcMemRefType.getMemorySpace());
+  FunctionType printMemRefType =
+      FunctionType::get(builder.getContext(), {pointerType}, {});
+  auto printFuncDecl =
+      builder.create<func::FuncOp>(loc, funcName, printMemRefType);
+  printFuncDecl.setPrivate();
+
+  builder.setInsertionPoint(op);
+  Value srcMemRef;
+  if (srcElementType.isa<IntegerType>()) {
+    srcMemRef = castIntMemRef(builder, op->getLoc(), op->getOperand(0), 64,
+                              unsign, /*replace*/ false);
+  } else {
+    srcMemRef = op->getOperand(0);
+  }
+
+  // Use memref.cast to remove rank
+  auto castedMemRef = builder.create<memref::CastOp>(loc, pointerType, srcMemRef);
+  SmallVector<Value, 1> operands{castedMemRef};
+  builder.create<func::CallOp>(loc, printFuncDecl, operands);
 }
 
 void PrintOpLoweringDispatcher(func::FuncOp &funcOp) {

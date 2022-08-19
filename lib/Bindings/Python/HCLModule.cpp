@@ -137,6 +137,11 @@ static bool removeStrideMap(MlirModule &mlir_mod) {
   return applyRemoveStrideMap(mod);
 }
 
+static bool lowerPrintOps(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLowerPrintOps(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -183,4 +188,5 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_bit_ops", &lowerBitOps);
   hcl_m.def("legalize_cast", &legalizeCast);
   hcl_m.def("remove_stride_map", &removeStrideMap);
+  hcl_m.def("lower_print_ops", &lowerPrintOps);
 }

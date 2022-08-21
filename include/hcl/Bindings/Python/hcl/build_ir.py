@@ -964,7 +964,7 @@ class TensorSlice(ExprOp):
                 self.indices + indices,
                 self.name,
             )
-        elif len(self.indices + indices) == len(self.shape):
+        elif len(self.indices + indices) == len(self.full_shape):
             # format indices
             new_indices = []
             for index in self.indices + indices:
@@ -972,9 +972,6 @@ class TensorSlice(ExprOp):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             load = LoadOp(self.parent, new_indices)
-            # TODO(Niansong): Why build in place result in duplicate load?
-            # if flags.BUILD_INPLACE:
-            #     load.build()
             return load
         else:
             raise TensorError("Indices length > # of array dimensions")

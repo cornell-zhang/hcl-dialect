@@ -127,7 +127,6 @@ void lowerPrintMemRef(Operation *op) {
   OpBuilder builder(op);
   auto loc = op->getLoc();
   ModuleOp parentModule = op->getParentOfType<ModuleOp>();
-  builder.setInsertionPointToStart(parentModule.getBody());
   auto srcMemRefType = op->getOperand(0).getType().cast<MemRefType>();
   auto srcElementType = srcMemRefType.getElementType();
   bool unsign = op->hasAttr("unsigned");
@@ -142,6 +141,19 @@ void lowerPrintMemRef(Operation *op) {
   } else {
     op->emitError("unsupported type for printMemref");
   }
+  // For integer memrefs, cast to I64 memref before printing.
+  builder.setInsertionPoint(op);
+  Value srcMemRef;
+  if (srcElementType.isa<IntegerType>()) {
+    srcMemRef = castIntMemRef(builder, op->getLoc(), op->getOperand(0), 64,
+                              unsign, /*replace*/ false);
+    srcElementType = IntegerType::get(builder.getContext(), 64);
+  } else {
+    srcMemRef = op->getOperand(0);
+  }
+
+  // Create print function declaration
+  builder.setInsertionPointToStart(parentModule.getBody());
   auto pointerType =
       UnrankedMemRefType::get(srcElementType, srcMemRefType.getMemorySpace());
   FunctionType printMemRefType =
@@ -150,16 +162,8 @@ void lowerPrintMemRef(Operation *op) {
       builder.create<func::FuncOp>(loc, funcName, printMemRefType);
   printFuncDecl.setPrivate();
 
-  builder.setInsertionPoint(op);
-  Value srcMemRef;
-  if (srcElementType.isa<IntegerType>()) {
-    srcMemRef = castIntMemRef(builder, op->getLoc(), op->getOperand(0), 64,
-                              unsign, /*replace*/ false);
-  } else {
-    srcMemRef = op->getOperand(0);
-  }
-
   // Use memref.cast to remove rank
+  builder.setInsertionPoint(op);
   auto castedMemRef = builder.create<memref::CastOp>(loc, pointerType, srcMemRef);
   SmallVector<Value, 1> operands{castedMemRef};
   builder.create<func::CallOp>(loc, printFuncDecl, operands);

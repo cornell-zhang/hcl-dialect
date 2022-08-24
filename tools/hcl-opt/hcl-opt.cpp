@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -88,9 +89,18 @@ static llvm::cl::opt<bool> lowerBitOps("lower-bitops",
 static llvm::cl::opt<bool> legalizeCast("legalize-cast",
                                         llvm::cl::desc("Legalize cast"),
                                         llvm::cl::init(false));
+
 static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
                                            llvm::cl::desc("Remove stride map"),
                                            llvm::cl::init(false));
+
+static llvm::cl::opt<bool> bufferization("bufferization",
+                                         llvm::cl::desc("Bufferization"),
+                                         llvm::cl::init(false));
+
+static llvm::cl::opt<bool> linalgConversion("linalg-to-affine",
+                                            llvm::cl::desc("Linalg to affine"),
+                                            llvm::cl::init(false));
 
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
@@ -215,6 +225,14 @@ int main(int argc, char **argv) {
 
   if (removeStrideMap) {
     pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  }
+
+  if (bufferization) {
+    pm.addPass(mlir::bufferization::createOneShotBufferizePass());
+  }
+
+  if (linalgConversion) {
+    optPM.addPass(mlir::createConvertLinalgToAffineLoopsPass());
   }
 
   if (enableNormalize) {

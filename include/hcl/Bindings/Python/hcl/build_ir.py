@@ -964,7 +964,7 @@ class TensorSlice(ExprOp):
                 self.indices + indices,
                 self.name,
             )
-        elif len(self.indices + indices) == len(self.shape):
+        elif len(self.indices + indices) == len(self.full_shape):
             # format indices
             new_indices = []
             for index in self.indices + indices:
@@ -972,9 +972,6 @@ class TensorSlice(ExprOp):
                     index = ConstantOp(IndexType.get(), index)
                 new_indices.append(index)
             load = LoadOp(self.parent, new_indices)
-            # TODO(Niansong): Why build in place result in duplicate load?
-            # if flags.BUILD_INPLACE:
-            #     load.build()
             return load
         else:
             raise TensorError("Indices length > # of array dimensions")
@@ -986,7 +983,7 @@ class TensorSlice(ExprOp):
             # TODO(Niansong): I think this is doable actually
             raise NotImpelementedError(
                 "Writing to a slice of tensor is not allowed.")
-        elif len(self.indices + indices) == len(self.shape):
+        elif len(self.indices + indices) == len(self.full_shape):
             new_indices = []
             for index in indices:
                 if isinstance(index, int):
@@ -994,7 +991,8 @@ class TensorSlice(ExprOp):
                 new_indices.append(index)
             return StoreOp(expr, self.parent, list(self.indices) + new_indices)
         else:
-            raise TensorError("Indices length > # of array dimensions")
+            raise TensorError("Indices length > # of array dimensions," \
+                + f"indices=[{self.indices + indices}], shape={self.full_shape}")
 
 
 class TensorOp(ExprOp):
@@ -1423,9 +1421,31 @@ class MathExpOp(UnaryOp):
         super().__init__(math.ExpOp, F32Type.get(), val)
 
 
-class PrintOp(UnaryOp):
+class PrintOp(ExprOp):
+    def __init__(self, val):
+        self.val = val
+        self.operands = [v.result for v in val]
+        super().__init__(hcl_d.PrintOp)
+        if flags.BUILD_INPLACE:
+            self.build()
+    
+    def build(self):
+        self.built_op = self.op(
+            self.operands, ip=GlobalInsertionPoint.get()
+        )
+        sign_str = ""
+        for v in self.val:
+            if is_unsigned_type(v.dtype):
+                sign_str += "u"
+            else:
+                sign_str += "_"
+        self.built_op.attributes["signedness"] = StringAttr.get(sign_str)
+        return self.built_op
+
+
+class PrintMemRefOp(UnaryOp):
     def __init__(self, val, dtype):
-        super().__init__(hcl_d.PrintOp, get_mlir_type(dtype), val)
+        super().__init__(hcl_d.PrintMemRefOp, get_mlir_type(dtype), val)
 
 
 class MathPowOp(BinaryOp):
@@ -1846,7 +1866,9 @@ class StoreOp(ExprOp):
         self.to_tensor = to_tensor
         self.indices = []
         for index in indices:
-            if not isinstance(get_mlir_type(index.dtype), IndexType):
+            if isinstance(index, int):
+                index = ConstantOp(IndexType.get(), index)
+            elif not isinstance(get_mlir_type(index.dtype), IndexType):
                 DTypeWarning(
                     "StoreOp's input is not an index. Cast from {} to {}.".format(
                         index.dtype, IndexType.get()

@@ -187,6 +187,18 @@ Value castInteger(OpBuilder builder, Location loc, Value input, Type srcType,
 Value castIntMemRef(OpBuilder &builder, Location loc, const Value &oldMemRef,
                     size_t newWidth, bool unsign = false, bool replace = true,
                     const Value &dstMemRef = NULL);
+Value castToF64(OpBuilder &rewriter, const Value &src, bool hasUnsignedAttr);
+
+} // namespace hcl
+} // namespace mlir
+
+//===----------------------------------------------------------------------===//
+// String utils
+//===----------------------------------------------------------------------===//
+namespace mlir {
+namespace hcl {
+bool replace(std::string& str, const std::string& from, const std::string& to);
+bool getEnv(const std::string &key, std::string &value);
 
 } // namespace hcl
 } // namespace mlir

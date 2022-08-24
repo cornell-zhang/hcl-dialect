@@ -862,6 +862,38 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
   std::reverse(producerIVs.begin(), producerIVs.end());
   requested_depth = cnt_depth - requested_depth + 1;
 
+  // find loop bounds
+  SmallVector<int64_t, 4> consumerLBs;
+  SmallVector<int64_t, 4> consumerUBs;
+  SmallVector<int64_t, 4> producerLBs;
+  SmallVector<int64_t, 4> producerUBs;
+  consumerFor.walk([&](AffineForOp forOp) {
+    auto lbMap = forOp.getLowerBoundMap();
+    auto ubMap = forOp.getUpperBoundMap();
+    int64_t lb = lbMap.getConstantResults()[0];
+    int64_t ub = ubMap.getConstantResults()[0];
+    consumerLBs.push_back(lb);
+    consumerUBs.push_back(ub);
+    return WalkResult::advance();
+  });
+  producerFor.walk([&](AffineForOp forOp) {
+    auto lbMap = forOp.getLowerBoundMap();
+    auto ubMap = forOp.getUpperBoundMap();
+    int64_t lb = lbMap.getConstantResults()[0];
+    int64_t ub = ubMap.getConstantResults()[0];
+    producerLBs.push_back(lb);
+    producerUBs.push_back(ub);
+  });
+  SmallVector<int64_t, 4> LBdiff;
+  SmallVector<int64_t, 4> UBdiff;
+  int64_t all_diff = 0;
+  for (unsigned i = 0; i < std::min(producerLBs.size(), consumerLBs.size());
+       i++) {
+    LBdiff.push_back(producerLBs[i] - consumerLBs[i]);
+    UBdiff.push_back(producerUBs[i] - consumerUBs[i]);
+    all_diff += LBdiff[i] + UBdiff[i];
+  }
+
   // 4) Try to merge two loops
   // TODO: bug: 1) cannot support tensor type
   //            2) doesn't support memref.load, memref.store
@@ -900,6 +932,107 @@ LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
     }
     if (requested_depth < cnt_depth - 1)
       return success();
+  } else if (dependency.size() == 0 && all_diff != 0) {
+    // no dependency, just merge the loops
+    // but the loop bounds are not the same
+    // e.g. first loop bound is (10, 10), second loop bound is (12, 12)
+    //     then the fused loop bound is (12, 12)
+    //     we build if statements to guard the smaller loop's body operations
+    // 4.1) Check producer and consumer loop bounds, which one has smaller
+    // bound?
+    bool LBconsistency = std::all_of(LBdiff.begin(), LBdiff.end(),
+                                     [](int64_t x) { return x > 0; }) ||
+                         std::all_of(LBdiff.begin(), LBdiff.end(),
+                                     [](int64_t x) { return x <= 0; });
+    bool UBconsistency = std::all_of(UBdiff.begin(), UBdiff.end(),
+                                     [](int64_t x) { return x > 0; }) ||
+                         std::all_of(UBdiff.begin(), UBdiff.end(),
+                                     [](int64_t x) { return x <= 0; });
+    if (!LBconsistency || !UBconsistency) {
+      computeAtOp.emitError(
+          "Cannot merge these two loops because one's loop bounds are not "
+          "consistently larger or smaller than the other's loop bounds");
+      return failure();
+    }
+    bool is_producer_smaller = true;
+    for (int i = 0; i < requested_depth; i++) {
+      if (producerUBs[i] - producerLBs[i] < consumerUBs[i] - consumerLBs[i]) {
+        is_producer_smaller = true && is_producer_smaller;
+      } else {
+        is_producer_smaller = false;
+      }
+    }
+    // 4.2) Build guard conditions
+    SmallVector<AffineExpr> constraints;
+    SmallVector<bool> eqFlags;
+    SmallVector<Value, 4> setOperands;
+    for (int depth_idx = 0; depth_idx < requested_depth; depth_idx++) {
+      OpBuilder builder(consumerFor);
+      auto producerLB = builder.getAffineConstantExpr(producerLBs[depth_idx]);
+      auto producerUB =
+          builder.getAffineConstantExpr(producerUBs[depth_idx] - 1);
+      auto consumerLB = builder.getAffineConstantExpr(consumerLBs[depth_idx]);
+      auto consumerUB =
+          builder.getAffineConstantExpr(consumerUBs[depth_idx] - 1);
+      if (is_producer_smaller) {
+        constraints.push_back(builder.getAffineDimExpr(depth_idx) - producerLB);
+        constraints.push_back(producerUB - builder.getAffineDimExpr(depth_idx));
+        eqFlags.push_back(false);
+        eqFlags.push_back(false);
+      } else {
+        constraints.push_back(builder.getAffineDimExpr(depth_idx) - consumerLB);
+        constraints.push_back(consumerUB - builder.getAffineDimExpr(depth_idx));
+        eqFlags.push_back(false);
+        eqFlags.push_back(false);
+      }
+      setOperands.push_back(consumerIVs[depth_idx]);
+    }
+
+    // 4.3) Build if statement
+    AffineForOp secondForOp = consumerFor;
+    getLoop(secondForOp, loop_name);
+    int curr_depth = 0;
+    AffineForOp firstForOp;
+    producerFor.walk([&](AffineForOp forOp) {
+      if (curr_depth++ == cnt_depth - requested_depth) {
+        firstForOp = forOp;
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    auto &firstBody = firstForOp.getBody()->getOperations();
+    auto &secondBody = secondForOp.getBody()->getOperations();
+
+    OpBuilder builder(secondForOp);
+    if (is_producer_smaller) {
+      builder.setInsertionPoint(&secondBody.front());
+    } else {
+      builder.setInsertionPoint(&firstBody.back());
+    }
+    auto ifCondSet = IntegerSet::get(requested_depth /*dimCount*/,
+                                     0 /*symbolCount*/, constraints, eqFlags);
+    auto ifOp = builder.create<AffineIfOp>(
+        consumerFor.getLoc(), ifCondSet, setOperands, /*withElseRegion*/ false);
+    auto &ifThenBody = ifOp.getThenBlock()->getOperations();
+
+    // 4.4) Build fused loop
+    if (is_producer_smaller) {
+      ifThenBody.splice(ifThenBody.begin(), firstBody, firstBody.begin(),
+                        std::prev(firstBody.end()));
+      for (int i = 0; i < requested_depth; ++i)
+        producerIVs[i].replaceAllUsesWith(consumerIVs[i]);
+      producerFor.erase();
+    } else {
+      ifThenBody.splice(ifThenBody.begin(), secondBody, secondBody.begin(),
+                        std::prev(secondBody.end()));
+      for (int i = 0; i < requested_depth; ++i)
+        consumerIVs[i].replaceAllUsesWith(producerIVs[i]);
+      // move producerFor to the end of consumerFor
+      producerFor->moveAfter(consumerFor.getOperation());
+      consumerFor.erase();
+    }
+    return success();
+
   } else {
     // strategy = FusionStrategy::Sibling;
     computeAtOp.emitWarning(
@@ -1089,7 +1222,9 @@ LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
 
 LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
+  // target is the target tensor to reuse
   auto target = reuseAtOp.target(); // return a Value type
+  // the loop at which level the target tensor is reused
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(reuseAtOp.axis().getDefiningOp());
   const auto loop_name = loopHandle.loop_name();
@@ -1098,7 +1233,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
-  // 2) Find the requested stage
+  // 2) Find the requested stage (loop nest)
+  // the outermost loop of the target loop nest
   AffineForOp rootForOp;
   if (failed(getStage(f, rootForOp, op_name))) {
     f.emitError("Cannot find Stage ") << op_name.str();
@@ -1114,6 +1250,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 4) Find (non-)reduction loops
+  // collect info about nonReductionLoops, spatial loops, and reduction loops
   AffineLoopBand nonReductionLoops;
   AffineLoopBand previousShiftLoops;
   // InductionVar -> Loop upper bound
@@ -1153,13 +1290,21 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   int cntLoad = 0;
   DenseMap<AffineExpr, Value> dim2iv; // dim -> induction var
   reuseLoop.walk([&](AffineLoadOp loadOp) {
+    // Note: affine.load operation's affine map can have arbitrary operands
+    // e.g. affine.load %v[%v0 + %v1, %v2 + %v3] has this affine map:
+    // (d0, d1, d2, d3) -> (d0 + d1, d2 + d3)
+    // the affine map operands are: %v0, %v1, %v2, %v3
     if (loadOp.getOperand(0) != target)
       return WalkResult::advance();
     cntLoad++;
-    for (int i = 0; i < (int)rank; ++i)
+    for (int i = 0; i < (int)rank; ++i) {
+      // loadOp.getAffineMap().getResult(i) is the affine expression of the i-th
+      // dimension. Such as d0+d1, d1+d2
       originalLoadExprs[i].push_back(loadOp.getAffineMap().getResult(i));
+    }
     OpBuilder builder(loadOp);
     for (auto operandItem : llvm::enumerate(loadOp.getMapOperands())) {
+      // operandItem.value() is the i-th affine map operand.
       dim2iv[builder.getAffineDimExpr(operandItem.index())] =
           operandItem.value();
     }
@@ -1258,9 +1403,29 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             axis = j;
           }
         } else if (expr.isa<AffineBinaryOpExpr>()) {
-          if (operands[operandIdx++] ==
-              nonReductionLoops[loopAxis].getInductionVar())
+          auto targetIV = nonReductionLoops[loopAxis].getInductionVar();
+          if (operands[operandIdx] == targetIV) {
+            // if the loadOp's AffineMap operand at operandIdx
+            // is the induction var of the reuse loop, then
+            // the target reuse axis is the current j-th axis
             axis = j;
+          } 
+          // TODO(Niansong): this is still problematic 
+          // else if (auto applyOp = dyn_cast<AffineApplyOp>(
+          //                operands[operandIdx].getDefiningOp())) {
+            // However, the reuse loop can be transformed
+            // so the induction var may not directly be the
+            // loadOp's AffineMap operand at operandIdx,
+            // instead, it is a result of affine.apply
+          //   for (auto applyOpOperand : applyOp.getOperands()) {
+          //     if (applyOpOperand == targetIV) {
+          //       axis = j;
+          //       break;
+          //     }
+          //   }
+          // }
+
+          operandIdx++;
           int cntDim = 0;
           for (int i = 0; i < numDims; ++i)
             if (expr.isFunctionOfDim(i))
@@ -1831,8 +1996,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
         auto loadMap = originalLoadOp.getAffineMap();
         int operandIdx = 0;
         int loadRank = 0;
-        int RLCnt = 0; // reduction loop count
-        int SLCnt = 0; // shift loop count
+        int RLCnt = 0; // reduction loop count (shift buffer loops inside `axis`)
+        int SLCnt = 0; // shift loop count (shift buffer loops outside `axis`)
         for (int i = 0; i < (int)rank; ++i) {
           auto expr = loadMap.getResult(i);
           if (i < axis) {
@@ -1889,8 +2054,31 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
                                             memAffineIndices);
       } else {
         SmallVector<Value> memAffineIndices;
-        for (auto forOp : nonReductionLoops)
-          memAffineIndices.push_back(forOp.getInductionVar());
+        for (int i = 0; i < (int)rank; ++i) {
+          AffineExpr baseExpr = originalLoadExprs[i][0];
+          // remove the reduction ivs from the baseExpr
+          if (baseExpr.isa<AffineDimExpr>()) {
+            memAffineIndices.push_back(dim2iv[baseExpr]);
+          } else if (baseExpr.isa<AffineBinaryOpExpr>()) {
+            auto expr = baseExpr.cast<AffineBinaryOpExpr>();
+            if (expr.getLHS().isa<AffineDimExpr>()) {
+              bool isReductionIV = reductionVars.count(dim2iv[expr.getLHS()]);
+              if (!isReductionIV) {
+                memAffineIndices.push_back(dim2iv[expr.getLHS()]);
+              }
+            }
+            if (expr.getRHS().isa<AffineDimExpr>()) {
+              bool isReductionIV = reductionVars.count(dim2iv[expr.getRHS()]);
+              if (!isReductionIV) {
+                memAffineIndices.push_back(dim2iv[expr.getRHS()]);
+              }
+            }
+          } else {
+            memAffineIndices.push_back(builder.create<arith::ConstantIndexOp>(
+                loc, baseExpr.dyn_cast<AffineConstantExpr>().getValue()));
+          }
+        }
+
         std::size_t size = memAffineIndices.size();
         for (unsigned int j = size - shiftForOps.size(); j < size; ++j) {
           memAffineIndices[j] =

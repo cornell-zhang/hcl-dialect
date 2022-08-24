@@ -5,7 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl-c/Dialect/Registration.h"
-#include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/Passes.h"
 #include "hcl/Transforms/Passes.h"
 
 #include "mlir/Conversion/Passes.h"

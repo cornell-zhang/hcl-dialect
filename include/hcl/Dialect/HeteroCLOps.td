@@ -763,13 +763,24 @@ def LogicalOrOp : HeteroCL_Op<"logical_or"> {
 //===----------------------------------------------------------------------===//
 
 def PrintOp : HeteroCL_Op<"print"> {
-  let summary = "print operation";
+  let summary = "print value operation";
   let description = [{
-    The "print" builtin operation prints a given input memref, and produces
-    no results.
+    The "print" builtin operation prints a list of 
+    values (variadic), and produces no results.
   }];
 
-  // The print operation takes an input memref to print.
+  // The print operation takes a list of values (variadic).
+  let arguments = (ins Variadic<AnyType>:$input);
+  let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
+}
+
+def PrintMemRefOp : HeteroCL_Op<"print_memref"> {
+  let summary = "print memref operation";
+  let description = [{
+    The "print_memref" builtin operation prints a memref
+    and produces no results. We define our own print_memref
+    to support fixed-point type memrefs
+  }];
   let arguments = (ins AnyMemRef:$input);
   let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
 }

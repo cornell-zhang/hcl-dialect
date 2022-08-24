@@ -1,7 +1,7 @@
-// RUN: hcl-opt %s --jit | FileCheck %s
+// RUN: hcl-opt %s --lower-print-ops --jit | FileCheck %s
 // Input: 0x0000
-// By setting the third bit to 1, we get
-// Output: 0x0004
+// By setting the 3,2,1 bits to 110, we get
+// Output: 12 (0x000C)
 module {
   memref.global "private" @gv0 : memref<1xi32> = dense<[0]>
   func.func @top() -> () attributes {bit, itypes = "s", otypes = "s", top} {
@@ -9,14 +9,15 @@ module {
     %res =memref.alloc() : memref<1xi32>
     affine.for %arg1 = 0 to 1 {
       %1 = affine.load %0[%arg1] : memref<1xi32>
-      %c1_i32 = arith.constant 1 : i32
-      %c2 = arith.constant 2 : index
-      %val = arith.constant 1 : i1
-      hcl.set_bit(%1 : i32, %c2, %val : i1)
+      %lo = arith.constant 1 : index
+      %hi = arith.constant 3 : index
+      %val = arith.constant 6 : i3
+      hcl.set_slice(%1 : i32, %hi, %lo, %val : i3)
       affine.store %1, %res[%arg1] : memref<1xi32>
     } 
-// CHECK: 4
-    hcl.print(%res) {format="%.0f \n"}: memref<1xi32>
+// CHECK: 12
+    %v = affine.load %res[0] : memref<1xi32>
+    hcl.print(%v) {format="%d\n"}: i32
     return
   }
 }

@@ -17,11 +17,6 @@ def LoopTransformation : Pass<"loop-opt", "ModuleOp"> {
   let constructor = "mlir::hcl::createLoopTransformationPass()";
 }
 
-def FixedToInteger : Pass<"fixed-to-integer", "ModuleOp"> {
-  let summary = "Fixed-point operations to integer";
-  let constructor = "mlir::hcl::createFixedPointToIntegerPass()";
-}
-
 def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
   let summary = "Transform anywidth-integer input to 64-bit";
   let constructor = "mlir::hcl::createAnyWidthIntegerPass()";
@@ -30,16 +25,6 @@ def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
 def MoveReturnToInput : Pass<"return-to-input", "ModuleOp"> {
   let summary = "Move return values to input argument list";
   let constructor = "mlir::hcl::createMoveReturnToInputPass()";
-}
-
-def LowerCompositeType : Pass<"lower-composite-type", "ModuleOp"> {
-  let summary = "Lower composite types";
-  let constructor = "mlir::hcl::createLowerCompositeTypePass()";
-}
-
-def LowerBitOps : Pass<"lower-bit-ops", "ModuleOp"> {
-  let summary = "Lower bit operations";
-  let constructor = "mlir::hcl::createLowerBitOpsPass()";
 }
 
 def LegalizeCast : Pass<"legalize-cast", "ModuleOp"> {

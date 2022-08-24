@@ -13,9 +13,9 @@
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl-c/Translation/EmitIntelHLS.h"
 #include "hcl-c/Translation/EmitVivadoHLS.h"
-#include "hcl/Conversion/HCLToLLVM.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
+#include "hcl/Conversion/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"
@@ -137,6 +137,11 @@ static bool removeStrideMap(MlirModule &mlir_mod) {
   return applyRemoveStrideMap(mod);
 }
 
+static bool lowerPrintOps(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyLowerPrintOps(mod);
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -183,4 +188,5 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_bit_ops", &lowerBitOps);
   hcl_m.def("legalize_cast", &legalizeCast);
   hcl_m.def("remove_stride_map", &removeStrideMap);
+  hcl_m.def("lower_print_ops", &lowerPrintOps);
 }

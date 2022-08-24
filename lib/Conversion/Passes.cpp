@@ -4,7 +4,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/Passes.h"
 #include "mlir/Pass/PassManager.h"
 
 //===----------------------------------------------------------------------===//

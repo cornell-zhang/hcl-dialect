@@ -21,6 +21,9 @@
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -28,9 +31,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 
+
 #include "hcl/Dialect/HeteroCLDialect.h"
 
-#include "hcl/Conversion/HCLToLLVM.h"
+#include "hcl/Conversion/Passes.h"
+#include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
 #include <iostream>
@@ -94,6 +99,10 @@ static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
                                            llvm::cl::desc("Remove stride map"),
                                            llvm::cl::init(false));
 
+static llvm::cl::opt<bool> lowerPrintOps("lower-print-ops",
+                                         llvm::cl::desc("Lower print ops"),
+                                         llvm::cl::init(false));
+
 static llvm::cl::opt<bool> bufferization("bufferization",
                                          llvm::cl::desc("Bufferization"),
                                          llvm::cl::init(false));
@@ -136,6 +145,54 @@ int loadMLIR(mlir::MLIRContext &context,
 }
 
 int runJiTCompiler(mlir::ModuleOp module) {
+
+  std::string LLVM_BUILD_DIR;
+  bool found = mlir::hcl::getEnv("LLVM_BUILD_DIR", LLVM_BUILD_DIR);
+  if (!found) {
+    llvm::errs() << "Error: LLVM_BUILD_DIR not found\n";
+  }
+  std::string runner_utils = LLVM_BUILD_DIR + "/lib/libmlir_runner_utils.so";
+  std::string c_runner_utils =
+      LLVM_BUILD_DIR + "/lib/libmlir_c_runner_utils.so";
+  llvm::SmallVector<std::string, 4> shared_libs = {runner_utils, c_runner_utils};
+  llvm::SmallVector<llvm::SmallString<256>, 4> libPaths;
+  // Use absolute library path so that gdb can find the symbol table.
+  transform(
+      shared_libs, std::back_inserter(libPaths),
+      [](std::string libPath) {
+        llvm::SmallString<256> absPath(libPath.begin(), libPath.end());
+        cantFail(llvm::errorCodeToError(llvm::sys::fs::make_absolute(absPath)));
+        return absPath;
+      });
+
+  // Libraries that we'll pass to the ExecutionEngine for loading.
+  llvm::SmallVector<llvm::StringRef, 4> executionEngineLibs;
+
+  using MlirRunnerInitFn = void (*)(llvm::StringMap<void *> &);
+  using MlirRunnerDestroyFn = void (*)();
+
+  llvm::StringMap<void *> exportSymbols;
+  llvm::SmallVector<MlirRunnerDestroyFn> destroyFns;
+
+  // Handle libraries that do support mlir-runner init/destroy callbacks.
+  for (auto &libPath : libPaths) {
+    auto lib = llvm::sys::DynamicLibrary::getPermanentLibrary(libPath.c_str());
+    void *initSym = lib.getAddressOfSymbol("__mlir_runner_init");
+    void *destroySim = lib.getAddressOfSymbol("__mlir_runner_destroy");
+
+    // Library does not support mlir runner, load it with ExecutionEngine.
+    if (!initSym || !destroySim) {
+      executionEngineLibs.push_back(libPath);
+      continue;
+    }
+
+    auto initFn = reinterpret_cast<MlirRunnerInitFn>(initSym);
+    initFn(exportSymbols);
+
+    auto destroyFn = reinterpret_cast<MlirRunnerDestroyFn>(destroySim);
+    destroyFns.push_back(destroyFn);
+  }
+
   // Initialize LLVM targets.
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
@@ -146,12 +203,14 @@ int runJiTCompiler(mlir::ModuleOp module) {
 
   // An optimization pipeline to use within the execution engine.
   auto optPipeline = mlir::makeOptimizingTransformer(
-      /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0,
+      /*optLevel=*/0, /*sizeLevel=*/0,
       /*targetMachine=*/nullptr);
 
+  mlir::ExecutionEngineOptions engineOptions;
+  engineOptions.sharedLibPaths = executionEngineLibs;
   // Create an MLIR execution engine. The execution engine eagerly JIT-compiles
   // the module.
-  auto maybeEngine = mlir::ExecutionEngine::create(module);
+  auto maybeEngine = mlir::ExecutionEngine::create(module, engineOptions);
   assert(maybeEngine && "failed to construct an execution engine");
   auto &engine = maybeEngine.get();
 
@@ -205,6 +264,11 @@ int main(int argc, char **argv) {
 
   if (fixedPointToInteger) {
     pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
+  }
+
+  // lowerPrintOps should be run after lowering fixed point to integer
+  if (lowerPrintOps) {
+    pm.addPass(mlir::hcl::createLowerPrintOpsPass());
   }
 
   if (anyWidthInteger) {

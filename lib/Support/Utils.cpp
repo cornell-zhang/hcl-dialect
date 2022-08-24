@@ -6,9 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Support/Utils.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 using namespace mlir;
 using namespace hcl;
 
@@ -800,4 +803,105 @@ Value hcl::castIntMemRef(OpBuilder &builder, Location loc,
         }
       });
   return newMemRef;
+}
+
+bool mlir::hcl::replace(std::string &str, const std::string &from,
+                        const std::string &to) {
+  size_t start_pos = str.find(from);
+  if (start_pos == std::string::npos)
+    return false;
+  str.replace(start_pos, from.length(), to);
+  return true;
+}
+
+Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src,
+                           bool hasUnsignedAttr) {
+  Type t = src.getType();
+  Type I64 = rewriter.getIntegerType(64);
+  Type F64 = rewriter.getF64Type();
+  Value casted;
+  if (t.isa<IntegerType>()) {
+    size_t iwidth = t.getIntOrFloatBitWidth();
+    if (t.isUnsignedInteger() or hasUnsignedAttr) {
+      Value widthAdjusted;
+      if (iwidth < 64) {
+        widthAdjusted = rewriter.create<arith::ExtUIOp>(src.getLoc(), I64, src);
+      } else if (iwidth > 64) {
+        widthAdjusted =
+            rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
+      } else {
+        widthAdjusted = src;
+      }
+      casted =
+          rewriter.create<arith::UIToFPOp>(src.getLoc(), F64, widthAdjusted);
+    } else { // signed and signless integer
+      Value widthAdjusted;
+      if (iwidth < 64) {
+        widthAdjusted = rewriter.create<arith::ExtSIOp>(src.getLoc(), I64, src);
+      } else if (iwidth > 64) {
+        widthAdjusted =
+            rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
+      } else {
+        widthAdjusted = src;
+      }
+      casted =
+          rewriter.create<arith::SIToFPOp>(src.getLoc(), F64, widthAdjusted);
+    }
+  } else if (t.isa<FloatType>()) {
+    unsigned width = t.cast<FloatType>().getWidth();
+    if (width < 64) {
+      casted = rewriter.create<arith::ExtFOp>(src.getLoc(), F64, src);
+    } else if (width > 64) {
+      casted = rewriter.create<arith::TruncFOp>(src.getLoc(), F64, src);
+    } else {
+      casted = src;
+    }
+  } else if (t.isa<FixedType>()) {
+    unsigned width = t.cast<FixedType>().getWidth();
+    unsigned frac = t.cast<FixedType>().getFrac();
+    Value widthAdjusted;
+    if (width < 64) {
+      widthAdjusted = rewriter.create<arith::ExtSIOp>(src.getLoc(), I64, src);
+    } else if (width > 64) {
+      widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
+    } else {
+      widthAdjusted = src;
+    }
+    Value srcF64 =
+        rewriter.create<arith::SIToFPOp>(src.getLoc(), F64, widthAdjusted);
+    Value const_frac = rewriter.create<arith::ConstantOp>(
+        src.getLoc(), F64, rewriter.getFloatAttr(F64, std::pow(2, frac)));
+    casted =
+        rewriter.create<arith::DivFOp>(src.getLoc(), F64, srcF64, const_frac);
+  } else if (t.isa<UFixedType>()) {
+    unsigned width = t.cast<UFixedType>().getWidth();
+    unsigned frac = t.cast<UFixedType>().getFrac();
+    Value widthAdjusted;
+    if (width < 64) {
+      widthAdjusted = rewriter.create<arith::ExtUIOp>(src.getLoc(), I64, src);
+    } else if (width > 64) {
+      widthAdjusted = rewriter.create<arith::TruncIOp>(src.getLoc(), I64, src);
+    } else {
+      widthAdjusted = src;
+    }
+    Value srcF64 =
+        rewriter.create<arith::UIToFPOp>(src.getLoc(), F64, widthAdjusted);
+    Value const_frac = rewriter.create<arith::ConstantOp>(
+        src.getLoc(), F64, rewriter.getFloatAttr(F64, std::pow(2, frac)));
+    casted =
+        rewriter.create<arith::DivFOp>(src.getLoc(), F64, srcF64, const_frac);
+  } else {
+    llvm::errs() << src.getLoc() << "could not cast value of type "
+                 << src.getType() << " to F64.\n";
+  }
+  return casted;
+}
+
+bool mlir::hcl::getEnv(const std::string &key, std::string &value) {
+  char *env = std::getenv(key.c_str());
+  if (env) {
+    value = env;
+    return true;
+  }
+  return false;
 }

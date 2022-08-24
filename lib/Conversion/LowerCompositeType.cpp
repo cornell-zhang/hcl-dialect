@@ -11,12 +11,10 @@
 // in other backends as well, such as HLS backend.
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
-
+#include "hcl/Conversion/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
-#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"

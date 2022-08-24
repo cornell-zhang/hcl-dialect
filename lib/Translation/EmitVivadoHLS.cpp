@@ -524,6 +524,8 @@ bool ExprVisitor::visitOp(arith::CmpIOp op) {
   case arith::CmpIPredicate::uge:
     return emitter.emitBinary(op, ">="), true;
   }
+  assert(false && "unsupported compare type");
+  return false;
 }
 
 bool ExprVisitor::visitOp(hcl::CmpFixedOp op) {

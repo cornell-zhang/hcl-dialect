@@ -2003,8 +2003,6 @@ class StructConstructOp(ExprOp):
             self.build()
 
     def build(self):
-        # during build, all unsigned fields are converted to signless
-        # we also build type hint string for each field.
         self.built_op = self.op(
             self.dtype,
             self.fields,
@@ -2030,7 +2028,8 @@ class StructGetOp(ExprOp):
         # but this is no longer compatible with mlir.
         # self.dtype has to be a concrete MLIR type, for
         # the field value to be consumed by another operation.
-        # self.dtype = mlir_type_to_str(get_concrete_type(self.type)) # dtype str
+        if is_unsigned_type(self.dtype):
+            self.dtype = IntegerType.get_signless(get_bitwidth(self.dtype))
         self.built_op = self.op(
             self.dtype,
             self.struct.result,

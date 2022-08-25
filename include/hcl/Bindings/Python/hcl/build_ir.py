@@ -92,6 +92,12 @@ def is_hcl_mlir_type(dtype):
 
 
 def get_mlir_type(dtype):
+    """
+    Get MLIR type from string.
+    Note that the returned type is for ExprOp creation intead of ExprOp.build().
+    This is because signedness infomation is preserved.
+    i.e. "uint8" is returned as unsigned type instead of signless type. 
+    """
     if (
         is_integer_type(dtype)
         or is_floating_point_type(dtype)
@@ -1984,6 +1990,8 @@ class StructConstructOp(ExprOp):
             self.build()
 
     def build(self):
+        # during build, all unsigned fields are converted to signless
+
         self.built_op = self.op(
             self.dtype,
             self.fields,

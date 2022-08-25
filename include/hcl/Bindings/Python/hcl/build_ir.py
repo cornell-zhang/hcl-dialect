@@ -1587,6 +1587,35 @@ class CastOp(ExprOp):
                 op = None
             else:
                 op = hcl_d.FixedToFixedOp
+        elif is_struct_type(res_type) and is_struct_type(self.val.dtype):
+            # We don't actually cast between struct types,
+            # here we check if two structs are identical when all
+            # integer fields are signless.
+            res_field_types = res_type.field_types
+            val_field_types = self.val.dtype.field_types
+            if len(res_field_types) != len(val_field_types):
+                raise HCLValueError(
+                    "Casting between structs with different number of fields. " +
+                    f"src type: {self.val.dtype}, dst type: {res_type}"
+                )
+            for res_ftype, val_ftype in zip(res_field_types, val_field_types):
+                res_ftype = get_concrete_type(res_ftype)
+                val_ftype = get_concrete_type(val_ftype)
+                if is_integer_type(res_ftype) and is_integer_type(val_ftype):
+                    # check bitwidth
+                    if get_bitwidth(res_ftype) != get_bitwidth(val_ftype):
+                        raise HCLValueError(
+                            "Casting between structs with different field bitwidth. " +
+                            f"src type: {self.val.dtype}, dst type: {res_type}"
+                        )
+                else:
+                    # check if the field types are identical
+                    if res_ftype != val_ftype:
+                        raise HCLValueError(
+                            "Casting between structs with different field types. " +
+                            f"src type: {self.val.dtype}, dst type: {res_type}"
+                        )
+            op = None
         else:
             op = builtin.UnrealizedConversionCastOp
             DTypeWarning(

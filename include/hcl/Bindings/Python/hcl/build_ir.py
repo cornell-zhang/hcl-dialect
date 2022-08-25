@@ -1034,6 +1034,19 @@ class TensorOp(ExprOp):
 
     @property
     def memref_type(self):
+        if is_struct_type(self.dtype):
+            # Replace unsigned field types with signless types
+            new_field_types = []
+            for field_type in self.dtype.field_types:
+                field_type = get_concrete_type(field_type)
+                if is_unsigned_type(field_type):
+                    new_field_types.append(
+                        IntegerType.get_signless(get_bitwidth(field_type))
+                    )
+                else:
+                    new_field_types.append(field_type)
+            dtype = hcl_d.StructType.get(new_field_types)
+            return MemRefType.get(self.shape, dtype)
         dtype = get_mlir_type(self.dtype)
         if is_unsigned_type(self.dtype):
             dtype = IntegerType.get_signless(self.dtype.width)
@@ -1991,7 +2004,7 @@ class StructConstructOp(ExprOp):
 
     def build(self):
         # during build, all unsigned fields are converted to signless
-
+        # we also build type hint string for each field.
         self.built_op = self.op(
             self.dtype,
             self.fields,

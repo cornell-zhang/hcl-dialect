@@ -61,7 +61,7 @@ def is_unsigned_type(dtype):
 
 
 def is_signed_type(dtype):
-    return isinstance(dtype, IntegerType) and (dtype.is_unsigned or dtype.is_signless)
+    return isinstance(dtype, IntegerType) and dtype.is_signless
 
 
 def is_fixed_type(dtype):

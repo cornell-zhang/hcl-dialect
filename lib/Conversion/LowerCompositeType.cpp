@@ -58,6 +58,22 @@ void deadMemRefAllocElimination(func::FuncOp &func) {
   }
 }
 
+void deadAffineLoadElimination(func::FuncOp &func) {
+  SmallVector<Operation *, 8> affineLoadOps;
+  func.walk([&](Operation *op) {
+    if (auto affineLoadOp = dyn_cast<AffineLoadOp>(op)) {
+      affineLoadOps.push_back(affineLoadOp);
+    }
+  });
+  std::reverse(affineLoadOps.begin(), affineLoadOps.end());
+  for (auto op : affineLoadOps) {
+    auto v = op->getResult(0);
+    if (v.use_empty()) {
+      op->erase();
+    }
+  }
+}
+
 void lowerStructType(func::FuncOp &func) {
 
   SmallVector<Operation *, 10> structGetOps;
@@ -134,10 +150,7 @@ void lowerStructType(func::FuncOp &func) {
             // Find the struct_construct op
             auto struct_construct_op = dyn_cast<StructConstructOp>(
                 storeOp.getOperand(0).getDefiningOp());
-            for (auto operand : storeOp.getAffineMap().getResults()) {
-              llvm::outs() << operand << "\n";
-            }
-            auto newStoreOp = builder.create<AffineStoreOp>(
+            builder.create<AffineStoreOp>(
                 loc, struct_construct_op.getOperand(field_index), field_memref,
                 storeOp.getAffineMap(), storeOp.getIndices());
           }
@@ -154,16 +167,12 @@ void lowerStructType(func::FuncOp &func) {
       Value loaded_field = load_builder.create<AffineLoadOp>(
           loc, field_memrefs[index], affine_load.getAffineMap(), affine_load.getIndices());
       struct_field.replaceAllUsesWith(loaded_field);
-      op->erase();
-
-      // erase the loadOp from struct_memref
-      defOp->erase();
-
+      op->erase(); // erase structGetOp
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
       // Case 2: defOp is a struct construction op
       Value replacement = defOp->getOperand(index);
       struct_field.replaceAllUsesWith(replacement);
-      op->erase();
+      op->erase(); // erase structGetOp
     } else {
       llvm_unreachable("unexpected defOp for structGetOp");
     }
@@ -171,6 +180,7 @@ void lowerStructType(func::FuncOp &func) {
 
 
   // Run DCE after all struct get is folded
+  deadAffineLoadElimination(func);
   deadStructConstructElimination(func);
   deadMemRefAllocElimination(func);
 }

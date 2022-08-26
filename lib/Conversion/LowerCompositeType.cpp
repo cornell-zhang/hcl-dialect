@@ -134,9 +134,12 @@ void lowerStructType(func::FuncOp &func) {
             // Find the struct_construct op
             auto struct_construct_op = dyn_cast<StructConstructOp>(
                 storeOp.getOperand(0).getDefiningOp());
-            builder.create<AffineStoreOp>(
+            for (auto operand : storeOp.getAffineMap().getResults()) {
+              llvm::outs() << operand << "\n";
+            }
+            auto newStoreOp = builder.create<AffineStoreOp>(
                 loc, struct_construct_op.getOperand(field_index), field_memref,
-                storeOp.getIndices());
+                storeOp.getAffineMap(), storeOp.getIndices());
           }
           // erase the storeOp that stores to the struct memref
           if (erase_struct_construct) {
@@ -149,7 +152,7 @@ void lowerStructType(func::FuncOp &func) {
       // Step3: replace structGetOp with load from field memrefs
       OpBuilder load_builder(op);
       Value loaded_field = load_builder.create<AffineLoadOp>(
-          loc, field_memrefs[index], affine_load.getIndices());
+          loc, field_memrefs[index], affine_load.getAffineMap(), affine_load.getIndices());
       struct_field.replaceAllUsesWith(loaded_field);
       op->erase();
 
@@ -165,6 +168,7 @@ void lowerStructType(func::FuncOp &func) {
       llvm_unreachable("unexpected defOp for structGetOp");
     }
   }
+
 
   // Run DCE after all struct get is folded
   deadStructConstructElimination(func);

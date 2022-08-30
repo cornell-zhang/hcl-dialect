@@ -952,6 +952,13 @@ class TensorSlice(ExprOp):
                 dim_size = (index.stop - index.start) / step
                 shape.append(int(dim_size))
                 dims += 1
+            # index is an expr
+            elif isinstance(index, ExprOp):
+                if not hasattr(index, "dtype"):
+                    raise HCLValueError("{} doesn't have dtype".format(index))
+                if not is_integer_type(index.dtype):
+                    raise HCLValueError("{} is not an integer type".format(index))
+                dims += 1
         for i, dim in enumerate(self.full_shape):
             if i < dims:
                 continue

@@ -2739,17 +2739,31 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
 
 def make_while(cond, ip=None):
     # suppose in a imperative context (build in-place)
-    if not isinstance(cond, CmpOp):
-        raise HCLValueError("`if` operation condition should be CmpOp")
+    if not isinstance(cond, (CmpOp, LogicalAndOp, LogicalOrOp)):
+        raise HCLValueError("`if` operation condition should be CmpOp, LogicalAndOp, or LogicalOrOp")
+
     while_op = scf.WhileOp([], [], ip=ip)
     while_op.before.blocks.append(*[])
     while_op.after.blocks.append(*[])
     GlobalInsertionPoint.save(while_op.before.blocks[0])
-    remover = ASTVisitor(mode="remove")
-    remover.visit(cond)
-    builder = ASTVisitor(mode="build")
-    builder.visit(cond)
-    scf.ConditionOp(cond.result, [], ip=GlobalInsertionPoint.get())
+    if cond.built_op is not None:
+        remover = ASTVisitor(mode="remove")
+        remover.visit(cond)
+    if not isinstance(cond, LogicalAndOp):
+        builder = ASTVisitor(mode="build")
+        builder.visit(cond)
+        cond_result = cond.result
+    else:
+        # fallback: build the conditions as arith.AndOp
+        lst = cond.cond_lst
+        res = lst[0]
+        for i, single_cond in enumerate(lst):
+            if i == 0:
+                continue
+            res = AndOp(res, single_cond)
+            res.build()
+        cond_result = res.result
+    scf.ConditionOp(cond_result, [], ip=GlobalInsertionPoint.get())
     GlobalInsertionPoint.restore()
     return while_op
 

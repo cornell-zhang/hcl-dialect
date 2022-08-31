@@ -1410,11 +1410,9 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             // the target reuse axis is the current j-th axis
             axis = j;
           }
-          // TODO(Niansong): this is still problematic
-          // else if (auto applyOp = dyn_cast<AffineApplyOp>(
-          //  operands[operandIdx].getDefiningOp())) {
 
-          else if (isa<AffineApplyOp>(operands[operandIdx].getDefiningOp())) {
+          else if (!operands[operandIdx].isa<BlockArgument>() &&
+                   isa<AffineApplyOp>(operands[operandIdx].getDefiningOp())) {
             // However, the reuse loop can be transformed
             // so the induction var may not directly be the
             // loadOp's AffineMap operand at operandIdx,
@@ -2061,7 +2059,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
           if (operand.isa<BlockArgument>())
             continue;
 
-          // if the operand's defining op is an affine.apply op, we need to 
+          // if the operand's defining op is an affine.apply op, we need to
           // create identical affine.apply ops for the load op
           // there might be a cascade of affine.apply ops, so we need to
           // clone them all
@@ -2083,24 +2081,28 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
               }
             }
             std::reverse(affineApplyOps.begin(), affineApplyOps.end());
-            SmallVector<Operation*, 4> newAffineApplyOps;
+            SmallVector<Operation *, 4> newAffineApplyOps;
             for (auto op : affineApplyOps) {
               auto cloned_op = builder.clone(*op);
               newAffineApplyOps.push_back(cloned_op);
             }
             // Make sure the new affine.apply ops have the correct
             // operands
-            for (unsigned op_idx = 0; op_idx < affineApplyOps.size(); ++op_idx) {
+            for (unsigned op_idx = 0; op_idx < affineApplyOps.size();
+                 ++op_idx) {
               auto orgOp = affineApplyOps[op_idx];
               auto newOp = newAffineApplyOps[op_idx];
-              for (unsigned opr_idx = 0; opr_idx < orgOp->getNumOperands(); ++opr_idx) {
+              for (unsigned opr_idx = 0; opr_idx < orgOp->getNumOperands();
+                   ++opr_idx) {
                 auto orgOpr = orgOp->getOperand(opr_idx);
                 if (orgOpr.isa<BlockArgument>())
                   continue;
                 // get the index of orgOpr.getDefiningOp() in affineApplyOps
-                auto oprDefOp_idx = getIndex(affineApplyOps, orgOpr.getDefiningOp());
+                auto oprDefOp_idx =
+                    getIndex(affineApplyOps, orgOpr.getDefiningOp());
                 if (oprDefOp_idx == -1)
-                  (*orgOp).emitError("operand's defining op is not found in affineApplyOps");
+                  (*orgOp).emitError(
+                      "operand's defining op is not found in affineApplyOps");
                 // update the new affine.apply op's operands
                 auto newOprDefOp = newAffineApplyOps[oprDefOp_idx];
                 newOp->setOperand(opr_idx, newOprDefOp->getResult(0));
@@ -2108,7 +2110,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             }
             // Update the operand in memAffineIndices
             auto lastNewAffineApplyOp = newAffineApplyOps.back();
-            memAffineIndices[operand_item.index()] = lastNewAffineApplyOp->getResult(0);
+            memAffineIndices[operand_item.index()] =
+                lastNewAffineApplyOp->getResult(0);
           }
         }
         load = builder.create<AffineLoadOp>(loc, target, affineMap,

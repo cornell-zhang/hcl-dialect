@@ -1409,21 +1409,25 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             // is the induction var of the reuse loop, then
             // the target reuse axis is the current j-th axis
             axis = j;
-          } 
-          // TODO(Niansong): this is still problematic 
+          }
+          // TODO(Niansong): this is still problematic
           // else if (auto applyOp = dyn_cast<AffineApplyOp>(
-          //                operands[operandIdx].getDefiningOp())) {
+          //  operands[operandIdx].getDefiningOp())) {
+
+          else if (isa<AffineApplyOp>(operands[operandIdx].getDefiningOp())) {
             // However, the reuse loop can be transformed
             // so the induction var may not directly be the
             // loadOp's AffineMap operand at operandIdx,
             // instead, it is a result of affine.apply
-          //   for (auto applyOpOperand : applyOp.getOperands()) {
-          //     if (applyOpOperand == targetIV) {
-          //       axis = j;
-          //       break;
-          //     }
-          //   }
-          // }
+            auto applyOp =
+                dyn_cast<AffineApplyOp>(operands[operandIdx].getDefiningOp());
+            for (auto applyOpOperand : applyOp.getOperands()) {
+              if (applyOpOperand == targetIV) {
+                axis = j;
+                break;
+              }
+            }
+          }
 
           operandIdx++;
           int cntDim = 0;
@@ -1996,7 +2000,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
         auto loadMap = originalLoadOp.getAffineMap();
         int operandIdx = 0;
         int loadRank = 0;
-        int RLCnt = 0; // reduction loop count (shift buffer loops inside `axis`)
+        int RLCnt =
+            0; // reduction loop count (shift buffer loops inside `axis`)
         int SLCnt = 0; // shift loop count (shift buffer loops outside `axis`)
         for (int i = 0; i < (int)rank; ++i) {
           auto expr = loadMap.getResult(i);
@@ -2050,6 +2055,62 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
         }
         auto affineMap =
             AffineMap::get(loadRank, 0, loadAffineExpr, builder.getContext());
+        for (auto operand_item : llvm::enumerate(memAffineIndices)) {
+          auto operand = operand_item.value();
+          // if operand is block argument, skip it
+          if (operand.isa<BlockArgument>())
+            continue;
+
+          // if the operand's defining op is an affine.apply op, we need to 
+          // create identical affine.apply ops for the load op
+          // there might be a cascade of affine.apply ops, so we need to
+          // clone them all
+          if (isa<AffineApplyOp>(operand.getDefiningOp())) {
+            SmallVector<Operation *, 4> affineApplyOps;
+            SmallVector<Operation *, 2> worklist{operand.getDefiningOp()};
+            while (!worklist.empty()) {
+              auto front = worklist[0];
+              worklist.erase(worklist.begin()); // pop front
+              if (isa<AffineApplyOp>(front)) {
+                affineApplyOps.push_back(front);
+                for (auto opr : front->getOperands()) {
+                  if (opr.isa<BlockArgument>())
+                    continue;
+                  if (isa<AffineApplyOp>(opr.getDefiningOp())) {
+                    worklist.push_back(opr.getDefiningOp());
+                  }
+                }
+              }
+            }
+            std::reverse(affineApplyOps.begin(), affineApplyOps.end());
+            SmallVector<Operation*, 4> newAffineApplyOps;
+            for (auto op : affineApplyOps) {
+              auto cloned_op = builder.clone(*op);
+              newAffineApplyOps.push_back(cloned_op);
+            }
+            // Make sure the new affine.apply ops have the correct
+            // operands
+            for (unsigned op_idx = 0; op_idx < affineApplyOps.size(); ++op_idx) {
+              auto orgOp = affineApplyOps[op_idx];
+              auto newOp = newAffineApplyOps[op_idx];
+              for (unsigned opr_idx = 0; opr_idx < orgOp->getNumOperands(); ++opr_idx) {
+                auto orgOpr = orgOp->getOperand(opr_idx);
+                if (orgOpr.isa<BlockArgument>())
+                  continue;
+                // get the index of orgOpr.getDefiningOp() in affineApplyOps
+                auto oprDefOp_idx = getIndex(affineApplyOps, orgOpr.getDefiningOp());
+                if (oprDefOp_idx == -1)
+                  (*orgOp).emitError("operand's defining op is not found in affineApplyOps");
+                // update the new affine.apply op's operands
+                auto newOprDefOp = newAffineApplyOps[oprDefOp_idx];
+                newOp->setOperand(opr_idx, newOprDefOp->getResult(0));
+              }
+            }
+            // Update the operand in memAffineIndices
+            auto lastNewAffineApplyOp = newAffineApplyOps.back();
+            memAffineIndices[operand_item.index()] = lastNewAffineApplyOp->getResult(0);
+          }
+        }
         load = builder.create<AffineLoadOp>(loc, target, affineMap,
                                             memAffineIndices);
       } else {
@@ -2109,43 +2170,44 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 16) Remove all the useless operations
-  for (Operation *op : opToRemove) {
-    op->erase();
-  }
+  // for (Operation *op : opToRemove) {
+  //   op->erase();
+  // }
 
   // 17) Merge loops with the same bound
-  if (previousShiftLoops.size() > 0 && cntIf < 2) {
-    // TODO: only support one shift loop now
-    AffineForOp firstLoop = previousShiftLoops.back();
-    AffineForOp secondLoop = nonReductionLoops[loopAxis];
-    if (firstLoop.getConstantUpperBound() ==
-        secondLoop.getConstantUpperBound()) {
-      auto &firstBody = firstLoop.getBody()->getOperations();
-      auto &secondBody = secondLoop.getBody()->getOperations();
-      auto firstOpInSecondLoop = secondBody.begin();
-      // do not need affine.yield op, so that's why using std::prev
-      secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
-                        std::prev(firstBody.end()));
-      firstLoop.getInductionVar().replaceAllUsesWith(
-          secondLoop.getInductionVar());
-      firstLoop.erase();
-      auto parent = secondLoop->getParentOp();
-      if (llvm::isa<AffineIfOp>(parent)) {
-        auto ifOp = llvm::cast<AffineIfOp>(parent);
-        auto &ifBody = ifOp.getThenBlock()->getOperations();
-        auto &parentBody =
-            nonReductionLoops[loopAxis - 1].getBody()->getOperations();
-        parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
-                          std::prev(ifBody.end()));
-        // skip the previous reuse part
-        ifOp->moveBefore(&(*firstOpInSecondLoop));
-        // move the rest into the if body
-        auto &secondBody = secondLoop.getBody()->getOperations();
-        ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
-                      std::prev(secondBody.end()));
-      }
-    }
-  }
+  // TODO(Niansong): this needs more checking before merge
+  // if (previousShiftLoops.size() > 0 && cntIf < 2) {
+  //   // TODO: only support one shift loop now
+  //   AffineForOp firstLoop = previousShiftLoops.back();
+  //   AffineForOp secondLoop = nonReductionLoops[loopAxis];
+  //   if (firstLoop.getConstantUpperBound() ==
+  //       secondLoop.getConstantUpperBound()) {
+  //     auto &firstBody = firstLoop.getBody()->getOperations();
+  //     auto &secondBody = secondLoop.getBody()->getOperations();
+  //     auto firstOpInSecondLoop = secondBody.begin();
+  //     // do not need affine.yield op, so that's why using std::prev
+  //     secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+  //                       std::prev(firstBody.end()));
+  //     firstLoop.getInductionVar().replaceAllUsesWith(
+  //         secondLoop.getInductionVar());
+  //     firstLoop.erase();
+  //     auto parent = secondLoop->getParentOp();
+  //     if (llvm::isa<AffineIfOp>(parent)) {
+  //       auto ifOp = llvm::cast<AffineIfOp>(parent);
+  //       auto &ifBody = ifOp.getThenBlock()->getOperations();
+  //       auto &parentBody =
+  //           nonReductionLoops[loopAxis - 1].getBody()->getOperations();
+  //       parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
+  //                         std::prev(ifBody.end()));
+  //       // skip the previous reuse part
+  //       ifOp->moveBefore(&(*firstOpInSecondLoop));
+  //       // move the rest into the if body
+  //       auto &secondBody = secondLoop.getBody()->getOperations();
+  //       ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
+  //                     std::prev(secondBody.end()));
+  //     }
+  //   }
+  // }
 
   return success();
 }

@@ -152,6 +152,8 @@ def get_concrete_type(dtype):
         return hcl_d.UFixedType(dtype)
     elif hcl_d.StructType.isinstance(dtype):
         return hcl_d.StructType(dtype)
+    elif IndexType.isinstance(dtype):
+        return IndexType(dtype)
     else:
         raise DTypeError("Unrecognized data type: {}".format(dtype))
 
@@ -956,8 +958,8 @@ class TensorSlice(ExprOp):
             elif isinstance(index, ExprOp):
                 if not hasattr(index, "dtype"):
                     raise HCLValueError("{} doesn't have dtype".format(index))
-                if not is_integer_type(index.dtype):
-                    raise HCLValueError("{} is not an integer type".format(index))
+                if not (is_integer_type(index.dtype) or isinstance(index, IterVar)): 
+                    raise HCLValueError("{} is not an integer type or index type".format(index))
                 dims += 1
         for i, dim in enumerate(self.full_shape):
             if i < dims:

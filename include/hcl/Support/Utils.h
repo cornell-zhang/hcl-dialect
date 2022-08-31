@@ -209,8 +209,8 @@ bool getEnv(const std::string &key, std::string &value);
 //===----------------------------------------------------------------------===//
 namespace mlir{
 namespace hcl{
-template <class T>
-int getIndex(SmallVector<T> v, T target);
+// TODO(Niansong): make this template function
+int getIndex(SmallVector<Operation*, 4> v, Operation* target);
 } // namespace hcl
 } // namespace mlir
 

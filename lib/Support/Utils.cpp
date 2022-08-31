@@ -905,3 +905,21 @@ bool mlir::hcl::getEnv(const std::string &key, std::string &value) {
   }
   return false;
 }
+
+template <class T>
+int mlir::hcl::getIndex(SmallVector<T> v, T target)
+{
+    auto it = find(v.begin(), v.end(), target);
+  
+    // If element was found
+    if (it != v.end()) 
+    {
+        int index = it - v.begin();
+        return index;       
+    }
+    else {
+        // If the element is not
+        // present in the vector
+        return -1;
+    }
+}

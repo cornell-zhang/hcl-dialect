@@ -203,4 +203,15 @@ bool getEnv(const std::string &key, std::string &value);
 } // namespace hcl
 } // namespace mlir
 
+
+//===----------------------------------------------------------------------===//
+// SmallVector utils
+//===----------------------------------------------------------------------===//
+namespace mlir{
+namespace hcl{
+template <class T>
+int getIndex(SmallVector<T> v, T target);
+} // namespace hcl
+} // namespace mlir
+
 #endif // HCL_ANALYSIS_UTILS_H

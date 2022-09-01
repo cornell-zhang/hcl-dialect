@@ -922,3 +922,26 @@ int mlir::hcl::getIndex(SmallVector<Operation*, 4> v, Operation* target)
         return -1;
     }
 }
+
+// Find the which dimension of affine.store the
+// loop induction variable operates on.
+// e.g. 
+// for %i = 0; %i < 10; %i++
+//   for %j = 0; %j < 10; %j++
+//      %ii = affine.apply(%i) #some_map
+//      affine.store %some_value %some_memref[%ii, %j]
+// If we want to find the memref axis of %some_memref that
+// %i operates on, the return result is 0.
+int mlir::hcl::findMemRefAxisFromIV(AffineStoreOp store, Value iv)
+{
+    auto memrefRank = store.getMemRef().getType().cast<MemRefType>().getRank();
+    auto indices = store.getIndices();
+    for (int i = 0; i < memrefRank; i++)
+    {
+        if ( iv == indices[i])
+        {
+            return i;
+        }
+    }
+    return -1;
+}

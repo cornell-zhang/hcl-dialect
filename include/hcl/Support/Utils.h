@@ -118,6 +118,8 @@ enum Dependency { RAW, RAR, WAR, WAW };
 bool analyzeDependency(const AffineForOp &forOpA, const AffineForOp &forOpB,
                        SmallVectorImpl<Dependency> &dependency);
 
+int findMemRefAxisFromIV(AffineStoreOp storeOp, Value iv);
+
 //===----------------------------------------------------------------------===//
 // PtrLikeMemRefAccess Struct Declaration
 //===----------------------------------------------------------------------===//

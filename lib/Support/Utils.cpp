@@ -906,42 +906,61 @@ bool mlir::hcl::getEnv(const std::string &key, std::string &value) {
   return false;
 }
 
-int mlir::hcl::getIndex(SmallVector<Operation*, 4> v, Operation* target)
-{
-    auto it = std::find(v.begin(), v.end(), target);
-  
-    // If element was found
-    if (it != v.end()) 
-    {
-        int index = it - v.begin();
-        return index;       
-    }
-    else {
-        // If the element is not
-        // present in the vector
-        return -1;
-    }
+int mlir::hcl::getIndex(SmallVector<Operation *, 4> v, Operation *target) {
+  auto it = std::find(v.begin(), v.end(), target);
+
+  // If element was found
+  if (it != v.end()) {
+    int index = it - v.begin();
+    return index;
+  } else {
+    // If the element is not
+    // present in the vector
+    return -1;
+  }
 }
+
+bool chaseAffineApply(Value iv, Value target) {
+  for (auto &use : iv.getUses()) {
+    auto op = use.getOwner();
+    if (dyn_cast<AffineApplyOp>(op)) {
+      if (op->getResult(0) == target) {
+        return true;
+      } else {
+        return chaseAffineApply(op->getResult(0), target);
+      }
+    } else {
+      continue;
+    }
+  }
+  return false;
+};
 
 // Find the which dimension of affine.store the
 // loop induction variable operates on.
-// e.g. 
+// e.g.
 // for %i = 0; %i < 10; %i++
 //   for %j = 0; %j < 10; %j++
 //      %ii = affine.apply(%i) #some_map
 //      affine.store %some_value %some_memref[%ii, %j]
 // If we want to find the memref axis of %some_memref that
 // %i operates on, the return result is 0.
-int mlir::hcl::findMemRefAxisFromIV(AffineStoreOp store, Value iv)
-{
-    auto memrefRank = store.getMemRef().getType().cast<MemRefType>().getRank();
-    auto indices = store.getIndices();
-    for (int i = 0; i < memrefRank; i++)
-    {
-        if ( iv == indices[i])
-        {
-            return i;
-        }
+int mlir::hcl::findMemRefAxisFromIV(AffineStoreOp store, Value iv) {
+  auto memrefRank = store.getMemRef().getType().cast<MemRefType>().getRank();
+  auto indices = store.getIndices();
+  for (int i = 0; i < memrefRank; i++) {
+    if (iv == indices[i]) {
+      // if it is a direct match
+      return i;
+    } else {
+      // try to chase down the affine.apply op
+      // see if any result of the affine.apply op
+      // matches indices[i].
+      // This essentially is a DFS search.
+      if (chaseAffineApply(iv, indices[i])) {
+        return i;
+      }
     }
-    return -1;
+  }
+  return -1;
 }

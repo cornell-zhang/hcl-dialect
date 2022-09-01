@@ -2181,7 +2181,6 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 17) Merge loops with the same bound
-  // TODO(Niansong): this needs more checking before merge
   if (previousShiftLoops.size() > 0 && cntIf < 2) {
     // TODO: only support one shift loop now
     AffineForOp firstLoop = previousShiftLoops.back();

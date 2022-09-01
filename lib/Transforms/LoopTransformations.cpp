@@ -1676,10 +1676,13 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
     // update the store to output tensor
     OpBuilder rewriter(op);
     SmallVector<AffineExpr> memAffineIndices;
-    auto oldAffineMap = op.getAffineMap();
+    auto oldAffineMap = op.getAffineMap(); 
+    // we need to find the correct memref axis from loopAxis
     for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e; ++i) {
       AffineExpr idx;
-      if ((int)i == loopAxis)
+      Value targetIV = nonReductionLoops[loopAxis].getInductionVar();
+      int targetAxis = findMemRefAxisFromIV(op, targetIV);
+      if ((int)i == targetAxis)
         // the iteration space now is related to the input tensor
         if (stride != 1) {
           auto strideCst = rewriter.getAffineConstantExpr(stride);
@@ -2178,39 +2181,39 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   }
 
   // 17) Merge loops with the same bound
-  // // TODO(Niansong): this needs more checking before merge
-  // if (previousShiftLoops.size() > 0 && cntIf < 2) {
-  //   // TODO: only support one shift loop now
-  //   AffineForOp firstLoop = previousShiftLoops.back();
-  //   AffineForOp secondLoop = nonReductionLoops[loopAxis];
-  //   if (firstLoop.getConstantUpperBound() ==
-  //       secondLoop.getConstantUpperBound()) {
-  //     auto &firstBody = firstLoop.getBody()->getOperations();
-  //     auto &secondBody = secondLoop.getBody()->getOperations();
-  //     auto firstOpInSecondLoop = secondBody.begin();
-  //     // do not need affine.yield op, so that's why using std::prev
-  //     secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
-  //                       std::prev(firstBody.end()));
-  //     firstLoop.getInductionVar().replaceAllUsesWith(
-  //         secondLoop.getInductionVar());
-  //     firstLoop.erase();
-  //     auto parent = secondLoop->getParentOp();
-  //     if (llvm::isa<AffineIfOp>(parent)) {
-  //       auto ifOp = llvm::cast<AffineIfOp>(parent);
-  //       auto &ifBody = ifOp.getThenBlock()->getOperations();
-  //       auto &parentBody =
-  //           nonReductionLoops[loopAxis - 1].getBody()->getOperations();
-  //       parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
-  //                         std::prev(ifBody.end()));
-  //       // skip the previous reuse part
-  //       ifOp->moveBefore(&(*firstOpInSecondLoop));
-  //       // move the rest into the if body
-  //       auto &secondBody = secondLoop.getBody()->getOperations();
-  //       ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
-  //                     std::prev(secondBody.end()));
-  //     }
-  //   }
-  // }
+  // TODO(Niansong): this needs more checking before merge
+  if (previousShiftLoops.size() > 0 && cntIf < 2) {
+    // TODO: only support one shift loop now
+    AffineForOp firstLoop = previousShiftLoops.back();
+    AffineForOp secondLoop = nonReductionLoops[loopAxis];
+    if (firstLoop.getConstantUpperBound() ==
+        secondLoop.getConstantUpperBound()) {
+      auto &firstBody = firstLoop.getBody()->getOperations();
+      auto &secondBody = secondLoop.getBody()->getOperations();
+      auto firstOpInSecondLoop = secondBody.begin();
+      // do not need affine.yield op, so that's why using std::prev
+      secondBody.splice(secondBody.begin(), firstBody, firstBody.begin(),
+                        std::prev(firstBody.end()));
+      firstLoop.getInductionVar().replaceAllUsesWith(
+          secondLoop.getInductionVar());
+      firstLoop.erase();
+      auto parent = secondLoop->getParentOp();
+      if (llvm::isa<AffineIfOp>(parent)) {
+        auto ifOp = llvm::cast<AffineIfOp>(parent);
+        auto &ifBody = ifOp.getThenBlock()->getOperations();
+        auto &parentBody =
+            nonReductionLoops[loopAxis - 1].getBody()->getOperations();
+        parentBody.splice(parentBody.begin(), ifBody, ifBody.begin(),
+                          std::prev(ifBody.end()));
+        // skip the previous reuse part
+        ifOp->moveBefore(&(*firstOpInSecondLoop));
+        // move the rest into the if body
+        auto &secondBody = secondLoop.getBody()->getOperations();
+        ifBody.splice(ifBody.begin(), secondBody, firstOpInSecondLoop,
+                      std::prev(secondBody.end()));
+      }
+    }
+  }
 
   return success();
 }

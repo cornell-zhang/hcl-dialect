@@ -1450,8 +1450,9 @@ class MathExpOp(UnaryOp):
 
 
 class PrintOp(ExprOp):
-    def __init__(self, val):
+    def __init__(self, val, format_str=""):
         self.val = val
+        self.format_str = format_str
         self.operands = [v.result for v in val]
         super().__init__(hcl_d.PrintOp)
         if flags.BUILD_INPLACE:
@@ -1468,6 +1469,9 @@ class PrintOp(ExprOp):
             else:
                 sign_str += "_"
         self.built_op.attributes["signedness"] = StringAttr.get(sign_str)
+        # Attach format string as an attribute
+        if self.format_str != "":
+            self.built_op.attributes["format"] = StringAttr.get(self.format_str)
         return self.built_op
 
 

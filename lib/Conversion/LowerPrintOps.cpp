@@ -67,7 +67,7 @@ Value getOrCreateGlobalString(Location loc, OpBuilder &builder, StringRef name,
     global = builder.create<LLVM::GlobalOp>(loc, type, /*isConstant=*/true,
                                             LLVM::Linkage::Internal, name,
                                             builder.getStringAttr(value),
-                                            /*alignment=*/0);
+                                            /*alignment=*/32);
   }
 
   // Get the pointer to the first character in the global string.

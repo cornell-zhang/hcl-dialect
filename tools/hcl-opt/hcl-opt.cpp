@@ -21,16 +21,15 @@
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
-
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 
@@ -134,6 +133,11 @@ static llvm::cl::opt<bool> moveReturnToInput(
     llvm::cl::desc("Move return values to input argument list"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool>
+    memRefDCE("memref-dce",
+              llvm::cl::desc("Remove memrefs that are never loaded from"),
+              llvm::cl::init(false));
+
 int loadMLIR(mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module) {
   module = parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
@@ -154,16 +158,15 @@ int runJiTCompiler(mlir::ModuleOp module) {
   std::string runner_utils = LLVM_BUILD_DIR + "/lib/libmlir_runner_utils.so";
   std::string c_runner_utils =
       LLVM_BUILD_DIR + "/lib/libmlir_c_runner_utils.so";
-  llvm::SmallVector<std::string, 4> shared_libs = {runner_utils, c_runner_utils};
+  llvm::SmallVector<std::string, 4> shared_libs = {runner_utils,
+                                                   c_runner_utils};
   llvm::SmallVector<llvm::SmallString<256>, 4> libPaths;
   // Use absolute library path so that gdb can find the symbol table.
-  transform(
-      shared_libs, std::back_inserter(libPaths),
-      [](std::string libPath) {
-        llvm::SmallString<256> absPath(libPath.begin(), libPath.end());
-        cantFail(llvm::errorCodeToError(llvm::sys::fs::make_absolute(absPath)));
-        return absPath;
-      });
+  transform(shared_libs, std::back_inserter(libPaths), [](std::string libPath) {
+    llvm::SmallString<256> absPath(libPath.begin(), libPath.end());
+    cantFail(llvm::errorCodeToError(llvm::sys::fs::make_absolute(absPath)));
+    return absPath;
+  });
 
   // Libraries that we'll pass to the ExecutionEngine for loading.
   llvm::SmallVector<llvm::StringRef, 4> executionEngineLibs;
@@ -256,6 +259,10 @@ int main(int argc, char **argv) {
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
+  }
+
+  if (memRefDCE) {
+    optPM.addPass(mlir::hcl::createMemRefDCEPass());
   }
 
   if (lowerComposite) {

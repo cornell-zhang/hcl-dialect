@@ -143,6 +143,14 @@ static bool lowerPrintOps(MlirModule &mlir_mod) {
 }
 
 //===----------------------------------------------------------------------===//
+// Utility pass APIs
+//===----------------------------------------------------------------------===//
+static bool memRefDCE(MlirModule &mlir_mod) {
+  auto mod = unwrap(mlir_mod);
+  return applyMemRefDCE(mod);
+}
+
+//===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
 
@@ -189,4 +197,7 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("legalize_cast", &legalizeCast);
   hcl_m.def("remove_stride_map", &removeStrideMap);
   hcl_m.def("lower_print_ops", &lowerPrintOps);
+
+  // Utility pass APIs.
+  hcl_m.def("memref_dce", &memRefDCE);
 }

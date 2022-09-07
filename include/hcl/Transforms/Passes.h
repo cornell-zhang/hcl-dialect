@@ -18,13 +18,14 @@ std::unique_ptr<OperationPass<ModuleOp>> createAnyWidthIntegerPass();
 std::unique_ptr<OperationPass<ModuleOp>> createMoveReturnToInputPass();
 std::unique_ptr<OperationPass<ModuleOp>> createLegalizeCastPass();
 std::unique_ptr<OperationPass<ModuleOp>> createRemoveStrideMapPass();
+std::unique_ptr<OperationPass<ModuleOp>> createMemRefDCEPass();
 
 bool applyLoopTransformation(ModuleOp &f);
-
 bool applyAnyWidthInteger(ModuleOp &module);
 bool applyMoveReturnToInput(ModuleOp &module);
 bool applyLegalizeCast(ModuleOp &module);
 bool applyRemoveStrideMap(ModuleOp &module);
+bool applyMemRefDCE(ModuleOp &module);
 
 /// Registers all HCL transformation passes
 void registerHCLPasses();

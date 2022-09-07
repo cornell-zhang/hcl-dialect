@@ -37,4 +37,9 @@ def RemoveStrideMap : Pass<"remove-stride-map", "ModuleOp"> {
   let constructor = "mlir::hcl::createRemoveStrideMapPass()";
 }
 
+def MemRefDCE : Pass<"memref-dce", "ModuleOp"> {
+  let summary = "Remove MemRefs that are never loaded from";
+  let constructor = "mlir::hcl::createMemRefDCEPass()";
+}
+
 #endif // HCL_MLIR_PASSES

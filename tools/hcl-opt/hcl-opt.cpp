@@ -262,7 +262,7 @@ int main(int argc, char **argv) {
   }
 
   if (memRefDCE) {
-    optPM.addPass(mlir::hcl::createMemRefDCEPass());
+    pm.addPass(mlir::hcl::createMemRefDCEPass());
   }
 
   if (lowerComposite) {

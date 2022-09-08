@@ -22,8 +22,47 @@ using namespace hcl;
 
 namespace mlir {
 namespace hcl {
+
+void removeNeverLoadedMemRef(func::FuncOp &func) {
+  SmallVector<Operation *, 8> memRefAllocOps;
+  func.walk([&](Operation *op) {
+    if (auto memRefAllocOp = dyn_cast<memref::AllocOp>(op)) {
+      memRefAllocOps.push_back(memRefAllocOp);
+    }
+  });
+  std::reverse(memRefAllocOps.begin(), memRefAllocOps.end());
+  for (auto op : memRefAllocOps) {
+    auto v = op->getResult(0);
+    bool loaded_from = false;
+    for (auto u : v.getUsers()) {
+      if (isa<memref::LoadOp>(u)) {
+        loaded_from = true;
+        break;
+      } else if (isa<AffineLoadOp>(u)) {
+        loaded_from = true;
+        break;
+      } else if (isa<func::ReturnOp>(u)) {
+        loaded_from = true;
+        break;
+      }
+    }
+    if (!loaded_from) {
+        // erase op and all known uses
+        for (auto u : v.getUsers()) {
+            u->erase();
+        } 
+        op->erase();
+    }
+  }
+}
+
 /// Pass entry point
-bool applyMemRefDCE(ModuleOp &mod) { return true; }
+bool applyMemRefDCE(ModuleOp &mod) { 
+    for (auto func : mod.getOps<func::FuncOp>()) {
+        removeNeverLoadedMemRef(func);
+    }
+    return true;     
+}
 } // namespace hcl
 } // namespace mlir
 

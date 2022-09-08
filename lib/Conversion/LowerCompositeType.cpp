@@ -185,10 +185,30 @@ void lowerStructType(func::FuncOp &func) {
   deadMemRefAllocElimination(func);
 }
 
+bool isLegal(func::FuncOp &func) {
+  bool legal = true;
+  func.walk([&](Operation *op) {
+    if (auto structGetOp = dyn_cast<StructGetOp>(op)) {
+      legal = false;
+      llvm::errs() << "Error: [Pass][LowerCompositeType] structGetOp is not legal: " << *op << "\n";
+      WalkResult::interrupt();
+    } else if (auto structConstructOp = dyn_cast<StructConstructOp>(op)) {
+      legal = false;
+      llvm::errs() << "Error: [Pass][LowerCompositeType] structConstructOp is not legal: " << *op << "\n";
+      WalkResult::interrupt();
+    }
+  });
+  return legal;
+}
+
 /// Pass entry point
 bool applyLowerCompositeType(ModuleOp &mod) {
   for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerStructType(func);
+    if (!isLegal(func)) {
+      func.emitError("Lowering composite type failed");
+      return false;
+    }
   }
   return true;
 }

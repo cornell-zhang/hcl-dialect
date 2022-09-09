@@ -9,12 +9,12 @@ This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](htt
 - cmake >= 3.19
 - python >= 3.7
 
-### Install LLVM 15.0.0-rc1
-- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-15.0.0-rc1) or checkout the Github branch
+### Install LLVM 15.0.0
+- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-15.0.0) or checkout the Github branch
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout tags/llvmorg-15.0.0-rc1
+git checkout tags/llvmorg-15.0.0
 ```
 
 - Build

@@ -745,7 +745,7 @@ class ExprOp(object):
 class IterVar(ExprOp):
     """loop induction variable (BlockArgument)"""
 
-    def __init__(self, op, name=""):
+    def __init__(self, op, name="", loc=None):
         super().__init__(op, dtype="index")
         self.name = name
         self.built_op = op
@@ -760,7 +760,7 @@ class ReduceVar(IterVar):
     induction variable of reduction loop
     """
 
-    def __init__(self, op, bound=None, name=""):
+    def __init__(self, op, bound=None, name="", loc=None):
         super().__init__(op, name)
         self.bound = bound
 
@@ -783,7 +783,7 @@ class ConstantOp(ExprOp):
     target width.
     """
 
-    def __init__(self, dtype, val, name="const_tensor"):
+    def __init__(self, dtype, val, name="const_tensor", loc=None):
         super().__init__(arith.ConstantOp)
         self.val = val
         self.name = name
@@ -945,7 +945,7 @@ class ConstantOp(ExprOp):
 
 
 class TensorSlice(ExprOp):
-    def __init__(self, full_shape, op, dtype, parent, indices, name=None):
+    def __init__(self, full_shape, op, dtype, parent, indices, name=None, loc=None):
         super().__init__(op)
         self.op = op
         self.full_shape = full_shape
@@ -1021,7 +1021,7 @@ class TensorSlice(ExprOp):
 
 
 class TensorOp(ExprOp):
-    def __init__(self, shape, op, dtype, name=None):
+    def __init__(self, shape, op, dtype, name=None, loc=None):
         if op != memref.AllocOp and not isinstance(op, BlockArgument):
             raise TensorError("Not supported TensorOp. Got {}".format(op))
         super().__init__(op)
@@ -1148,7 +1148,7 @@ class TensorOp(ExprOp):
 
 
 class UnaryOp(ExprOp):
-    def __init__(self, op, dtype, val):
+    def __init__(self, op, dtype, val, loc=None):
         super().__init__(op)
         self.dtype = dtype
         self.val = val
@@ -1277,7 +1277,7 @@ class CmpOp(BinaryOp):
         },
     }
 
-    def __init__(self, lhs, rhs, arg):
+    def __init__(self, lhs, rhs, arg, loc=None):
         self.arg = arg
         dtype = lhs.dtype
         if is_integer_type(dtype) or is_index_type(dtype):
@@ -1332,7 +1332,7 @@ class AddOp(BinaryOp):
 
 
 class SubOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {"float": arith.SubFOp, "int": arith.SubIOp, "fixed": hcl_d.SubFixedOp},
             dtype,
@@ -1342,7 +1342,7 @@ class SubOp(BinaryOp):
 
 
 class MulOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {"float": arith.MulFOp, "int": arith.MulIOp, "fixed": hcl_d.MulFixedOp},
             dtype,
@@ -1352,7 +1352,7 @@ class MulOp(BinaryOp):
 
 
 class DivOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {
                 "float": arith.DivFOp,
@@ -1367,7 +1367,7 @@ class DivOp(BinaryOp):
 
 
 class FloorDivOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {
                 "float": arith.DivFOp,
@@ -1381,7 +1381,7 @@ class FloorDivOp(BinaryOp):
 
 
 class RemOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {"float": arith.RemFOp, "int": arith.RemSIOp, "uint": arith.RemUIOp},
             dtype,
@@ -1391,7 +1391,7 @@ class RemOp(BinaryOp):
 
 
 class LeftShiftOp(BinaryOp):
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, loc=None):
         if isinstance(rhs, int):
             new_type = IntegerType.get_signless(lhs.dtype.width + rhs)
             lhs = CastOp(lhs, new_type)
@@ -1407,39 +1407,39 @@ class LeftShiftOp(BinaryOp):
 
 
 class RightShiftOp(BinaryOp):
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, loc=None):
         super().__init__(arith.ShRUIOp, lhs.dtype, lhs, rhs)
 
 
 class AndOp(BinaryOp):
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, loc=None):
         super().__init__(arith.AndIOp, lhs.dtype, lhs, rhs)
 
 
 class OrOp(BinaryOp):
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, loc=None):
         super().__init__(arith.OrIOp, lhs.dtype, lhs, rhs)
 
 
 class XOrOp(BinaryOp):
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, loc=None):
         super().__init__(arith.XOrIOp, lhs.dtype, lhs, rhs)
 
 
 class NegOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(
             {"float": arith.NegFOp, "int": arith.NegFOp}, val.dtype, val
         )  # use the same op
 
 
 class BitReverseOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(hcl_d.BitReverseOp, val.dtype, val)
 
 
 class BitCastOp(UnaryOp):
-    def __init__(self, dtype, val):
+    def __init__(self, dtype, val, loc=None):
         super().__init__(arith.BitcastOp, dtype, val)
 
     def build(self):
@@ -1458,12 +1458,12 @@ class BitCastOp(UnaryOp):
 
 
 class MathExpOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.ExpOp, F32Type.get(), val)
 
 
 class PrintOp(ExprOp):
-    def __init__(self, val, format_str=""):
+    def __init__(self, val, format_str="", loc=None):
         self.val = val
         self.format_str = format_str
         self.operands = [v.result for v in val]
@@ -1489,12 +1489,12 @@ class PrintOp(ExprOp):
 
 
 class PrintMemRefOp(UnaryOp):
-    def __init__(self, val, dtype):
+    def __init__(self, val, dtype, loc=None):
         super().__init__(hcl_d.PrintMemRefOp, get_mlir_type(dtype), val)
 
 
 class MathPowOp(BinaryOp):
-    def __init__(self, x, y):
+    def __init__(self, x, y, loc=None):
         if not isinstance(x, (int, float)):
             dtype = x.dtype
         if not isinstance(y, (int, float)):
@@ -1515,42 +1515,42 @@ class MathPowOp(BinaryOp):
 
 
 class MathLogOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.LogOp, F32Type.get(), val)
 
 
 class MathLog2Op(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.Log2Op, F32Type.get(), val)
 
 
 class MathLog10Op(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.Log10Op, F32Type.get(), val)
 
 
 class MathSqrtOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.SqrtOp, F32Type.get(), val)
 
 
 class MathSinOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.SinOp, F32Type.get(), val)
 
 
 class MathCosOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.CosOp, F32Type.get(), val)
 
 
 class MathTanhOp(UnaryOp):
-    def __init__(self, val):
+    def __init__(self, val, loc=None):
         super().__init__(math.TanhOp, F32Type.get(), val)
 
 
 class CastOp(ExprOp):
-    def __init__(self, val, res_type=None):
+    def __init__(self, val, res_type=None, loc=None):
         # dtype is the result type
         res_type = get_mlir_type(res_type)
         self.val = get_hcl_op(val)
@@ -1693,7 +1693,7 @@ class CastOp(ExprOp):
 
 
 class GetBitOp(ExprOp):
-    def __init__(self, num, index):
+    def __init__(self, num, index, loc=None):
         super().__init__(hcl_d.GetIntBitOp, IntegerType.get_signless(1))
         self.num = num
         if isinstance(index, int):
@@ -1727,7 +1727,7 @@ class GetBitOp(ExprOp):
 
 
 class LogicalAndOp(ExprOp):
-    def __init__(self, *cond):
+    def __init__(self, *cond, loc=None):
         super().__init__(hcl_d.LogicalAndOp, IntegerType.get_signless(1))
         self.cond_lst = cond
 
@@ -1736,7 +1736,7 @@ class LogicalAndOp(ExprOp):
 
 
 class LogicalOrOp(ExprOp):
-    def __init__(self, *cond):
+    def __init__(self, *cond, loc=None):
         super().__init__(hcl_d.LogicalOrOp, IntegerType.get_signless(1))
         self.cond_lst = cond
         raise MLIRLimitationError("LogicalOrOp not implemented")
@@ -1746,7 +1746,7 @@ class LogicalOrOp(ExprOp):
 
 
 class SetBitOp(ExprOp):
-    def __init__(self, num, index, val):
+    def __init__(self, num, index, val, loc=None):
         super().__init__(hcl_d.SetIntBitOp, None)  # No return value!
         self.num = num  # actually a LoadOp
         if isinstance(index, int):
@@ -1788,7 +1788,7 @@ class SetBitOp(ExprOp):
 
 
 class GetSliceOp(ExprOp):
-    def __init__(self, num, hi, lo):
+    def __init__(self, num, hi, lo, loc=None):
         super().__init__(hcl_d.GetIntSliceOp, num.dtype)
         self.num = num
 
@@ -1828,7 +1828,7 @@ class GetSliceOp(ExprOp):
 
 
 class SetSliceOp(ExprOp):
-    def __init__(self, num, hi, lo, val):
+    def __init__(self, num, hi, lo, val, loc=None):
         super().__init__(hcl_d.SetIntSliceOp, None)  # No return value!
         self.num = num  # actually a LoadOp
 
@@ -1870,7 +1870,7 @@ class SetSliceOp(ExprOp):
 
 
 class LoadOp(ExprOp):
-    def __init__(self, tensor, indices):
+    def __init__(self, tensor, indices, loc=None):
         super().__init__(affine.AffineLoadOp, tensor.dtype)
         self.tensor = tensor
         self.indices = []
@@ -1927,7 +1927,7 @@ class LoadOp(ExprOp):
 
 
 class StoreOp(ExprOp):
-    def __init__(self, val, to_tensor, indices):
+    def __init__(self, val, to_tensor, indices, loc=None):
         super().__init__(affine.AffineStoreOp)
         val = get_hcl_op(val)
         if val.dtype != to_tensor.dtype:
@@ -1994,7 +1994,7 @@ class StoreOp(ExprOp):
 
 
 class CallOp(ExprOp):
-    def __init__(self, dtype, func_name, inputs):
+    def __init__(self, dtype, func_name, inputs, loc=None):
         # here we only accept one result
         super().__init__(func.CallOp, dtype)
         self.func_name = func_name
@@ -2017,7 +2017,7 @@ class CallOp(ExprOp):
 class SelectOp(ExprOp):
     """Ternary operation"""
 
-    def __init__(self, cond, true_val, false_val):
+    def __init__(self, cond, true_val, false_val, loc=None):
         super().__init__(arith.SelectOp)
         # turn py builtin op to hcl op
         true_val = get_hcl_op(true_val)
@@ -2049,7 +2049,7 @@ class SelectOp(ExprOp):
 
 
 class StructConstructOp(ExprOp):
-    def __init__(self, fields):
+    def __init__(self, fields, loc=None):
         super().__init__(hcl_d.StructConstructOp)
         self.fields = [f.result for f in fields]
         self.field_types = [f.type for f in self.fields]
@@ -2067,7 +2067,7 @@ class StructConstructOp(ExprOp):
 
 
 class StructGetOp(ExprOp):
-    def __init__(self, struct, index):
+    def __init__(self, struct, index, loc=None):
         super().__init__(hcl_d.StructGetOp)
         self.struct = struct
         self.index = index
@@ -2096,7 +2096,7 @@ class StructGetOp(ExprOp):
 
 class ReduceOp(ExprOp):
     # cannot build inplace!!!
-    def __init__(self, op, axis, dtype, prefix, init_val, reduce_op):
+    def __init__(self, op, axis, dtype, prefix, init_val, reduce_op, loc=None):
         super().__init__(op, dtype=get_mlir_type(dtype))
         self.axis = axis
         self.prefix = prefix
@@ -2105,7 +2105,7 @@ class ReduceOp(ExprOp):
 
 
 class SumOp(ReduceOp):
-    def __init__(self, op, axis, dtype):
+    def __init__(self, op, axis, dtype, loc=None):
         super().__init__(
             op,
             axis,
@@ -2122,7 +2122,7 @@ class SumOp(ReduceOp):
 
 
 class MinOp(ReduceOp):
-    def __init__(self, op, axis, dtype):
+    def __init__(self, op, axis, dtype, loc=None):
         super().__init__(
             op,
             axis,
@@ -2139,7 +2139,7 @@ class MinOp(ReduceOp):
 
 
 class MaxOp(ReduceOp):
-    def __init__(self, op, axis, dtype):
+    def __init__(self, op, axis, dtype, loc=None):
         super().__init__(
             op,
             axis,

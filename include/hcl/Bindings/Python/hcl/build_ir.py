@@ -429,10 +429,11 @@ def regularize_fixed_type(lhs, rhs):
 
 
 class ExprOp(object):
-    def __init__(self, op, dtype=None):
+    def __init__(self, op, dtype=None, loc=None):
         self.op = op
         self.dtype = dtype
         self.built_op = None
+        self.loc = loc
 
     @property
     def result(self):  # get_op_result_or_value
@@ -442,7 +443,7 @@ class ExprOp(object):
             return self.built_op.result
 
     @staticmethod
-    def generic_op(OpClass, lhs, rhs, arg=None):
+    def generic_op(OpClass, lhs, rhs, arg=None, loc=None):
         if (hasattr(lhs, "v") and lhs.v is not None) or (
             hasattr(rhs, "v") and rhs.v is not None
         ):
@@ -472,9 +473,9 @@ class ExprOp(object):
         # create AST node based on different types
         dtype = lhs.dtype
         if arg == None:
-            expr = OpClass(dtype, lhs, rhs)
+            expr = OpClass(dtype, lhs, rhs, loc)
         else:
-            expr = OpClass(lhs, rhs, arg)
+            expr = OpClass(lhs, rhs, arg, loc)
         return expr
 
     @staticmethod
@@ -499,7 +500,10 @@ class ExprOp(object):
         return scalar[0]
 
     def __add__(self, other):
-        return self.generic_op(AddOp, self, other)
+        # set filename and linenumber
+        fn, ln = get_line_number(1)
+        loc = Location.file(fn, ln, 0)
+        return self.generic_op(AddOp, self, other, loc=loc)
 
     def __radd__(self, other):
         # if other is an hcl.scalar
@@ -1171,11 +1175,12 @@ class UnaryOp(ExprOp):
 
 
 class BinaryOp(ExprOp):
-    def __init__(self, op, dtype, lhs, rhs):
+    def __init__(self, op, dtype, lhs, rhs, loc=None):
         super().__init__(op)
         self.dtype = dtype
         self.lhs = lhs
         self.rhs = rhs
+        self.loc = loc
         if isinstance(op, dict):
             if is_integer_type(dtype) or is_index_type(dtype):
                 self.op = op["int"]
@@ -1193,7 +1198,8 @@ class BinaryOp(ExprOp):
 
     def build(self):
         self.built_op = self.op(
-            self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get()
+            self.lhs.result, self.rhs.result, ip=GlobalInsertionPoint.get(),
+            loc=self.loc
         )
         if is_unsigned_type(self.dtype):
             self.built_op.attributes["unsigned"] = UnitAttr.get()
@@ -1315,12 +1321,13 @@ class CmpOp(BinaryOp):
 
 
 class AddOp(BinaryOp):
-    def __init__(self, dtype, lhs, rhs):
+    def __init__(self, dtype, lhs, rhs, loc=None):
         super().__init__(
             {"float": arith.AddFOp, "int": arith.AddIOp, "fixed": hcl_d.AddFixedOp},
             dtype,
             lhs,
             rhs,
+            loc
         )
 
 

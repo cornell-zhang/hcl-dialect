@@ -341,14 +341,14 @@ def cast_types(lhs, rhs):
         # integer or real floating type to double
         res_type = F64Type.get()
         DTypeWarning("Casting value {} from {} to {}".format(
-            rhs, rtype, res_type)).warn()
+            rhs, rtype, res_type)).log()
         return lhs, CastOp(rhs, res_type)
     # 3) Otherwise, if lhs is float
     elif isinstance(ltype, F32Type):
         # integer type to float
         res_type = F32Type.get()
         DTypeWarning("Casting value {} from {} to {}".format(
-            rhs, rtype, res_type)).warn()
+            rhs, rtype, res_type)).log()
         return lhs, CastOp(rhs, res_type)
     # 4) Otherwise, if lhs is integer.
     elif isinstance(ltype, (IntegerType, IndexType)):
@@ -356,7 +356,7 @@ def cast_types(lhs, rhs):
         if isinstance(rtype, IntegerType):
             res_type = ltype
             DTypeWarning("Casting value {} from {} to {}".format(
-                rhs, rtype, res_type)).warn()
+                rhs, rtype, res_type)).log()
             return lhs, CastOp(rhs, res_type)
         # 4.2) lhs is index, rhs is also index, nothing to do
         elif isinstance(rtype, IndexType):
@@ -367,9 +367,9 @@ def cast_types(lhs, rhs):
             res_type = hcl_d.FixedType.get(
                 ltype.width + rtype.frac, rtype.frac)
             DTypeWarning("Casting value {} from {} to {}".format(
-                lhs, ltype, res_type)).warn()
+                lhs, ltype, res_type)).log()
             DTypeWarning("Casting value {} from {} to {}".format(
-                rhs, rtype, res_type)).warn()
+                rhs, rtype, res_type)).log()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         # 4.4) lhs is int or index, rhs is unsigned fixed point of lower rank
         # e.g. Int(100) + UFixed(3, 2) -> UFixed(100 + 2, 2)
@@ -377,9 +377,9 @@ def cast_types(lhs, rhs):
             res_type = hcl_d.UFixedType.get(
                 ltype.width + rtype.frac, rtype.frac)
             DTypeWarning("Casting value {} from {} to {}".format(
-                lhs, ltype, res_type)).warn()
+                lhs, ltype, res_type)).log()
             DTypeWarning("Casting value {} from {} to {}".format(
-                rhs, rtype, res_type)).warn()
+                rhs, rtype, res_type)).log()
             return CastOp(lhs, res_type), CastOp(rhs, res_type)
         else:
             # unexpected type
@@ -390,7 +390,7 @@ def cast_types(lhs, rhs):
         if is_integer_type(rtype) or is_fixed_type(rtype):
             res_type = ltype
             DTypeWarning("Casting value {} from {} to {}".format(
-                rhs, rtype, res_type)).warn()
+                rhs, rtype, res_type)).log()
             return lhs, CastOp(rhs, res_type)
         else:
             # unexpected type

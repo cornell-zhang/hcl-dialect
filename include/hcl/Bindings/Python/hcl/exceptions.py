@@ -1,9 +1,11 @@
 import warnings
+from contextvars import ContextVar
 
 # By default, Python ignores deprecation warnings.
 # we have to enable it to see the warning.
 warnings.simplefilter("always", DeprecationWarning)
 
+PrintLog = ContextVar("PrintLog", default=False)
 
 class bcolors:
     """ANSI color escape codes for terminal output."""
@@ -68,6 +70,10 @@ class HCLWarning(HCLException):
 
     def warn(self):
         warnings.warn(self.message, category=self.category)
+
+    def log(self):
+        if PrintLog.get():
+            print(self.message)
 
 
 class HCLError(HCLException):

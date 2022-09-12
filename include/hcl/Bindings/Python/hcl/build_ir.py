@@ -4,6 +4,8 @@
 #
 # ===----------------------------------------------------------------------=== #
 
+import os
+import sys
 from typing import List
 
 import numpy as np
@@ -12,6 +14,10 @@ from hcl_mlir.dialects import hcl as hcl_d
 from hcl_mlir.dialects import math, memref, scf, func, tensor
 from hcl_mlir.ir import *
 from hcl_mlir.exceptions import *
+
+def get_line_number(frame=0):
+    fr = sys._getframe(frame + 1) # +1 to ignore this function call
+    return (os.path.basename(fr.f_code.co_filename), fr.f_lineno)
 
 
 class HCLFlags(object):

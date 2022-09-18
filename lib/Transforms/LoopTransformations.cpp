@@ -2162,7 +2162,9 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             memAffineIndices[i] =
                 builder.create<arith::ConstantIndexOp>(loc, 0);
         }
-        // TODO(Niansong): throw error if target.shape() != memAffineIndices.size()
+        if (shape.size() != memAffineIndices.size()) {
+          reuseAtOp.emitError("ReuseAt failed at step 15: target.shape() != memAffineIndices.size()");
+        }
         load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
       }
     }

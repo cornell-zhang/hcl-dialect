@@ -2128,18 +2128,23 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             memAffineIndices.push_back(dim2iv[baseExpr]);
           } else if (baseExpr.isa<AffineBinaryOpExpr>()) {
             auto expr = baseExpr.cast<AffineBinaryOpExpr>();
-            if (expr.getLHS().isa<AffineDimExpr>()) {
-              bool isReductionIV = reductionVars.count(dim2iv[expr.getLHS()]);
-              if (!isReductionIV) {
-                memAffineIndices.push_back(dim2iv[expr.getLHS()]);
+            // walk LHS
+            expr.getLHS().walk([&](AffineExpr e) {
+              if (e.isa<AffineDimExpr>()) {
+                bool isReductionIV = reductionVars.count(dim2iv[e]);
+                if (!isReductionIV)
+                  memAffineIndices.push_back(dim2iv[e]);
               }
-            }
-            if (expr.getRHS().isa<AffineDimExpr>()) {
-              bool isReductionIV = reductionVars.count(dim2iv[expr.getRHS()]);
-              if (!isReductionIV) {
-                memAffineIndices.push_back(dim2iv[expr.getRHS()]);
+            });
+
+            // walk RHS
+            expr.getRHS().walk([&](AffineExpr e) {
+              if (e.isa<AffineDimExpr>()) {
+                bool isReductionIV = reductionVars.count(dim2iv[e]);
+                if (!isReductionIV)
+                  memAffineIndices.push_back(dim2iv[e]);
               }
-            }
+            });
           } else {
             memAffineIndices.push_back(builder.create<arith::ConstantIndexOp>(
                 loc, baseExpr.dyn_cast<AffineConstantExpr>().getValue()));
@@ -2157,6 +2162,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             memAffineIndices[i] =
                 builder.create<arith::ConstantIndexOp>(loc, 0);
         }
+        // TODO(Niansong): throw error if target.shape() != memAffineIndices.size()
         load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
       }
     }

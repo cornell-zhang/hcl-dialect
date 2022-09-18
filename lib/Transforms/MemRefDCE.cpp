@@ -44,6 +44,9 @@ void removeNeverLoadedMemRef(func::FuncOp &func) {
       } else if (isa<func::ReturnOp>(u)) {
         loaded_from = true;
         break;
+      } else if (isa<func::CallOp>(u)) {
+        loaded_from = true;
+        break;
       }
     }
     if (!loaded_from) {

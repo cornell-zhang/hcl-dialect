@@ -1655,7 +1655,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 11) Update loop bound
   // TODO: support non-constant bound
   auto origLoopBound = nonReductionLoops[loopAxis].getConstantUpperBound();
-  nonReductionLoops[loopAxis].setConstantUpperBound(origLoopBound + distance);
+  nonReductionLoops[loopAxis].setConstantUpperBound(origLoopBound * stride + distance);
 
   // 12) Update store index, since some load/store will be created later, this
   // step is done in advance reduction case:

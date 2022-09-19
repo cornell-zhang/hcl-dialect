@@ -103,6 +103,7 @@ def get_mlir_type(dtype):
     Note that the returned type is for ExprOp creation intead of ExprOp.build().
     This is because signedness infomation is preserved.
     i.e. "uint8" is returned as unsigned type instead of signless type. 
+    @param: dtype: string or MLIR type
     """
     if (
         is_integer_type(dtype)
@@ -182,6 +183,9 @@ def get_bitwidth(dtype):
 
 
 def print_mlir_type(dtype):
+    """ Print MLIR type to C/HLSC types
+    @param dtype: MLIR type
+    """
     if is_floating_point_type(dtype):
         if dtype.width == 32:
             return "float"
@@ -222,6 +226,9 @@ def print_mlir_type(dtype):
 
 
 def mlir_type_to_str(dtype):
+    """ Build HeteroCL-compatible type string from MLIR type
+    @param dtype: MLIR type
+    """
     if is_signed_type(dtype):
         return "int{}".format(get_bitwidth(dtype))
     elif is_unsigned_type(dtype):

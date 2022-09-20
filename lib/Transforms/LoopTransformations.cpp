@@ -1220,6 +1220,20 @@ LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
   return success();
 }
 
+LogicalResult runReplaceOp(func::FuncOp &f, ReplaceOp &replaceOp,
+                          Value &src, Value &dst) {
+  // 1) Get the schedule
+
+  // 2) Find the requested array
+  // has been done in findArray
+
+  // 3) Replace all uses of src with dst
+  src.replaceAllUsesWith(dst);
+  src.getDefiningOp()->erase();
+
+  return success();
+}
+
 LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   // target is the target tensor to reuse
@@ -3350,7 +3364,7 @@ bool isHCLOp(Operation &op) {
   return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
                    OutlineOp, ReshapeOp, ReformOp, ThreadBindOp,
-                   InterKernelToOp>(op);
+                   InterKernelToOp, ReplaceOp>(op);
 }
 
 void eraseScheduleOp(func::FuncOp &f,
@@ -3484,6 +3498,14 @@ bool applyLoopTransformationOnSingleFunction(
       } else if (auto new_op = dyn_cast<OutlineOp>(op)) {
         if (failed(runOutline(mod, f, new_op)))
           return false;
+      } else if (auto new_op = dyn_cast<ReplaceOp>(op)) {
+        Value src, dst;
+        if (findArray(f, new_op.src(), src) && findArray(f, new_op.dst(), dst)) {
+          if (failed(runReplaceOp(f, new_op, src, dst)))
+            return false;
+        } else {
+          return false;
+        }
       }
       opToRemove.push_back(&op);
     }

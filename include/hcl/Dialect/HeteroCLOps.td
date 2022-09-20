@@ -565,6 +565,20 @@ def HeteroCL_CloneOp : HeteroCL_Op<"clone">
     }];
 }
 
+def HeteroCL_ReplaceOp : HeteroCL_Op<"replace"> 
+{
+    let summary = "replace";
+    let description = [{
+        hcl.replace(src, dst)
+    }];
+
+    let arguments = (ins AnyMemRef:$src, AnyMemRef:$dst);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $src `:` type($src) `,` $dst `:` type($dst) `)` attr-dict
+    }];
+}
+
 //===----------------------------------------------------------------------===//
 // Fixed-point operations
 //===----------------------------------------------------------------------===//

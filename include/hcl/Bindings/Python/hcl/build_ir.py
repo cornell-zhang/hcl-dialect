@@ -1649,6 +1649,26 @@ class CastOp(ExprOp):
                             f"src type: {self.val.dtype}, dst type: {res_type}"
                         )
             op = None
+        elif is_struct_type(res_type) and is_integer_type(self.val.dtype):
+            # check the sum of bitwidth of all fields
+            res_field_types = res_type.field_types
+            total_width = 0
+            for res_ftype in res_field_types:
+                if not is_integer_type(res_ftype):
+                    raise HCLValueError(
+                        "Casting from integer to struct with non-integer fields. " +
+                        f"src type: {self.val.dtype}, dst type: {res_type}"
+                    )
+                cftype = get_concrete_type(res_ftype)
+                total_width += get_bitwidth(cftype)
+            cvtype = get_concrete_type(self.val.dtype)
+            if total_width != get_bitwidth(cvtype):
+                raise HCLValueError(
+                    "Casting between integer and struct with different bitwidth. " +
+                    f"src type: {self.val.dtype}, dst type: {res_type}"
+                )
+            # TODO(Niansong): add a int to struct cast op 
+            op = None
         else:
             op = builtin.UnrealizedConversionCastOp
             raise DTypeError(

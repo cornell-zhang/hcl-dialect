@@ -1654,12 +1654,12 @@ class CastOp(ExprOp):
             res_field_types = res_type.field_types
             total_width = 0
             for res_ftype in res_field_types:
-                if not is_integer_type(res_ftype):
+                cftype = get_concrete_type(res_ftype)
+                if not is_integer_type(cftype):
                     raise HCLValueError(
                         "Casting from integer to struct with non-integer fields. " +
                         f"src type: {self.val.dtype}, dst type: {res_type}"
                     )
-                cftype = get_concrete_type(res_ftype)
                 total_width += get_bitwidth(cftype)
             cvtype = get_concrete_type(self.val.dtype)
             if total_width != get_bitwidth(cvtype):

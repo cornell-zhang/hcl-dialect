@@ -1667,8 +1667,7 @@ class CastOp(ExprOp):
                     "Casting between integer and struct with different bitwidth. " +
                     f"src type: {self.val.dtype}, dst type: {res_type}"
                 )
-            # TODO(Niansong): add a int to struct cast op 
-            op = None
+            op = hcl_d.IntToStructOp
         else:
             op = builtin.UnrealizedConversionCastOp
             raise DTypeError(

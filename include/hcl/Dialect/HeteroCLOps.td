@@ -817,4 +817,13 @@ def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
 
 }
 
+def IntToStructOp : HeteroCL_Op<"int_to_struct"> {
+  let summary = "Cast operation from an integer type to a struct type";
+  let arguments = (ins SignlessIntegerLike:$input);
+  let results = (outs Struct:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
+}
+
 #endif // HCL_OPS

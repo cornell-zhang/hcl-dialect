@@ -1651,10 +1651,10 @@ class CastOp(ExprOp):
             op = None
         else:
             op = builtin.UnrealizedConversionCastOp
-            DTypeWarning(
+            raise DTypeError(
                 "Unrealized conversion cast: {} -> {}".format(
                     self.val.dtype, res_type)
-            ).warn()
+            )
 
         super().__init__(op, res_type)
         if flags.BUILD_INPLACE:

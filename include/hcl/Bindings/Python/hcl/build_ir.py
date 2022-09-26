@@ -1696,6 +1696,7 @@ class CastOp(ExprOp):
             hcl_d.FixedToFloatOp,
             hcl_d.FloatToFixedOp,
             hcl_d.FixedToFixedOp,
+            hcl_d.IntToStructOp
         ]:
             if is_unsigned_type(self.dtype):
                 dtype = IntegerType.get_signless(self.dtype.width)

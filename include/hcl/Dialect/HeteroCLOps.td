@@ -771,12 +771,21 @@ def AndOp : HeteroCL_Op<"and"> {
     }];
 }
 
+def OrOp : HeteroCL_Op<"or"> {
+    let summary = "Logical or operation with variadic region, supporting short-circuiting";
+    let results = (outs BoolLike:$result);
+    let regions = (region VariadicRegion<AnyRegion>:$bodies);
+    let assemblyFormat = [{
+        ($bodies^)?  attr-dict `:` type($result)
+    }];
+}
+
 //===----------------------------------------------------------------------===//
 // YieldOp
 //===----------------------------------------------------------------------===//
 
 def YieldOp : HeteroCL_Op<"yield", [NoSideEffect, Terminator,
-                               ParentOneOf<["AndOp"]>]> {
+                               ParentOneOf<["AndOp, OrOp"]>]> {
   let summary = "yield and termination operation";
   let description = [{
     "hcl.yield" yields an SSA value from the HCL dialect op region and

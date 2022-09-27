@@ -767,7 +767,7 @@ def AndOp : HeteroCL_Op<"and"> {
     let results = (outs BoolLike:$result);
     let regions = (region VariadicRegion<AnyRegion>:$bodies);
     let assemblyFormat = [{
-        ($bodies^)? `:` type($result)  attr-dict
+        ($bodies^)?  attr-dict `:` type($result)
     }];
 }
 

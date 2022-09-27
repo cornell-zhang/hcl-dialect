@@ -2358,13 +2358,25 @@ class ASTVisitor:
             self.visit(expr.cond)
 
     def visit_struct_op(self, expr):
-        fields = [self.visit(e) for e in expr]
-        op = StructConstructOp(fields)
-        return op.build()
+        if self.mode == "build":
+            fields = [self.visit(e) for e in expr]
+            op = StructConstructOp(fields)
+            return op.build()
+        elif self.mode == "profile":
+            fields = [self.visit(e) for e in expr]
+        else:
+            self.erase_op(expr)
+        return
 
     def visit_struct_get_op(self, expr):
-        self.visit(expr.struct)
-        return expr.build()
+        if self.mode == "build":
+            self.visit(expr.struct)
+            return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.struct)
+        else:
+            self.erase_op(expr)
+        return
 
     def visit_load_op(self, expr):
         if self.mode == "remove":

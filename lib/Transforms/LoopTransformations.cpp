@@ -1669,7 +1669,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 11) Update loop bound
   // TODO: support non-constant bound
   auto origLoopBound = nonReductionLoops[loopAxis].getConstantUpperBound();
-  nonReductionLoops[loopAxis].setConstantUpperBound(origLoopBound + distance);
+  nonReductionLoops[loopAxis].setConstantUpperBound(origLoopBound * stride +
+                                                    distance);
 
   // 12) Update store index, since some load/store will be created later, this
   // step is done in advance reduction case:
@@ -1690,7 +1691,7 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
     // update the store to output tensor
     OpBuilder rewriter(op);
     SmallVector<AffineExpr> memAffineIndices;
-    auto oldAffineMap = op.getAffineMap(); 
+    auto oldAffineMap = op.getAffineMap();
     // we need to find the correct memref axis from loopAxis
     for (unsigned int i = 0, e = oldAffineMap.getResults().size(); i < e; ++i) {
       AffineExpr idx;
@@ -2142,18 +2143,23 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
             memAffineIndices.push_back(dim2iv[baseExpr]);
           } else if (baseExpr.isa<AffineBinaryOpExpr>()) {
             auto expr = baseExpr.cast<AffineBinaryOpExpr>();
-            if (expr.getLHS().isa<AffineDimExpr>()) {
-              bool isReductionIV = reductionVars.count(dim2iv[expr.getLHS()]);
-              if (!isReductionIV) {
-                memAffineIndices.push_back(dim2iv[expr.getLHS()]);
+            // walk LHS
+            expr.getLHS().walk([&](AffineExpr e) {
+              if (e.isa<AffineDimExpr>()) {
+                bool isReductionIV = reductionVars.count(dim2iv[e]);
+                if (!isReductionIV)
+                  memAffineIndices.push_back(dim2iv[e]);
               }
-            }
-            if (expr.getRHS().isa<AffineDimExpr>()) {
-              bool isReductionIV = reductionVars.count(dim2iv[expr.getRHS()]);
-              if (!isReductionIV) {
-                memAffineIndices.push_back(dim2iv[expr.getRHS()]);
+            });
+
+            // walk RHS
+            expr.getRHS().walk([&](AffineExpr e) {
+              if (e.isa<AffineDimExpr>()) {
+                bool isReductionIV = reductionVars.count(dim2iv[e]);
+                if (!isReductionIV)
+                  memAffineIndices.push_back(dim2iv[e]);
               }
-            }
+            });
           } else {
             memAffineIndices.push_back(builder.create<arith::ConstantIndexOp>(
                 loc, baseExpr.dyn_cast<AffineConstantExpr>().getValue()));
@@ -2170,6 +2176,10 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
           if (shape[i] == 1)
             memAffineIndices[i] =
                 builder.create<arith::ConstantIndexOp>(loc, 0);
+        }
+        if (shape.size() != memAffineIndices.size()) {
+          reuseAtOp.emitError("ReuseAt failed at step 15: target.shape() != "
+                              "memAffineIndices.size()");
         }
         load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
       }
@@ -3380,7 +3390,8 @@ void eraseScheduleOp(func::FuncOp &f,
   }
   std::reverse(handleToRemove.begin(), handleToRemove.end());
   for (Operation *op : handleToRemove) {
-    op->erase();
+    if (op->use_empty())
+      op->erase();
   }
 }
 

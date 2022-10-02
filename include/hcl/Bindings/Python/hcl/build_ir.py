@@ -103,6 +103,7 @@ def get_mlir_type(dtype):
     Note that the returned type is for ExprOp creation intead of ExprOp.build().
     This is because signedness infomation is preserved.
     i.e. "uint8" is returned as unsigned type instead of signless type. 
+    @param: dtype: string or MLIR type
     """
     if (
         is_integer_type(dtype)
@@ -182,6 +183,9 @@ def get_bitwidth(dtype):
 
 
 def print_mlir_type(dtype):
+    """ Print MLIR type to C/HLSC types
+    @param dtype: MLIR type
+    """
     if is_floating_point_type(dtype):
         if dtype.width == 32:
             return "float"
@@ -222,6 +226,9 @@ def print_mlir_type(dtype):
 
 
 def mlir_type_to_str(dtype):
+    """ Build HeteroCL-compatible type string from MLIR type
+    @param dtype: MLIR type
+    """
     if is_signed_type(dtype):
         return "int{}".format(get_bitwidth(dtype))
     elif is_unsigned_type(dtype):
@@ -1642,12 +1649,31 @@ class CastOp(ExprOp):
                             f"src type: {self.val.dtype}, dst type: {res_type}"
                         )
             op = None
+        elif is_struct_type(res_type) and is_integer_type(self.val.dtype):
+            # check the sum of bitwidth of all fields
+            res_field_types = res_type.field_types
+            total_width = 0
+            for res_ftype in res_field_types:
+                cftype = get_concrete_type(res_ftype)
+                if not is_integer_type(cftype):
+                    raise HCLValueError(
+                        "Casting from integer to struct with non-integer fields. " +
+                        f"src type: {self.val.dtype}, dst type: {res_type}"
+                    )
+                total_width += get_bitwidth(cftype)
+            cvtype = get_concrete_type(self.val.dtype)
+            if total_width != get_bitwidth(cvtype):
+                raise HCLValueError(
+                    "Casting between integer and struct with different bitwidth. " +
+                    f"src type: {self.val.dtype}, dst type: {res_type}"
+                )
+            op = hcl_d.IntToStructOp
         else:
             op = builtin.UnrealizedConversionCastOp
-            DTypeWarning(
+            raise DTypeError(
                 "Unrealized conversion cast: {} -> {}".format(
                     self.val.dtype, res_type)
-            ).warn()
+            )
 
         super().__init__(op, res_type)
         if flags.BUILD_INPLACE:
@@ -1670,6 +1696,7 @@ class CastOp(ExprOp):
             hcl_d.FixedToFloatOp,
             hcl_d.FloatToFixedOp,
             hcl_d.FixedToFixedOp,
+            hcl_d.IntToStructOp
         ]:
             if is_unsigned_type(self.dtype):
                 dtype = IntegerType.get_signless(self.dtype.width)
@@ -2331,13 +2358,25 @@ class ASTVisitor:
             self.visit(expr.cond)
 
     def visit_struct_op(self, expr):
-        fields = [self.visit(e) for e in expr]
-        op = StructConstructOp(fields)
-        return op.build()
+        if self.mode == "build":
+            fields = [self.visit(e) for e in expr]
+            op = StructConstructOp(fields)
+            return op.build()
+        elif self.mode == "profile":
+            fields = [self.visit(e) for e in expr]
+        else:
+            self.erase_op(expr)
+        return
 
     def visit_struct_get_op(self, expr):
-        self.visit(expr.struct)
-        return expr.build()
+        if self.mode == "build":
+            self.visit(expr.struct)
+            return expr.build()
+        elif self.mode == "profile":
+            self.visit(expr.struct)
+        else:
+            self.erase_op(expr)
+        return
 
     def visit_load_op(self, expr):
         if self.mode == "remove":

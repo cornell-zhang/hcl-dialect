@@ -754,6 +754,10 @@ def BitReverseOp : HeteroCL_Op<"bit_reverse", [SameOperandsAndResultType]> {
     }];
 }
 
+//===----------------------------------------------------------------------===//
+// Logic operations
+//===----------------------------------------------------------------------===//
+
 def LogicalAndOp : HeteroCL_Op<"logical_and"> {
     let summary = "logical and operation";
     let arguments = (ins Variadic<AnyType>:$input);
@@ -770,6 +774,43 @@ def LogicalOrOp : HeteroCL_Op<"logical_or"> {
     let assemblyFormat = [{
         ($input^)? attr-dict `:` type($input) `->` type($result)
     }];
+}
+
+def AndOp : HeteroCL_Op<"and"> {
+    let summary = "Logical and operation with variadic region, supporting short-circuiting";
+    let results = (outs BoolLike:$result);
+    let regions = (region VariadicRegion<AnyRegion>:$bodies);
+    let assemblyFormat = [{
+        ($bodies^)?  attr-dict `:` type($result)
+    }];
+}
+
+def OrOp : HeteroCL_Op<"or"> {
+    let summary = "Logical or operation with variadic region, supporting short-circuiting";
+    let results = (outs BoolLike:$result);
+    let regions = (region VariadicRegion<AnyRegion>:$bodies);
+    let assemblyFormat = [{
+        ($bodies^)?  attr-dict `:` type($result)
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// YieldOp
+//===----------------------------------------------------------------------===//
+
+def YieldOp : HeteroCL_Op<"yield", [NoSideEffect, Terminator,
+                               ParentOneOf<["AndOp, OrOp"]>]> {
+  let summary = "yield and termination operation";
+  let description = [{
+    "hcl.yield" yields an SSA value from the HCL dialect op region and
+    terminates the regions.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$results);
+  let builders = [OpBuilder<(ins), [{ /* nothing to do */ }]>];
+
+  let assemblyFormat =
+      [{  attr-dict ($results^ `:` type($results))? }];
 }
 
 //===----------------------------------------------------------------------===//
@@ -829,6 +870,15 @@ def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
         OpBuilder<(ins "Value":$input, "size_t":$index)>
     ];
 
+}
+
+def IntToStructOp : HeteroCL_Op<"int_to_struct"> {
+  let summary = "Cast operation from an integer type to a struct type";
+  let arguments = (ins SignlessIntegerLike:$input);
+  let results = (outs Struct:$res);
+  let assemblyFormat = [{
+      `(` $input `)` attr-dict `:` type($input) `->` type($res)
+  }];
 }
 
 #endif // HCL_OPS

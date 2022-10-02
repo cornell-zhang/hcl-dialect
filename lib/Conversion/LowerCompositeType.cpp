@@ -185,6 +185,29 @@ void lowerStructType(func::FuncOp &func) {
   deadMemRefAllocElimination(func);
 }
 
+Value buildStructFromInt(OpBuilder &builder, Location loc, Value int_value,
+                         StructType struct_type, int lo) {
+  SmallVector<Value, 4> struct_elements;
+  for (Type field_type : struct_type.cast<StructType>().getElementTypes()) {
+    if (field_type.isa<IntegerType>()) {
+      int field_bitwidth = field_type.getIntOrFloatBitWidth();
+      int hi = lo + (field_bitwidth - 1);
+      Value hi_idx = builder.create<mlir::arith::ConstantIndexOp>(loc, hi);
+      Value lo_idx = builder.create<mlir::arith::ConstantIndexOp>(loc, lo);
+      lo += field_bitwidth;
+      Value field_value = builder.create<mlir::hcl::GetIntSliceOp>(
+          loc, field_type, int_value, hi_idx, lo_idx);
+      struct_elements.push_back(field_value);
+    } else if (field_type.isa<StructType>()) {
+      struct_elements.push_back(
+          buildStructFromInt(builder, loc, int_value, field_type.cast<StructType>(), lo));
+    } else {
+      llvm_unreachable("unexpected type");
+    }
+  }
+  return builder.create<StructConstructOp>(loc, struct_type, struct_elements);
+}
+
 void lowerIntToStructOp(func::FuncOp &func) {
   SmallVector<Operation *, 10> intToStructOps;
   func.walk([&](Operation *op) {
@@ -201,23 +224,9 @@ void lowerIntToStructOp(func::FuncOp &func) {
     // Step1: create get_bit op for each field
     StructType struct_type = struct_value.getType().cast<StructType>();
     OpBuilder builder(op);
-    int hi = 0;
     int lo = 0;
-    SmallVector<Value, 4> field_values;
-    for (Type field_type : struct_type.getElementTypes()) {
-      // get field bitwidth
-      int field_bitwidth = field_type.getIntOrFloatBitWidth();
-      hi = lo + (field_bitwidth - 1);
-      Value hi_idx = builder.create<mlir::arith::ConstantIndexOp>(loc, hi);
-      Value lo_idx = builder.create<mlir::arith::ConstantIndexOp>(loc, lo);
-      lo += field_bitwidth;
-      Value field_value = builder.create<mlir::hcl::GetIntSliceOp>(
-          loc, field_type, int_value, hi_idx, lo_idx);
-      field_values.push_back(field_value);
-    }
     // Step2: create struct construct op
-    Value struct_construct = builder.create<StructConstructOp>(
-        loc, struct_type, field_values);
+    auto struct_construct = buildStructFromInt(builder, loc, int_value, struct_type, lo);
     // Step3: replace intToStructOp with struct construct
     struct_value.replaceAllUsesWith(struct_construct);
   } 

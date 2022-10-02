@@ -178,6 +178,12 @@ def get_bitwidth(dtype):
         return dtype.width
     elif hcl_d.UFixedType.isinstance(dtype):
         return dtype.width
+    elif hcl_d.StructType.isinstance(dtype):
+        bitwidth = 0
+        for field in dtype.field_types:
+            field = get_concrete_type(field)
+            bitwidth += get_bitwidth(field)
+        return bitwidth
     else:
         raise DTypeError("Unrecognized data type: {}".format(dtype))
 
@@ -252,6 +258,41 @@ def mlir_type_to_str(dtype):
     else:
         raise DTypeError("Unrecognized data type: {}".format(dtype))
 
+
+def get_signless_type(dtype):
+    if is_integer_type(dtype):
+        return IntegerType.get_signless(get_bitwidth(dtype))
+    elif is_struct_type(dtype):
+        new_field_types = []
+        for field_type in dtype.field_types:
+            field_type = get_concrete_type(field_type)
+            if is_integer_type(field_type):
+                new_field_types.append(
+                    get_signless_type(field_type)
+                )
+            elif is_struct_type(field_type):
+                new_field_types.append(get_signless_type(field_type))
+            else:
+                new_field_types.append(field_type)
+        dtype = hcl_d.StructType.get(new_field_types)
+        return dtype
+    else:
+        return dtype
+
+def is_all_field_int(dtype):
+    """ Check if a struct type has all integer fields
+    """
+    if not is_struct_type(dtype):
+        return False
+    dtype = get_concrete_type(dtype)
+    for field_type in dtype.field_types:
+        field_type = get_concrete_type(field_type)
+        if is_struct_type(field_type):
+            if not is_all_field_int(field_type):
+                return False
+        elif not is_integer_type(field_type):
+            return False
+    return True
 
 class HCLMLIRInsertionPoint(object):
     def __init__(self):
@@ -1062,16 +1103,7 @@ class TensorOp(ExprOp):
     def memref_type(self):
         if is_struct_type(self.dtype):
             # Replace unsigned field types with signless types
-            new_field_types = []
-            for field_type in self.dtype.field_types:
-                field_type = get_concrete_type(field_type)
-                if is_unsigned_type(field_type):
-                    new_field_types.append(
-                        IntegerType.get_signless(get_bitwidth(field_type))
-                    )
-                else:
-                    new_field_types.append(field_type)
-            dtype = hcl_d.StructType.get(new_field_types)
+            dtype = get_signless_type(self.dtype)
             return MemRefType.get(self.shape, dtype)
         dtype = get_mlir_type(self.dtype)
         if is_unsigned_type(self.dtype):
@@ -1650,17 +1682,12 @@ class CastOp(ExprOp):
                         )
             op = None
         elif is_struct_type(res_type) and is_integer_type(self.val.dtype):
-            # check the sum of bitwidth of all fields
-            res_field_types = res_type.field_types
-            total_width = 0
-            for res_ftype in res_field_types:
-                cftype = get_concrete_type(res_ftype)
-                if not is_integer_type(cftype):
-                    raise HCLValueError(
+            if not is_all_field_int(res_type):
+                raise HCLValueError(
                         "Casting from integer to struct with non-integer fields. " +
                         f"src type: {self.val.dtype}, dst type: {res_type}"
                     )
-                total_width += get_bitwidth(cftype)
+            total_width = get_bitwidth(res_type)
             cvtype = get_concrete_type(self.val.dtype)
             if total_width != get_bitwidth(cvtype):
                 raise HCLValueError(
@@ -1698,8 +1725,8 @@ class CastOp(ExprOp):
             hcl_d.FixedToFixedOp,
             hcl_d.IntToStructOp
         ]:
-            if is_unsigned_type(self.dtype):
-                dtype = IntegerType.get_signless(self.dtype.width)
+            if is_unsigned_type(self.dtype) or is_struct_type(self.dtype):
+                dtype = get_signless_type(self.dtype)
                 self.built_op = self.op(
                     dtype, self.val.result, ip=GlobalInsertionPoint.get()
                 )

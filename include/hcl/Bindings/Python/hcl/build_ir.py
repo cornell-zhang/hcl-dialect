@@ -488,7 +488,7 @@ class ExprOp(object):
         if not is_struct_type(self.dtype):
             raise DTypeError(".asint is only supported on struct type")
         bitwidth = get_bitwidth(self.dtype)
-        # return CastOp(self, hcl_d.Int(bitwidth))
+        raise NotImpelementedError("StructToInt operation WIP")
 
     @asint.setter
     def asint(self, value):

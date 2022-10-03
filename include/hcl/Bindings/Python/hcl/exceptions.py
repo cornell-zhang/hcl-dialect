@@ -156,7 +156,7 @@ class AssertError(HCLError):
 
 """ New Error subclasses """
 
-class NotImpelementedError(HCLError):
+class HCLNotImplementedError(HCLError):
     """A subclass for specifying not implemented exception"""
 
     def __init__(self, msg, line=None):

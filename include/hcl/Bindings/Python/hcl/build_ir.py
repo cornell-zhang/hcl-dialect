@@ -226,7 +226,7 @@ def print_mlir_type(dtype):
         else:
             raise DTypeError("Not supported data type: {}".format(dtype))
     elif is_struct_type(dtype):
-        raise NotImpelementedError("struct type printing to be implemented")
+        raise HCLNotImplementedError("struct type printing to be implemented")
     else:
         raise DTypeError("Not supported data type: {}".format(dtype))
 
@@ -488,7 +488,7 @@ class ExprOp(object):
         if not is_struct_type(self.dtype):
             raise DTypeError(".asint is only supported on struct type")
         bitwidth = get_bitwidth(self.dtype)
-        raise NotImpelementedError("StructToInt operation WIP")
+        raise HCLNotImplementedError("StructToInt operation WIP")
 
     @asint.setter
     def asint(self, value):
@@ -634,7 +634,7 @@ class ExprOp(object):
         return self.generic_integer_op(XOrOp, self, other)
 
     def __invert__(self):
-        raise NotImpelementedError("__invert__ is not implemented")
+        raise HCLNotImplementedError("__invert__ is not implemented")
 
     def __lt__(self, other):
         return self.generic_op(CmpOp, self, other, arg="lt")
@@ -760,7 +760,7 @@ class ExprOp(object):
         expr : Expr
             Expression with new type
         """
-        raise NotImpelementedError("astype is not implemented")
+        raise HCLNotImplementedError("astype is not implemented")
 
     def __getattr__(self, key):
         """Access a field from a struct value.
@@ -1069,7 +1069,7 @@ class TensorSlice(ExprOp):
             indices = (indices,)
         if len(self.indices + indices) < len(self.full_shape):
             # TODO(Niansong): I think this is doable actually
-            raise NotImpelementedError(
+            raise HCLNotImplementedError(
                 "Writing to a slice of tensor is not allowed.")
         elif len(self.indices + indices) == len(self.full_shape):
             new_indices = []
@@ -1179,7 +1179,7 @@ class TensorOp(ExprOp):
             indices = (indices,)
         if len(indices) < len(self.shape):
             # TODO(Niansong): I think this is doable actually
-            raise NotImpelementedError(
+            raise HCLNotImplementedError(
                 "Writing to a slice of tensor is not allowed.")
         elif len(indices) == len(self.shape):
             # format indices
@@ -2680,7 +2680,7 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
     # TODO: need to test if lb, ub, step are all affine
     # Construct step
     if not isinstance(step, int):
-        raise NotImpelementedError("int type step is not supported")
+        raise HCLNotImplementedError("int type step is not supported")
     if step < 0:  # need to also change induction variable
         lb, ub = ub + 1, lb + 1  # swap
         step = -step

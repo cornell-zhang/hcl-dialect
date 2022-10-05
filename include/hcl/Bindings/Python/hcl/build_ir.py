@@ -606,6 +606,8 @@ class ExprOp(object):
         return self.generic_op(RemOp, self, other)
 
     def __neg__(self):
+        if is_integer_type(self.dtype):
+            return self.generic_op(MulOp, self, -1)
         return NegOp(self)
 
     def __lshift__(self, other):
@@ -1482,9 +1484,10 @@ class XOrOp(BinaryOp):
 
 class NegOp(UnaryOp):
     def __init__(self, val, loc=None):
-        super().__init__(
-            {"float": arith.NegFOp, "int": arith.NegFOp}, val.dtype, val
-        )  # use the same op
+        if is_floating_point_type(val.dtype):
+            super().__init__(arith.NegFOp, val.dtype, val)
+        else:
+            raise DTypeError("Unsupported types for NegOp: {}".format(val.dtype))
 
 
 class BitReverseOp(UnaryOp):

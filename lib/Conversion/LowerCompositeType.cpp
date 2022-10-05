@@ -257,6 +257,9 @@ bool isLegal(func::FuncOp &func) {
 bool applyLowerCompositeType(ModuleOp &mod) {
   for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerIntToStructOp(func);
+  }
+  applyMemRefDCE(mod);
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerStructType(func);
     if (!isLegal(func)) {
       func.emitError("Lowering composite type failed");

@@ -484,19 +484,6 @@ class ExprOp(object):
         self.loc = loc
 
     @property
-    def asint(self):
-        if not is_struct_type(self.dtype):
-            raise DTypeError(".asint is only supported on struct type")
-        bitwidth = get_bitwidth(self.dtype)
-        raise HCLNotImplementedError("StructToInt operation WIP")
-
-    @asint.setter
-    def asint(self, value):
-        if not is_struct_type(self.dtype):
-            raise DTypeError(".asint is only supported on struct type")
-        return IntToStructOp(value, self.dtype)
-
-    @property
     def result(self):  # get_op_result_or_value
         if isinstance(self.built_op, BlockArgument):
             return self.built_op
@@ -784,8 +771,6 @@ class ExprOp(object):
             if self.built_op is None:
                 self.build()
             return self.result
-        elif key == "asint":
-            return self
         elif isinstance(self, LoadOp):
             # access a field from a struct tensor
             key_list = [k for k in self.tensor.hcl_dtype.dtype_dict.keys()]
@@ -1699,6 +1684,20 @@ class CastOp(ExprOp):
                             f"src type: {self.val.dtype}, dst type: {res_type}"
                         )
             op = None
+        elif is_struct_type(res_type) and is_integer_type(self.val.dtype):
+            if not is_all_field_int(res_type):
+                raise HCLValueError(
+                        "Casting from integer to struct with non-integer fields. " +
+                        f"src type: {self.val.dtype}, dst type: {res_type}"
+                    )
+            total_width = get_bitwidth(res_type)
+            cvtype = get_concrete_type(self.val.dtype)
+            if total_width != get_bitwidth(cvtype):
+                raise HCLValueError(
+                    "Casting between integer and struct with different bitwidth. " +
+                    f"src type: {self.val.dtype}, dst type: {res_type}"
+                )
+            op = hcl_d.IntToStructOp
         else:
             op = builtin.UnrealizedConversionCastOp
             raise DTypeError(
@@ -1727,8 +1726,9 @@ class CastOp(ExprOp):
             hcl_d.FixedToFloatOp,
             hcl_d.FloatToFixedOp,
             hcl_d.FixedToFixedOp,
+            hcl_d.IntToStructOp
         ]:
-            if is_unsigned_type(self.dtype):
+            if is_unsigned_type(self.dtype) or is_struct_type(self.dtype):
                 dtype = get_signless_type(self.dtype)
                 self.built_op = self.op(
                     dtype, self.val.result, ip=GlobalInsertionPoint.get()
@@ -1748,43 +1748,6 @@ class CastOp(ExprOp):
             )
         return self.built_op
 
-class IntToStructOp(ExprOp):
-    def __init__(self, val, res_type=None, loc=None):
-        res_type = get_mlir_type(res_type)
-        self.val = get_hcl_op(val)
-        self.val.dtype = get_mlir_type(self.val.dtype)
-        if is_struct_type(res_type) and is_integer_type(self.val.dtype):
-            if not is_all_field_int(res_type):
-                raise HCLValueError(
-                        "Casting from integer to struct with non-integer fields. " +
-                        f"src type: {self.val.dtype}, dst type: {res_type}"
-                    )
-            total_width = get_bitwidth(res_type)
-            cvtype = get_concrete_type(self.val.dtype)
-            if total_width != get_bitwidth(cvtype):
-                raise HCLValueError(
-                    "Casting between integer and struct with different bitwidth. " +
-                    f"src type: {self.val.dtype}, dst type: {res_type}"
-                )
-            op = hcl_d.IntToStructOp
-        else:
-            raise DTypeError(
-                "IntToStructOp does not support type: {} -> {}".format(
-                    self.val.dtype, res_type)
-            )
-        super().__init__(op, res_type)
-        if flags.BUILD_INPLACE:
-            self.build()
-    def build(self):
-        if is_struct_type(self.dtype):
-            dtype = get_signless_type(self.dtype)
-            self.built_op = self.op(
-                dtype, self.val.result, ip=GlobalInsertionPoint.get()
-            )
-            self.built_op.attributes["unsigned"] = UnitAttr.get()
-        else:
-            raise DTypeError("IntToStructOp only supports struct as result type")
-        return self.built_op
 
 class GetBitOp(ExprOp):
     def __init__(self, num, index, loc=None):

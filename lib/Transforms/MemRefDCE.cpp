@@ -23,6 +23,14 @@ using namespace hcl;
 namespace mlir {
 namespace hcl {
 
+void cleanUpUnusedOps(func::FuncOp &func) {
+  func.walk([&](Operation *op) {
+    if (op->getNumResults() != 0 && op->use_empty()) {
+      op->erase();
+    }
+  });
+}
+
 void removeNeverLoadedMemRef(func::FuncOp &func) {
   SmallVector<Operation *, 8> memRefAllocOps;
   func.walk([&](Operation *op) {
@@ -63,6 +71,7 @@ void removeNeverLoadedMemRef(func::FuncOp &func) {
 bool applyMemRefDCE(ModuleOp &mod) { 
     for (auto func : mod.getOps<func::FuncOp>()) {
         removeNeverLoadedMemRef(func);
+        cleanUpUnusedOps(func);
     }
     return true;     
 }

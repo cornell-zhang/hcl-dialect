@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Conversion/Passes.h"
+#include "hcl/Transforms/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
@@ -261,8 +262,10 @@ bool applyLowerCompositeType(ModuleOp &mod) {
   applyMemRefDCE(mod);
   for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerStructType(func);
+  }
+  applyMemRefDCE(mod);
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     if (!isLegal(func)) {
-      func.emitError("Lowering composite type failed");
       return false;
     }
   }

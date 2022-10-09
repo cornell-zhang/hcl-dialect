@@ -2792,11 +2792,8 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
     else:
         visitor.visit(cond)
     if visitor.scf_cnt > 0 or len(visitor.load) != 0 or len(visitor.store) != 0:
-        if not isinstance(cond, LogicalAndOp):
-            builder = ASTVisitor(mode="build")
-            builder.visit(cond)
-            cond_result = cond.result
-        else:
+        cond_expr = None
+        if isinstance(cond, LogicalAndOp):
             lst = cond.cond_lst
             res = lst[0]
             for i, single_cond in enumerate(lst):
@@ -2805,11 +2802,15 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
                 res = AndOp(res, single_cond)
                 res.build()
             cond_result = res.result
+            cond_expr = res
+        else:
+            cond_result = cond.result
+            cond_expr = cond
         if_op = scf.IfOp(cond_result, hasElse=hasElse,
                          results_=resultType, ip=ip)
-        if cond.built_op is not None:
+        if cond_expr.built_op is not None:
             mover = ASTVisitor(mode="move_before", op=if_op)
-            mover.visit(cond)
+            mover.visit(cond_expr)
         if yieldOp:
             scf.YieldOp([], ip=InsertionPoint(if_op.then_block))
             if hasElse:

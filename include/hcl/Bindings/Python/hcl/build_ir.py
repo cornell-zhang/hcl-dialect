@@ -2213,16 +2213,18 @@ class MaxOp(ReduceOp):
 
 
 class ASTVisitor:
-    def __init__(self, mode="build"):
+    def __init__(self, mode="build", op=None):
         self.iv = []
-        if mode not in ["build", "remove", "profile"]:
+        if mode not in ["build", "remove", "profile", "move_before"]:
             raise APIError(
-                "ASTVisitor only supports build, remove, or profile mode"
+                "ASTVisitor only supports build, remove, profile, or move_before mode"
             )
         self.mode = mode
         self.load = []
         self.store = []
         self.scf_cnt = 0
+        # Move ops in the AST before the given op
+        self.target_op = op
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -2319,12 +2321,20 @@ class ASTVisitor:
         expr.built_op.operation.erase()
         expr.built_op = None
 
+    def move_before(self, expr, target_op):
+        if expr.built_op is None:
+            return
+        expr.built_op.move_before(target_op)
+
     def visit_unary_op(self, expr):
         if self.mode == "build":
             self.visit(expr.val)
             return expr.build()
         elif self.mode == "profile":
             self.visit(expr.val)
+        elif self.mode == "move_before":
+            self.visit(expr.val)
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
             self.visit(expr.val)
@@ -2337,6 +2347,10 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.visit(expr.lhs)
             self.visit(expr.rhs)
+        elif self.mode == "move_before":
+            self.visit(expr.lhs)
+            self.visit(expr.rhs)
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
             self.visit(expr.rhs)
@@ -2381,6 +2395,11 @@ class ASTVisitor:
             self.visit(expr.cond)
             self.visit(expr.true_val)
             self.visit(expr.false_val)
+        elif self.mode == "move_before":
+            self.visit(expr.cond)
+            self.visit(expr.true_val)
+            self.visit(expr.false_val)
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
             self.visit(expr.false_val)
@@ -2394,6 +2413,9 @@ class ASTVisitor:
             return op.build()
         elif self.mode == "profile":
             fields = [self.visit(e) for e in expr]
+        elif self.mode == "move_before":
+            fields = [self.visit(e) for e in expr]
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
         return
@@ -2404,6 +2426,9 @@ class ASTVisitor:
             return expr.build()
         elif self.mode == "profile":
             self.visit(expr.struct)
+        elif self.mode == "move_before":
+            self.visit(expr.struct)
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
         return
@@ -2415,6 +2440,16 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.load.append(expr)
             return
+        elif self.mode == "move_before":
+            # Move the load op right before the target op
+            self.move_before(expr, self.target_op)
+            # And also rebuild one copy of the load op
+            # We need to rebuild this load op because
+            # if the load op is moved to a different block,
+            # it may not dominate its original users.
+            # Consider this case: test_dsl_basic.py::test_elif
+            expr.build()
+            return
         else:
             return expr.build()
 
@@ -2425,10 +2460,17 @@ class ASTVisitor:
         elif self.mode == "profile":
             self.store.append(expr)
             return
+        elif self.mode == "move_before":
+            self.move_before(expr, self.target_op)
+            return
         else:
             return expr.build()
 
     def visit_cast_op(self, expr):
+        if self.mode == "move_before":
+            self.visit(expr.val)
+            self.move_before(expr, self.target_op)
+            return
         if self.mode == "remove":
             self.erase_op(expr)
         self.visit(expr.val)
@@ -2440,6 +2482,10 @@ class ASTVisitor:
             self.visit(expr.num)
             self.visit(expr.index)
             return expr.build()
+        elif self.mode == "move_before":
+            self.visit(expr.num)
+            self.visit(expr.index)
+            self.move_before(self.target_op)
         elif self.mode == "remove":
             self.erase_op(expr)
             self.visit(expr.index)
@@ -2454,6 +2500,11 @@ class ASTVisitor:
             self.visit(expr.hi)
             self.visit(expr.lo)
             return expr.build()
+        elif self.mode == "move_before":
+            self.visit(expr.num)
+            self.visit(expr.hi)
+            self.visit(expr.lo)
+            self.move_before(expr, self.target_op)
         elif self.mode == "remove":
             self.erase_op(expr)
             self.visit(expr.lo)
@@ -2465,6 +2516,12 @@ class ASTVisitor:
             self.visit(expr.lo)
 
     def visit_setbit_op(self, expr):
+        if self.mode == "move_before":
+            self.visit(expr.num)
+            self.visit(expr.index)
+            self.visit(expr.val)
+            self.move_before(expr, self.target_op)
+            return
         if self.mode == "remove":
             self.erase_op(expr)
         self.visit(expr.num)
@@ -2474,6 +2531,13 @@ class ASTVisitor:
             return expr.build()
 
     def visit_setslice_op(self, expr):
+        if self.mode == "move_before":
+            self.visit(expr.num)
+            self.visit(expr.hi)
+            self.visit(expr.lo)
+            self.visit(expr.val)
+            self.move_before(expr, self.target_op)
+            return
         if self.mode == "remove":
             self.erase_op(expr)
         self.visit(expr.num)
@@ -2488,12 +2552,16 @@ class ASTVisitor:
             return expr.build()
         elif self.mode == "profile":
             pass
+        elif self.mode == "move_before":
+            self.move_before(expr, self.target_op)
         else:
             self.erase_op(expr)
 
     def visit_reduce_op(self, expr):
         if self.mode == "remove":
             raise APIError("Cannot remove ReduceOp")
+        elif self.mode == "move_before":
+            raise APIError("Moving reduce op is not supported")
         elif self.mode == "profile":
             return
         # save insetion point
@@ -2724,9 +2792,6 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
     else:
         visitor.visit(cond)
     if visitor.scf_cnt > 0 or len(visitor.load) != 0 or len(visitor.store) != 0:
-        if cond.built_op is not None:
-            remover = ASTVisitor(mode="remove")
-            remover.visit(cond)
         if not isinstance(cond, LogicalAndOp):
             builder = ASTVisitor(mode="build")
             builder.visit(cond)
@@ -2742,6 +2807,9 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
             cond_result = res.result
         if_op = scf.IfOp(cond_result, hasElse=hasElse,
                          results_=resultType, ip=ip)
+        if cond.built_op is not None:
+            mover = ASTVisitor(mode="move_before", op=if_op)
+            mover.visit(cond)
         if yieldOp:
             scf.YieldOp([], ip=InsertionPoint(if_op.then_block))
             if hasElse:

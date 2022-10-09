@@ -2429,6 +2429,7 @@ class ASTVisitor:
         elif self.mode == "move_before":
             self.visit(expr.struct)
             self.move_before(expr, self.target_op)
+            expr.build()
         else:
             self.erase_op(expr)
         return

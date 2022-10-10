@@ -2324,7 +2324,10 @@ class ASTVisitor:
     def move_before(self, expr, target_op):
         if expr.built_op is None:
             return
+        if "moved" in expr.built_op.attributes:
+            return
         expr.built_op.move_before(target_op)
+        expr.built_op.attributes["moved"] = UnitAttr.get()
 
     def visit_unary_op(self, expr):
         if self.mode == "build":
@@ -2429,7 +2432,6 @@ class ASTVisitor:
         elif self.mode == "move_before":
             self.visit(expr.struct)
             self.move_before(expr, self.target_op)
-            expr.build()
         else:
             self.erase_op(expr)
         return
@@ -2442,14 +2444,7 @@ class ASTVisitor:
             self.load.append(expr)
             return
         elif self.mode == "move_before":
-            # Move the load op right before the target op
             self.move_before(expr, self.target_op)
-            # And also rebuild one copy of the load op
-            # We need to rebuild this load op because
-            # if the load op is moved to a different block,
-            # it may not dominate its original users.
-            # Consider this case: test_dsl_basic.py::test_elif
-            expr.build()
             return
         else:
             return expr.build()
@@ -2486,7 +2481,7 @@ class ASTVisitor:
         elif self.mode == "move_before":
             self.visit(expr.num)
             self.visit(expr.index)
-            self.move_before(self.target_op)
+            self.move_before(expr, self.target_op)
         elif self.mode == "remove":
             self.erase_op(expr)
             self.visit(expr.index)
@@ -2781,7 +2776,7 @@ def make_for(lb, ub, step=1, name="", stage="", reduction=False, ip=None, loc=No
     return forOp
 
 
-def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
+def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True, cond_pos=None):
     # suppose in a imperative context (build in-place)
     if not isinstance(cond, (CmpOp, LogicalAndOp)):
         raise HCLValueError("`if` operation condition should be CmpOp")
@@ -2809,8 +2804,10 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True):
             cond_expr = cond
         if_op = scf.IfOp(cond_result, hasElse=hasElse,
                          results_=resultType, ip=ip)
+        if cond_pos is None:
+            cond_pos = if_op
         if cond_expr.built_op is not None:
-            mover = ASTVisitor(mode="move_before", op=if_op)
+            mover = ASTVisitor(mode="move_before", op=cond_pos)
             mover.visit(cond_expr)
         if yieldOp:
             scf.YieldOp([], ip=InsertionPoint(if_op.then_block))

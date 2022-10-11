@@ -2213,7 +2213,7 @@ class MaxOp(ReduceOp):
 
 
 class ASTVisitor:
-    def __init__(self, mode="build", op=None):
+    def __init__(self, mode="build", op=None, tag_only=False):
         self.iv = []
         if mode not in ["build", "remove", "profile", "move_before"]:
             raise APIError(
@@ -2225,6 +2225,7 @@ class ASTVisitor:
         self.scf_cnt = 0
         # Move ops in the AST before the given op
         self.target_op = op
+        self.tag_only = tag_only
 
     def visit(self, expr):
         """Apply the visitor to an expression."""
@@ -2326,7 +2327,8 @@ class ASTVisitor:
             return
         if "moved" in expr.built_op.attributes:
             return
-        expr.built_op.move_before(target_op)
+        if not self.tag_only:
+            expr.built_op.move_before(target_op)
         expr.built_op.attributes["moved"] = UnitAttr.get()
 
     def visit_unary_op(self, expr):
@@ -2804,9 +2806,10 @@ def make_if(cond, ip=None, hasElse=False, resultType=[], yieldOp=True, cond_pos=
             cond_expr = cond
         if_op = scf.IfOp(cond_result, hasElse=hasElse,
                          results_=resultType, ip=ip)
-        if cond_pos is None:
-            cond_pos = if_op
-        if cond_expr.built_op is not None:
+        if cond_pos is None: # top-level if
+            mover = ASTVisitor(mode="move_before", tag_only=True)
+            mover.visit(cond_expr)
+        elif cond_expr.built_op is not None: # nested if (elif branch)
             mover = ASTVisitor(mode="move_before", op=cond_pos)
             mover.visit(cond_expr)
         if yieldOp:

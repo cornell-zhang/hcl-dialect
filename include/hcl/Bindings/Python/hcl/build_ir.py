@@ -2904,9 +2904,6 @@ def make_while(cond, ip=None):
     while_op.before.blocks.append(*[])
     while_op.after.blocks.append(*[])
     GlobalInsertionPoint.save(while_op.before.blocks[0])
-    if cond.built_op is not None:
-        remover = ASTVisitor(mode="remove")
-        remover.visit(cond)
     if not isinstance(cond, LogicalAndOp):
         builder = ASTVisitor(mode="build")
         builder.visit(cond)
@@ -2921,7 +2918,10 @@ def make_while(cond, ip=None):
             res = AndOp(res, single_cond)
             res.build()
         cond_result = res.result
-    scf.ConditionOp(cond_result, [], ip=GlobalInsertionPoint.get())
+    cond_op = scf.ConditionOp(cond_result, [], ip=GlobalInsertionPoint.get())
+    if cond.built_op is not None:
+        mover = ASTVisitor(mode="move_before", op=cond_op)
+        mover.visit(cond)
     GlobalInsertionPoint.restore()
     return while_op
 

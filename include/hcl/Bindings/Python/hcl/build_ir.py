@@ -2108,8 +2108,9 @@ class SelectOp(ExprOp):
 class StructConstructOp(ExprOp):
     def __init__(self, fields, loc=None):
         super().__init__(hcl_d.StructConstructOp)
-        self.fields = [f.result for f in fields]
-        self.field_types = [f.type for f in self.fields]
+        self.fields = fields
+        self.field_results = [f.result for f in fields]
+        self.field_types = [f.type for f in self.field_results]
         self.dtype = hcl_d.StructType.get(self.field_types)
         if flags.BUILD_INPLACE:
             self.build()
@@ -2117,7 +2118,7 @@ class StructConstructOp(ExprOp):
     def build(self):
         self.built_op = self.op(
             self.dtype,
-            self.fields,
+            self.field_results,
             ip=GlobalInsertionPoint.get(),
         )
         return self.built_op
@@ -2141,13 +2142,17 @@ class StructGetOp(ExprOp):
         # self.dtype has to be a concrete MLIR type, for
         # the field value to be consumed by another operation.
         if is_unsigned_type(self.dtype):
-            self.dtype = IntegerType.get_signless(get_bitwidth(self.dtype))
+            dtype = IntegerType.get_signless(get_bitwidth(self.dtype))
+        else:
+            dtype = self.dtype
         self.built_op = self.op(
-            self.dtype,
+            dtype,
             self.struct.result,
             IntegerAttr.get(IntegerType.get_signless(64), self.index),
             ip=GlobalInsertionPoint.get(),
         )
+        if is_unsigned_type(self.dtype):
+            self.built_op.attributes["unsigned"] = UnitAttr.get()
         return self.built_op
 
 

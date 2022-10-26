@@ -199,3 +199,10 @@ class APIWarning(HCLWarning):
     def __init__(self, msg, line=None):
         category_str = bcolors.WARNING + "[API]" + bcolors.ENDC
         HCLWarning.__init__(self, msg, line, category_str, RuntimeWarning)
+
+class PassWarning(HCLWarning):
+    """A subclass for specifying pass related warning"""
+
+    def __init__(self, msg, line=None):
+        category_str = bcolors.WARNING + "[Pass]" + bcolors.ENDC
+        HCLWarning.__init__(self, msg, line, category_str, RuntimeWarning)

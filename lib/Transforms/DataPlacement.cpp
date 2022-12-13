@@ -183,13 +183,14 @@ bool applyDataPlacement(ModuleOp &module) {
     auto device = toOp.device();
     auto optional_axis = toOp.axis();
     llvm::outs() << "target: " << target << "\n";
-    llvm::outs() << "device: " << device << "\n";
-    llvm::outs() << "axis: " << optional_axis << "\n";
-    // if (optional_axis.hasValue()) {
-
-    // } else {
-
-    // }
+    // llvm::outs() << "device: " << device << "\n";
+    // llvm::outs() << "axis: " << optional_axis << "\n";
+    // check if axis has value
+    if (optional_axis) {
+      llvm::outs() << "axis has value: " << optional_axis << "\n";
+    } else {
+      llvm::outs() << "axis has no value\n";
+    }
   }
 
   // for (auto func : module.getOps<func::FuncOp>()) {

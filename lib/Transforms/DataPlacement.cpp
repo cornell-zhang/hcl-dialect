@@ -169,10 +169,33 @@ DataFlowGraph buildDFG(Operation &scope_op) {
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) {
 
-  for (auto func : module.getOps<func::FuncOp>()) {
-    DataFlowGraph graph = buildDFG(*func.getOperation());
-    graph.print();
+  // get all HostXcelTo ops
+  SmallVector<Operation *, 4> hostXcelToOps;
+  module.walk([&](Operation *op) {
+    if (isa<HostXcelToOp>(op)) {
+      hostXcelToOps.push_back(op);
+    }
+  });
+
+  for (auto op : hostXcelToOps) {
+    HostXcelToOp toOp = dyn_cast<HostXcelToOp>(op);
+    auto target = toOp.target();
+    auto device = toOp.device();
+    auto optional_axis = toOp.axis();
+    llvm::outs() << "target: " << target << "\n";
+    llvm::outs() << "device: " << device << "\n";
+    llvm::outs() << "axis: " << optional_axis << "\n";
+    // if (optional_axis.hasValue()) {
+
+    // } else {
+
+    // }
   }
+
+  // for (auto func : module.getOps<func::FuncOp>()) {
+  //   DataFlowGraph graph = buildDFG(*func.getOperation());
+  //   graph.print();
+  // }
 
   // try creating a new module
   // this worked:

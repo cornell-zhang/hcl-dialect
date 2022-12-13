@@ -524,12 +524,12 @@ def HeteroCL_HostXcelToOp : HeteroCL_Op<"host_xcel_to">
     let description = [{
         hcl.to(tensor, axis, device)
     }];
-    let arguments = (ins AnyMemRef:$targets,
+    let arguments = (ins AnyMemRef:$target,
                         DefaultValuedAttr<DeviceEnum, "DeviceEnum::CPUDevice">:$device,
                         Optional<LoopHandle>:$axis);
     let results = (outs );
     let assemblyFormat = [{
-        `(` $targets `:` type($targets) `,` $device (`,` $axis^)? `)` attr-dict
+        `(` $target `:` type($target) `,` $device (`,` $axis^)? `)` attr-dict
     }];
 }
 

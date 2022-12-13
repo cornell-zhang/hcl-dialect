@@ -135,10 +135,6 @@ DataFlowGraph buildDFG(Operation &scope_op) {
         std::set<Operation *> producedMemRefs;
         getAllLoadedMemRefs(&op, consumedMemRefs);
         getAllStoredMemRefs(&op, producedMemRefs);
-        // update the latest producer for each memref
-        for (auto memRef : producedMemRefs) {
-          latestProducer[memRef] = node;
-        }
         // add edges to the graph
         for (auto memRef : consumedMemRefs) {
           // get the node that produces the memref
@@ -148,6 +144,10 @@ DataFlowGraph buildDFG(Operation &scope_op) {
             Node *producer = latestProducer[memRef];
             graph.addEdge(producer, node);
           }
+        }
+        // update the latest producer for each memref
+        for (auto memRef : producedMemRefs) {
+          latestProducer[memRef] = node;
         }
       }
     }

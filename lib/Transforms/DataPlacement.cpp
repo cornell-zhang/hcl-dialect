@@ -28,14 +28,19 @@ namespace hcl {
 class Node {
   // Member variables
   Operation *op;
-  int device;
+  DeviceEnum device;
   std::vector<Node *> upstream;
   std::vector<Node *> downstream;
+  std::vector<Operation *> consumedMemRefs;
+  std::vector<Operation *> producedMemRefs;
 
 public:
   Node(Operation *op) : op(op) {}
   void addUpstream(Node *node) { upstream.push_back(node); }
   void addDownstream(Node *node) { downstream.push_back(node); }
+  void addConsumedMemRef(Operation *memRef) { consumedMemRefs.push_back(memRef); }
+  void addProducedMemRef(Operation *memRef) { producedMemRefs.push_back(memRef); }
+  std::vector<Operation *> getConsumedMemRefs() { return consumedMemRefs; }
   void print() {
     llvm::outs() << "Node: " << this->getName() << "\n";
     llvm::outs() << "Upstream: ";
@@ -63,18 +68,32 @@ public:
 
 class DataFlowGraph {
   // Member variables
-  std::vector<Node *> nodes;
+  std::map<std::string, Node *> nodeMap;
 
 public:
-  void addNode(Node *node) { nodes.push_back(node); }
+  void addNode(Node *node) { 
+    this->nodeMap[node->getName()] = node;
+  }
   void addEdge(Node *src, Node *dst) {
     src->addDownstream(dst);
     dst->addUpstream(src);
   }
+  Node* getNode(std::string name) {
+    return this->nodeMap[name];
+  }
+  void getNodeByConsumedMemRefs(Operation *memRef, std::vector<Node *> &consumerNodes) {
+    for (auto node : this->nodeMap) {
+      for (auto consumedMemRef : node.second->getConsumedMemRefs()) {
+        if (consumedMemRef == memRef) {
+          consumerNodes.push_back(node.second);
+        }
+      }
+    }
+  }
   void print() {
     // print the graph
-    for (auto node : this->nodes) {
-      node->print();
+    for (auto node : this->nodeMap) {
+      node.second->print();
     }
   }
 };
@@ -126,7 +145,7 @@ void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
   }
 }
 
-DataFlowGraph buildDFG(Operation &scope_op) {
+DataFlowGraph buildDFGInScope(Operation &scope_op) {
   // build a data flow graph
   // given an operation as the scope of the graph
   DataFlowGraph graph;
@@ -151,6 +170,7 @@ DataFlowGraph buildDFG(Operation &scope_op) {
           // get the node that produces the memref
           // add an edge from the node to the current node
           // check if memRef is in latestProducer map
+          node->addConsumedMemRef(memRef);
           if (latestProducer.find(memRef) != latestProducer.end()) {
             Node *producer = latestProducer[memRef];
             graph.addEdge(producer, node);
@@ -158,6 +178,7 @@ DataFlowGraph buildDFG(Operation &scope_op) {
         }
         // update the latest producer for each memref
         for (auto memRef : producedMemRefs) {
+          node->addProducedMemRef(memRef);
           latestProducer[memRef] = node;
         }
       }
@@ -165,6 +186,24 @@ DataFlowGraph buildDFG(Operation &scope_op) {
   }
   return graph;
 }
+
+void buildHierarchicalDFG(ModuleOp &module, std::map<Operation *, DataFlowGraph> &hierarchicalDFG) {
+  // build a hierarchical data flow graph
+  // given a module
+  // get all the top level ops
+  SmallVector<Operation *, 4> topLevelOps;
+  module.walk([&](Operation *op) {
+    if (isa<AffineForOp>(op) || isa<scf::ForOp>(op) || isa<func::FuncOp>(op)) {
+      topLevelOps.push_back(op);
+    }
+  });
+  // build a data flow graph for each top level op
+  for (auto op : topLevelOps) {
+    DataFlowGraph graph = buildDFGInScope(*op);
+    hierarchicalDFG[op] = graph;
+  }
+}
+
 
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) {
@@ -176,6 +215,7 @@ bool applyDataPlacement(ModuleOp &module) {
       hostXcelToOps.push_back(op);
     }
   });
+
 
   for (auto op : hostXcelToOps) {
     HostXcelToOp toOp = dyn_cast<HostXcelToOp>(op);

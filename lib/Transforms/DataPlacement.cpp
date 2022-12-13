@@ -13,6 +13,7 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
 #include <map>
@@ -81,11 +82,35 @@ void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
 
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) { 
+  
+  std::map<Operation *, std::set<Operation *>> loopConsumedMemRefs;
+  std::map<Operation *, std::set<Operation *>> loopProducedMemRefs;
+
+  // get all the loops
+  std::vector<Operation *> loops;
+  module.walk([&](Operation *op) {
+    if (isa<AffineForOp>(op)) {
+      loops.push_back(op);
+    } else if (isa<scf::ForOp>(op)) {
+      loops.push_back(op);
+    }
+  });
+
+  // get all the memrefs consumed and produced by each loop
+  for (auto loop : loops) {
+    // add an empty set for each loop
+    loopConsumedMemRefs.insert(std::make_pair(loop, std::set<Operation *>()));
+    loopProducedMemRefs.insert(std::make_pair(loop, std::set<Operation *>()));
+    getAllLoadedMemRefs(loop, loopConsumedMemRefs[loop]);
+    getAllStoredMemRefs(loop, loopProducedMemRefs[loop]);
+  }
+  
+  
+  
   // try creating a new module
   OpBuilder builder(module.getContext());
   builder.setInsertionPointToStart(module.getBody());
   builder.create<ModuleOp>(module.getLoc());
-//   auto newModule = ModuleOp::create(module.getLoc());
   // move all ops in the old module to the new module
 //   newModule.getBody()->getOperations().splice(
 //         newModule.getBody()->begin(), module.getBody()->getOperations());

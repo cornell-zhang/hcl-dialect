@@ -4,8 +4,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <map>
-
 #include "PassDetail.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
@@ -13,8 +11,12 @@
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
 
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+
+#include <map>
+#include <set>
 
 using namespace mlir;
 using namespace hcl;
@@ -45,6 +47,37 @@ class DataFlowGraph {
   }
 };
 
+void getAllLoadedMemRefs(Operation *op, std::set<Operation *> &memRefs) {
+  SmallVector<Operation *, 8> loadOps;
+  op->walk([&](Operation *op) {
+    if (isa<AffineLoadOp>(op)) {
+      loadOps.push_back(op);
+    } else if (isa<memref::LoadOp>(op)) {
+      loadOps.push_back(op);
+    }
+  });
+
+  // add memrefs to the set
+  for (auto loadOp : loadOps) {
+    memRefs.insert(loadOp->getOperand(0).getDefiningOp());
+  }
+}
+
+void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
+  SmallVector<Operation *, 8> storeOps;
+  op->walk([&](Operation *op) {
+    if (isa<AffineStoreOp>(op)) {
+      storeOps.push_back(op);
+    } else if (isa<memref::StoreOp>(op)) {
+      storeOps.push_back(op);
+    }
+  });
+
+  // add memrefs to the set
+  for (auto storeOp : storeOps) {
+    memRefs.insert(storeOp->getOperand(1).getDefiningOp());
+  }
+}
 
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) { 

@@ -60,7 +60,15 @@ void getAllLoadedMemRefs(Operation *op, std::set<Operation *> &memRefs) {
 
   // add memrefs to the set
   for (auto loadOp : loadOps) {
-    memRefs.insert(loadOp->getOperand(0).getDefiningOp());
+    auto operand = loadOp->getOperand(0);
+    // check if operand defining op is a block arg
+    if (operand.isa<BlockArgument>()){
+      // get block arg index
+      unsigned int index = operand.cast<BlockArgument>().getArgNumber();
+      memRefs.insert(reinterpret_cast<Operation *>(index));
+    } else {
+      memRefs.insert(loadOp->getOperand(0).getDefiningOp());
+    }
   }
 }
 
@@ -76,9 +84,18 @@ void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
 
   // add memrefs to the set
   for (auto storeOp : storeOps) {
-    memRefs.insert(storeOp->getOperand(1).getDefiningOp());
+    auto operand = storeOp->getOperand(1);
+    if (operand.isa<BlockArgument>()){
+      // get block arg index
+      unsigned int index = operand.cast<BlockArgument>().getArgNumber();
+      memRefs.insert(reinterpret_cast<Operation *>(index));
+    } else {
+      memRefs.insert(storeOp->getOperand(1).getDefiningOp());
+    }
   }
 }
+
+
 
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) { 
@@ -105,12 +122,27 @@ bool applyDataPlacement(ModuleOp &module) {
     getAllStoredMemRefs(loop, loopProducedMemRefs[loop]);
   }
   
+  // let's check some results
+  for (auto loop : loops) {
+    llvm::outs() << "Loop: " << *loop << "\n";
+    llvm::outs() << "Consumed: " << "\n";
+    for (auto memRef : loopConsumedMemRefs[loop]) {
+      llvm::outs() << memRef << "\n";
+    }
+    llvm::outs() << "Produced: " << "\n";
+    for (auto memRef : loopProducedMemRefs[loop]) {
+      llvm::outs() << memRef << "\n";
+    }
+  }
   
   
   // try creating a new module
-  OpBuilder builder(module.getContext());
-  builder.setInsertionPointToStart(module.getBody());
-  builder.create<ModuleOp>(module.getLoc());
+  // this worked:
+  // OpBuilder builder(module.getContext());
+  // builder.setInsertionPointToStart(module.getBody());
+  // builder.create<ModuleOp>(module.getLoc());
+
+
   // move all ops in the old module to the new module
 //   newModule.getBody()->getOperations().splice(
 //         newModule.getBody()->begin(), module.getBody()->getOperations());

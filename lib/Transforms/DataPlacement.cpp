@@ -35,6 +35,20 @@ class Node {
   Node(Operation *op) : op(op) {}
   void addUpstream(Node *node) { upstream.push_back(node); }
   void addDownstream(Node *node) { downstream.push_back(node); } 
+  void print() {
+    llvm::outs() << "Node: " << this->getName() << "\n";
+    llvm::outs() << "Upstream: ";
+    for (auto node : this->upstream) {
+      llvm::outs() << node->getName() << " ";
+    }
+    llvm::outs() << "\n";
+    llvm::outs() << "Downstream: ";
+    for (auto node : this->downstream) {
+      llvm::outs() << node->getName() << " ";
+    }
+    llvm::outs() << "\n";
+  }
+  std::string getName() {return this->op->getAttr("op_name").cast<StringAttr>().getValue().str();}
 };
 
 class DataFlowGraph {
@@ -45,6 +59,12 @@ class DataFlowGraph {
   void addEdge(Node *src, Node *dst) {
     src->addDownstream(dst);
     dst->addUpstream(src);
+  }
+  void print() {
+    // print the graph
+    for (auto node : this->nodes) {
+      node->print();
+    }
   }
 };
 
@@ -95,44 +115,53 @@ void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
   }
 }
 
+DataFlowGraph buildDFG(Operation &scope_op) {
+  // build a data flow graph
+  // given an operation as the scope of the graph
+  DataFlowGraph graph;
+  std::map<Operation *, Node *> latestProducer;
+  for (auto &region : scope_op.getRegions()) {
+    for (auto &block : region.getBlocks()) {
+      for (auto &op : block.getOperations()) {
+        // skip op that is not a loop
+        if (!isa<AffineForOp>(op) && !isa<scf::ForOp>(op)) {
+          continue;
+        }
+        // create a node for each op
+        Node *node = new Node(&op);
+        graph.addNode(node);
+        // get all the memrefs consumed and produced by the op
+        std::set<Operation *> consumedMemRefs;
+        std::set<Operation *> producedMemRefs;
+        getAllLoadedMemRefs(&op, consumedMemRefs);
+        getAllStoredMemRefs(&op, producedMemRefs);
+        // update the latest producer for each memref
+        for (auto memRef : producedMemRefs) {
+          latestProducer[memRef] = node;
+        }
+        // add edges to the graph
+        for (auto memRef : consumedMemRefs) {
+          // get the node that produces the memref
+          // add an edge from the node to the current node
+          // check if memRef is in latestProducer map
+          if (latestProducer.find(memRef) != latestProducer.end()) {
+            Node *producer = latestProducer[memRef];
+            graph.addEdge(producer, node);
+          }
+        }
+      }
+    }
+  }
+  return graph;
+}
 
 
 /// Pass entry point
 bool applyDataPlacement(ModuleOp &module) { 
   
-  std::map<Operation *, std::set<Operation *>> loopConsumedMemRefs;
-  std::map<Operation *, std::set<Operation *>> loopProducedMemRefs;
-
-  // get all the loops
-  std::vector<Operation *> loops;
-  module.walk([&](Operation *op) {
-    if (isa<AffineForOp>(op)) {
-      loops.push_back(op);
-    } else if (isa<scf::ForOp>(op)) {
-      loops.push_back(op);
-    }
-  });
-
-  // get all the memrefs consumed and produced by each loop
-  for (auto loop : loops) {
-    // add an empty set for each loop
-    loopConsumedMemRefs.insert(std::make_pair(loop, std::set<Operation *>()));
-    loopProducedMemRefs.insert(std::make_pair(loop, std::set<Operation *>()));
-    getAllLoadedMemRefs(loop, loopConsumedMemRefs[loop]);
-    getAllStoredMemRefs(loop, loopProducedMemRefs[loop]);
-  }
-  
-  // let's check some results
-  for (auto loop : loops) {
-    llvm::outs() << "Loop: " << *loop << "\n";
-    llvm::outs() << "Consumed: " << "\n";
-    for (auto memRef : loopConsumedMemRefs[loop]) {
-      llvm::outs() << memRef << "\n";
-    }
-    llvm::outs() << "Produced: " << "\n";
-    for (auto memRef : loopProducedMemRefs[loop]) {
-      llvm::outs() << memRef << "\n";
-    }
+  for (auto func : module.getOps<func::FuncOp>()) {
+    DataFlowGraph graph = buildDFG(*func.getOperation());
+    graph.print();
   }
   
   

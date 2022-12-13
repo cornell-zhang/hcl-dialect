@@ -110,6 +110,10 @@ static llvm::cl::opt<bool> linalgConversion("linalg-to-affine",
                                             llvm::cl::desc("Linalg to affine"),
                                             llvm::cl::init(false));
 
+static llvm::cl::opt<bool> dataPlacement("data-placement",
+                                         llvm::cl::desc("Data placement"),
+                                         llvm::cl::init(false));
+
 static llvm::cl::opt<bool>
     enableNormalize("normalize",
                     llvm::cl::desc("Enable other common optimizations"),
@@ -259,6 +263,10 @@ int main(int argc, char **argv) {
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   if (enableOpt) {
     pm.addPass(mlir::hcl::createLoopTransformationPass());
+  }
+
+  if (dataPlacement) {
+    pm.addPass(mlir::hcl::createDataPlacementPass());
   }
 
   if (memRefDCE) {

@@ -518,6 +518,21 @@ def HeteroCL_InterKernelToOp : HeteroCL_Op<"inter_kernel_to">
     }];
 }
 
+def HeteroCL_HostXcelToOp : HeteroCL_Op<"host_xcel_to">
+{
+    let summary = "host-xcel data placement";
+    let description = [{
+        hcl.to(tensor, axis, device)
+    }];
+    let arguments = (ins AnyMemRef:$targets,
+                        DefaultValuedAttr<DeviceEnum, "DeviceEnum::CPUDevice">:$device,
+                        Optional<LoopHandle>:$axis);
+    let results = (outs );
+    let assemblyFormat = [{
+        `(` $targets `:` type($targets) `,` $device (`,` $axis^)? `)` attr-dict
+    }];
+}
+
 def HeteroCL_OutlineOp : HeteroCL_Op<"outline"> 
 {
     let summary = "outline";

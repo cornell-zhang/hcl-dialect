@@ -11,10 +11,10 @@
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
 
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 
 #include <map>
 #include <set>
@@ -31,10 +31,11 @@ class Node {
   int device;
   std::vector<Node *> upstream;
   std::vector<Node *> downstream;
- public:
+
+public:
   Node(Operation *op) : op(op) {}
   void addUpstream(Node *node) { upstream.push_back(node); }
-  void addDownstream(Node *node) { downstream.push_back(node); } 
+  void addDownstream(Node *node) { downstream.push_back(node); }
   void print() {
     llvm::outs() << "Node: " << this->getName() << "\n";
     llvm::outs() << "Upstream: ";
@@ -48,13 +49,23 @@ class Node {
     }
     llvm::outs() << "\n";
   }
-  std::string getName() {return this->op->getAttr("op_name").cast<StringAttr>().getValue().str();}
+  std::string getName() {
+    // check if "op_name" attribute exists
+    if (this->op->getAttr("op_name")) {
+      return this->op->getAttr("op_name").cast<StringAttr>().getValue().str();
+    } else if (this->op->getAttr("loop_name")) {
+      return this->op->getAttr("loop_name").cast<StringAttr>().getValue().str();
+    } else {
+      return this->op->getName().getStringRef().str();
+    }
+  }
 };
 
 class DataFlowGraph {
   // Member variables
   std::vector<Node *> nodes;
- public:
+
+public:
   void addNode(Node *node) { nodes.push_back(node); }
   void addEdge(Node *src, Node *dst) {
     src->addDownstream(dst);
@@ -82,7 +93,7 @@ void getAllLoadedMemRefs(Operation *op, std::set<Operation *> &memRefs) {
   for (auto loadOp : loadOps) {
     auto operand = loadOp->getOperand(0);
     // check if operand defining op is a block arg
-    if (operand.isa<BlockArgument>()){
+    if (operand.isa<BlockArgument>()) {
       // get block arg index
       unsigned int index = operand.cast<BlockArgument>().getArgNumber();
       memRefs.insert(reinterpret_cast<Operation *>(index));
@@ -105,7 +116,7 @@ void getAllStoredMemRefs(Operation *op, std::set<Operation *> &memRefs) {
   // add memrefs to the set
   for (auto storeOp : storeOps) {
     auto operand = storeOp->getOperand(1);
-    if (operand.isa<BlockArgument>()){
+    if (operand.isa<BlockArgument>()) {
       // get block arg index
       unsigned int index = operand.cast<BlockArgument>().getArgNumber();
       memRefs.insert(reinterpret_cast<Operation *>(index));
@@ -155,26 +166,23 @@ DataFlowGraph buildDFG(Operation &scope_op) {
   return graph;
 }
 
-
 /// Pass entry point
-bool applyDataPlacement(ModuleOp &module) { 
-  
+bool applyDataPlacement(ModuleOp &module) {
+
   for (auto func : module.getOps<func::FuncOp>()) {
     DataFlowGraph graph = buildDFG(*func.getOperation());
     graph.print();
   }
-  
-  
+
   // try creating a new module
   // this worked:
   // OpBuilder builder(module.getContext());
   // builder.setInsertionPointToStart(module.getBody());
   // builder.create<ModuleOp>(module.getLoc());
 
-
   // move all ops in the old module to the new module
-//   newModule.getBody()->getOperations().splice(
-//         newModule.getBody()->begin(), module.getBody()->getOperations());
+  //   newModule.getBody()->getOperations().splice(
+  //         newModule.getBody()->begin(), module.getBody()->getOperations());
   return true;
 }
 

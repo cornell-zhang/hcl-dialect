@@ -17,6 +17,11 @@ def LoopTransformation : Pass<"loop-opt", "ModuleOp"> {
   let constructor = "mlir::hcl::createLoopTransformationPass()";
 }
 
+def DataPlacement : Pass<"data-placement", "ModuleOp"> {
+  let summary = "Data placement pass";
+  let constructor = "mlir::hcl::createDataPlacementPass()";
+}
+
 def AnyWidthInteger : Pass<"anywidth-integer", "ModuleOp"> {
   let summary = "Transform anywidth-integer input to 64-bit";
   let constructor = "mlir::hcl::createAnyWidthIntegerPass()";

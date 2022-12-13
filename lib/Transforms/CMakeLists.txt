@@ -6,6 +6,7 @@ add_mlir_library(MLIRHCLPasses
     LegalizeCast.cpp
     RemoveStrideMap.cpp
     MemRefDCE.cpp
+    DataPlacement.cpp
 
     ADDITIONAL_HEADER_DIRS
     ${PROJECT_SOURCE_DIR}/include/hcl

@@ -41,13 +41,14 @@ def NDRangeDimKindEnum: I32EnumAttr<"NDRangeDimKindEnum",
     let symbolToStringFnName = "ConvertToNDRangeDimString";
 }
 
-def CPUDevice: I32EnumAttrCase<"CPUDevice", 0>;
-def FPGADevice: I32EnumAttrCase<"FPGADevice", 1>;
-def GPUDevice: I32EnumAttrCase<"GPUDevice", 2>;
+def UnknownDevice: I32EnumAttrCase<"UnknownDevice", 0>;
+def CPUDevice: I32EnumAttrCase<"CPUDevice", 1>;
+def FPGADevice: I32EnumAttrCase<"FPGADevice", 2>;
+def GPUDevice: I32EnumAttrCase<"GPUDevice", 3>;
 
 def DeviceEnum: I32EnumAttr<"DeviceEnum",
         "A device enum",
-        [CPUDevice, FPGADevice, GPUDevice]> {
+        [UnknownDevice, CPUDevice, FPGADevice, GPUDevice]> {
     let cppNamespace = "mlir::hcl";
     let stringToSymbolFnName = "ConvertToDeviceEnum";
     let symbolToStringFnName = "ConvertToDeviceString";

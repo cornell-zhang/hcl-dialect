@@ -29,7 +29,7 @@ namespace hcl {
 class Node {
   // Member variables
   Operation *op;
-  DeviceEnum device;
+  DeviceEnum device = DeviceEnum::UnknownDevice;
   std::vector<Node *> upstream;
   std::vector<Node *> downstream;
   std::vector<Operation *> consumedMemRefs;
@@ -48,13 +48,13 @@ public:
   std::vector<Operation *> getConsumedMemRefs() { return consumedMemRefs; }
   void print() {
     llvm::outs() << "Node: " << this->getName();
-    llvm::outs() << "[" << this->getDeviceName() << "]\n";
-    llvm::outs() << "Upstream: ";
+    llvm::outs() << " [" << this->getDeviceName() << "]\n";
+    llvm::outs() << "  Upstream: ";
     for (auto node : this->upstream) {
       llvm::outs() << node->getName() << " ";
     }
     llvm::outs() << "\n";
-    llvm::outs() << "Downstream: ";
+    llvm::outs() << "  Downstream: ";
     for (auto node : this->downstream) {
       llvm::outs() << node->getName() << " ";
     }
@@ -122,7 +122,9 @@ public:
       DeviceEnum device = node.second->getDevice();
       // propagate the device to all downstream nodes
       for (auto downstreamNode : node.second->getDownstream()) {
-        downstreamNode->setDevice(device);
+        if (downstreamNode->getDevice() == DeviceEnum::UnknownDevice) {
+          downstreamNode->setDevice(device);
+        }
       }
     }
   }
@@ -301,8 +303,17 @@ bool applyDataPlacement(ModuleOp &module) {
         op->emitError("Cannot find loop ") << loop_name.str();
         return false;
       }
+      int axis_index = getLoop(rootForOp, loop_name);
       // get parent operation of the axis op
       scope_op = axis_op->getParentOp();
+      // get the data flow graph of the scope
+      DataFlowGraph graph = hierarchicalDFG[scope_op];
+      Node *target_node = axis_index == 0 ? graph.getNode(op_name.str()) : graph.getNode(loop_name.str());
+      auto device = toOp.device();
+      for (auto node : target_node->getDownstream()) {
+        node->setDevice(device);
+        // llvm::outs() << "set node " << node->getName() << " to device " << node->getDeviceName() << "\n";
+      }
     } else {
       // if axis is not specified, the memref must be a block argument
       if (!target.isa<BlockArgument>()) {
@@ -310,17 +321,18 @@ bool applyDataPlacement(ModuleOp &module) {
         return false;
       }
       scope_op = func.getOperation();
+      // get the data flow graph of the scope
+      DataFlowGraph graph = hierarchicalDFG[scope_op];
+      // get the node that consumes the memref
+      std::vector<Node *> target_nodes;
+      graph.getNodeByConsumedMemRef(target_defining_op, target_nodes);
+      auto device = toOp.device();
+      for (auto node : target_nodes) {
+        node->setDevice(device);
+        // llvm::outs() << "set node " << node->getName() << " to device " << node->getDeviceName() << "\n";
+      }
     }
     scopes.insert(scope_op);
-    // get the data flow graph of the scope
-    DataFlowGraph graph = hierarchicalDFG[scope_op];
-    // get the node that consumes the memref
-    std::vector<Node *> target_nodes;
-    graph.getNodeByConsumedMemRef(target_defining_op, target_nodes);
-    auto device = toOp.device();
-    for (auto node : target_nodes) {
-      node->setDevice(device);
-    }
   }
 
   // propagate device information and partition graphs
@@ -328,6 +340,7 @@ bool applyDataPlacement(ModuleOp &module) {
     DataFlowGraph graph = hierarchicalDFG[scope];
     graph.propagateDevice();
     graph.partition();
+    graph.print();
   }
 
   // for (auto func : module.getOps<func::FuncOp>()) {

@@ -1,4 +1,4 @@
-// RUN: hcl-opt  %s
+// RUN: hcl-opt  %s --jit
 
 module {
     func.func private @loadMemrefI32(memref<*xi32>)

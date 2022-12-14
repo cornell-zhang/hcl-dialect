@@ -159,11 +159,19 @@ int runJiTCompiler(mlir::ModuleOp module) {
   if (!found) {
     llvm::errs() << "Error: LLVM_BUILD_DIR not found\n";
   }
+  std::string HCL_DIALECT_BUILD_DIR;
+  found = mlir::hcl::getEnv("HCL_DIALECT_BUILD_DIR", HCL_DIALECT_BUILD_DIR);
+  if (!found) {
+    llvm::errs() << "Error: HCL_DIALECT_BUILD_DIR not found\n";
+  }
   std::string runner_utils = LLVM_BUILD_DIR + "/lib/libmlir_runner_utils.so";
   std::string c_runner_utils =
       LLVM_BUILD_DIR + "/lib/libmlir_c_runner_utils.so";
+  std::string hcl_runtime_lib =
+      HCL_DIALECT_BUILD_DIR + "/lib/libhcl_runtime_utils.so";
   llvm::SmallVector<std::string, 4> shared_libs = {runner_utils,
-                                                   c_runner_utils};
+                                                   c_runner_utils,
+                                                   hcl_runtime_lib};
   llvm::SmallVector<llvm::SmallString<256>, 4> libPaths;
   // Use absolute library path so that gdb can find the symbol table.
   transform(shared_libs, std::back_inserter(libPaths), [](std::string libPath) {

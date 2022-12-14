@@ -31,7 +31,10 @@ struct UnrankedMemRefType {
 };
 
 
-extern "C" HCL_RUNTIME_UTILS_EXPORT void loadMemrefI32(int64_t rank, void *ptr);
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+_mlir_ciface_loadMemrefI32(UnrankedMemRefType<int32_t> *m);
 
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+loadMemrefI32(int64_t rank, void *ptr);
 
 #endif // HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H

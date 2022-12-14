@@ -31,7 +31,7 @@ struct UnrankedMemRefType {
 };
 
 
-extern "C" HCL_RUNTIME_UTILS_EXPORT void loadMemrefI32(int64_t rank, void *ptr, std::string filename);
+extern "C" HCL_RUNTIME_UTILS_EXPORT void loadMemrefI32(int64_t rank, void *ptr);
 
 
 #endif // HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H

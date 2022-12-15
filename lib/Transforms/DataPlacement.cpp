@@ -142,14 +142,14 @@ public:
         op_handles.push_back(op_handle);
       }
     }
-    SmallVector<Value> op_handles_values;
-    for (auto op_handle : op_handles) {
-      op_handles_values.push_back(op_handle->getResult(0));
-    }
-    auto outline_op = builder.create<OutlineOp>(funcOp.getLoc(), op_handles_values);
-    if (failed(runOutline(mod, funcOp, outline_op))) {
-      funcOp->emitError("Failed to outline the kernel function");
-    }
+    // SmallVector<Value> op_handles_values;
+    // for (auto op_handle : op_handles) {
+    //   op_handles_values.push_back(op_handle->getResult(0));
+    // }
+    // auto outline_op = builder.create<OutlineOp>(funcOp.getLoc(), op_handles_values);
+    // if (failed(runOutline(mod, funcOp, outline_op))) {
+    //   funcOp->emitError("Failed to outline the kernel function");
+    // }
     return;
   }
 };

@@ -129,7 +129,27 @@ public:
     }
   }
 
-  void partition() {
+  void partition(ModuleOp &mod, func::FuncOp &funcOp) {
+    // partition doesn't work now because of outline op
+    // collect all nodes on FPGA
+    OpBuilder builder(funcOp.getBody().back().getTerminator());
+    std::vector<Node *> fpgaNodes;
+    std::vector<Operation *> op_handles;
+    for (auto node : this->nodeMap) {
+      if (node.second->getDevice() == DeviceEnum::FPGADevice) {
+        fpgaNodes.push_back(node.second);
+        auto op_handle = builder.create<CreateOpHandleOp>(funcOp.getLoc(), node.second->getName());
+        op_handles.push_back(op_handle);
+      }
+    }
+    SmallVector<Value> op_handles_values;
+    for (auto op_handle : op_handles) {
+      op_handles_values.push_back(op_handle->getResult(0));
+    }
+    auto outline_op = builder.create<OutlineOp>(funcOp.getLoc(), op_handles_values);
+    if (failed(runOutline(mod, funcOp, outline_op))) {
+      funcOp->emitError("Failed to outline the kernel function");
+    }
     return;
   }
 };
@@ -339,7 +359,7 @@ bool applyDataPlacement(ModuleOp &module) {
   for (auto scope : scopes) {
     DataFlowGraph graph = hierarchicalDFG[scope];
     graph.propagateDevice();
-    graph.partition();
+    graph.partition(module, func);
     graph.print();
   }
 

@@ -18,6 +18,7 @@ add_mlir_dialect_library(MLIRHCLConversion
     ${conversion_libs}
     MLIRIR
     MLIRPass
+    MLIRMathTransforms
     MLIRHeteroCL
     MLIRHCLSupport
 )

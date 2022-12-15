@@ -14,11 +14,15 @@
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/Math/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+
 #include "llvm/ADT/Sequence.h"
+
 
 using namespace mlir;
 using namespace hcl;
@@ -265,7 +269,13 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
   arith::populateArithmeticExpandOpsPatterns(patterns);
   arith::populateArithmeticToLLVMConversionPatterns(typeConverter, patterns);
+
+  populateExpandCtlzPattern(patterns);
+  populateExpandTanhPattern(patterns);
+  populateMathAlgebraicSimplificationPatterns(patterns);
+  populateMathPolynomialApproximationPatterns(patterns);
   populateMathToLLVMConversionPatterns(typeConverter, patterns);
+  
   populateFuncToLLVMConversionPatterns(typeConverter, patterns);
   cf::populateControlFlowToLLVMConversionPatterns(typeConverter, patterns);
   populateReconcileUnrealizedCastsPatterns(patterns);

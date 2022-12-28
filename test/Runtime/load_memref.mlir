@@ -1,4 +1,4 @@
-// RUN: hcl-opt  %s --jit
+// RUN: hcl-opt  %s 
 
 module {
     llvm.mlir.global internal constant @str_global("test.txt")

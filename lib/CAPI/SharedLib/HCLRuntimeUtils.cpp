@@ -9,7 +9,7 @@
 
 #define MAX_LINE_LENGTH 4096
 
-template <typename T> void loadMemref(int64_t rank, void *ptr, char *str) {
+template <typename T> void readMemref(int64_t rank, void *ptr, char *str) {
   // Open the input file
   FILE *fp = fopen(str, "r");
   if (!fp) {
@@ -55,18 +55,70 @@ template <typename T> void loadMemref(int64_t rank, void *ptr, char *str) {
   free(array);
 }
 
-extern "C" void loadMemrefI32(int64_t rank, void *ptr, char *str) {
-  loadMemref<int32_t>(rank, ptr, str);
+extern "C" void readMemrefI32(int64_t rank, void *ptr, char *str) {
+  readMemref<int32_t>(rank, ptr, str);
 }
 
-extern "C" void loadMemrefI64(int64_t rank, void *ptr, char *str) {
-  loadMemref<int64_t>(rank, ptr, str);
+extern "C" void readMemrefI64(int64_t rank, void *ptr, char *str) {
+  readMemref<int64_t>(rank, ptr, str);
 }
 
-extern "C" void loadMemrefF32(int64_t rank, void *ptr, char *str) {
-  loadMemref<float>(rank, ptr, str);
+extern "C" void readMemrefF32(int64_t rank, void *ptr, char *str) {
+  readMemref<float>(rank, ptr, str);
 }
 
-extern "C" void loadMemrefF64(int64_t rank, void *ptr, char *str) {
-  loadMemref<double>(rank, ptr, str);
+extern "C" void readMemrefF64(int64_t rank, void *ptr, char *str) {
+  readMemref<double>(rank, ptr, str);
+}
+
+template <typename T>
+void writeMemref(int64_t rank, void *ptr, char *filename, std::string fmt) {
+  // Define the array and its size
+  UnrankedMemRefType<T> unranked_memref = {rank, ptr};
+  DynamicMemRefType<T> memref(unranked_memref);
+  int array_size = 1;
+  for (int i = 0; i < rank; i++) {
+    array_size *= memref.sizes[i];
+  }
+  T *array = (T *)malloc(array_size * sizeof(T));
+  memcpy(array, memref.data, array_size * sizeof(T));
+
+  // Open the file for writing
+  FILE *fp = fopen(filename, "w");
+  if (fp == NULL) {
+    // File opening failed
+    printf("Error opening file!\n");
+    return;
+  }
+
+  // Write the array to the file, with comma separators
+  for (int i = 0; i < array_size; i++) {
+    fprintf(fp, fmt.c_str(), array[i]);
+    if (i < array_size - 1) {
+      // Add a comma separator, unless this is the last element
+      fprintf(fp, ",");
+    }
+  }
+
+  // Close the file
+  fclose(fp);
+
+  // Free the array
+  free(array);
+}
+
+extern "C" void writeMemrefI32(int64_t rank, void *ptr, char *str) {
+  writeMemref<int32_t>(rank, ptr, str, "%d ");
+}
+
+extern "C" void writeMemrefI64(int64_t rank, void *ptr, char *str) {
+  writeMemref<int64_t>(rank, ptr, str, "%ld ");
+}
+
+extern "C" void writeMemrefF32(int64_t rank, void *ptr, char *str) {
+  writeMemref<float>(rank, ptr, str, "%f ");
+}
+
+extern "C" void writeMemrefF64(int64_t rank, void *ptr, char *str) {
+  writeMemref<double>(rank, ptr, str, "%f ");
 }

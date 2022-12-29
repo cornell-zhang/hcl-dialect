@@ -22,15 +22,27 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 extern "C" HCL_RUNTIME_UTILS_EXPORT void
-loadMemrefI32(int64_t rank, void *ptr, char *str);
+readMemrefI32(int64_t rank, void *ptr, char *str);
 
 extern "C" HCL_RUNTIME_UTILS_EXPORT void
-loadMemrefI64(int64_t rank, void *ptr, char *str);
+readMemrefI64(int64_t rank, void *ptr, char *str);
 
 extern "C" HCL_RUNTIME_UTILS_EXPORT void
-loadMemrefF32(int64_t rank, void *ptr, char *str);
+readMemrefF32(int64_t rank, void *ptr, char *str);
 
 extern "C" HCL_RUNTIME_UTILS_EXPORT void
-loadMemrefF64(int64_t rank, void *ptr, char *str);
+readMemrefF64(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+writeMemrefI32(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+writeMemrefI64(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+writeMemrefF32(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+writeMemrefF64(int64_t rank, void *ptr, char *str);
 
 #endif // HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H

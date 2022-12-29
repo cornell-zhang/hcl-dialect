@@ -19,22 +19,18 @@
 #endif // _WIN32
 
 #include <string>
-
-//===----------------------------------------------------------------------===//
-// Codegen-compatible structure for UnrankedMemRef type.
-//===----------------------------------------------------------------------===//
-// Unranked MemRef
-template <typename T>
-struct UnrankedMemRefType {
-  int64_t rank;
-  void *descriptor;
-};
-
-
-extern "C" HCL_RUNTIME_UTILS_EXPORT void
-_mlir_ciface_loadMemrefI32(UnrankedMemRefType<int32_t> *m);
+#include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 extern "C" HCL_RUNTIME_UTILS_EXPORT void
 loadMemrefI32(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+loadMemrefI64(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+loadMemrefF32(int64_t rank, void *ptr, char *str);
+
+extern "C" HCL_RUNTIME_UTILS_EXPORT void
+loadMemrefF64(int64_t rank, void *ptr, char *str);
 
 #endif // HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H

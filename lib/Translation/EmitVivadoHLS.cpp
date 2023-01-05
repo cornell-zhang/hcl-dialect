@@ -1888,8 +1888,12 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
   if (func->hasAttr("bit"))
     BIT_FLAG = true;
 
-  if (func.getBlocks().size() != 1)
-    emitError(func, "has zero or more than one basic blocks.");
+  if (func.getBlocks().empty())
+    // This is a declaration.
+    return;
+
+  if (func.getBlocks().size() > 1)
+    emitError(func, "has more than one basic blocks.");
 
   if (func->hasAttr("top"))
     os << "/// This is top function.\n";

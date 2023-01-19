@@ -820,7 +820,12 @@ Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src,
   Type I64 = rewriter.getIntegerType(64);
   Type F64 = rewriter.getF64Type();
   Value casted;
-  if (t.isa<IntegerType>()) {
+  if (t.isa<IndexType>()) {
+    Type I32 = rewriter.getIntegerType(32);
+    Value intValue = rewriter.create<arith::IndexCastOp>(src.getLoc(), I32, src);
+    return castToF64(rewriter, intValue, hasUnsignedAttr);
+  }
+  else if (t.isa<IntegerType>()) {
     size_t iwidth = t.getIntOrFloatBitWidth();
     if (t.isUnsignedInteger() or hasUnsignedAttr) {
       Value widthAdjusted;

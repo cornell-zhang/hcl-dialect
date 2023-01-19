@@ -132,7 +132,7 @@ public:
     Value input = operands[0];
     Value hi = operands[1];
     Value lo = operands[2];
-    // cast low and high index to int32 type
+    // cast low and high index to itype
     unsigned iwidth = input.getType().getIntOrFloatBitWidth();
     Type itype = rewriter.getIntegerType(iwidth);
     Location loc = op->getLoc();
@@ -149,7 +149,10 @@ public:
         rewriter.create<mlir::arith::ShRUIOp>(loc, shift1, lshift_width);
     Value shift3 =
         rewriter.create<mlir::arith::ShRUIOp>(loc, shift2, lo_casted);
-    op->getResult(0).replaceAllUsesWith(shift3);
+    Type otype = op->getResult(0).getType();
+    Value truncated =
+        rewriter.create<mlir::arith::TruncIOp>(loc, otype, shift3);
+    op->getResult(0).replaceAllUsesWith(truncated);
     rewriter.eraseOp(op);
     return success();
   }

@@ -218,7 +218,7 @@ int runJiTCompiler(mlir::ModuleOp module) {
 
   // An optimization pipeline to use within the execution engine.
   auto optPipeline = mlir::makeOptimizingTransformer(
-      /*optLevel=*/0, /*sizeLevel=*/0,
+      /*optLevel=*/1, /*sizeLevel=*/0,
       /*targetMachine=*/nullptr);
 
   mlir::ExecutionEngineOptions engineOptions;

@@ -736,9 +736,9 @@ def GetIntBitOp : HeteroCL_Op<"get_bit"> {
 def SetIntBitOp : HeteroCL_Op<"set_bit"> {
     let summary = "set bit of an integer";
     let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$index, BoolLike:$val);
-    let results = (outs );
+    let results = (outs SignlessIntegerLike:$result);
     let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $index `,` $val `:` type($val) `)` attr-dict
+        `(` $num `:` type($num) `,` $index `,` $val `:` type($val) `)` attr-dict `->` type($result)
     }];
 }
 
@@ -754,9 +754,9 @@ def GetIntSliceOp : HeteroCL_Op<"get_slice"> {
 def SetIntSliceOp : HeteroCL_Op<"set_slice"> {
     let summary = "set slice of an integer";
     let arguments = (ins SignlessIntegerLike:$num, Builtin_Index:$hi, Builtin_Index:$lo, SignlessIntegerLike:$val);
-    let results = (outs );
+    let results = (outs SignlessIntegerLike:$result);
     let assemblyFormat = [{
-        `(` $num `:` type($num) `,` $hi `,` $lo `,` $val `:` type($val) `)` attr-dict
+        `(` $num `:` type($num) `,` $hi `,` $lo `,` $val `:` type($val) `)` attr-dict `->` type($result)
     }];
 }
 

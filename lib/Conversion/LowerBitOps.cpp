@@ -22,6 +22,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -71,8 +72,9 @@ void lowerBitReverseOps(func::FuncOp &func) {
           Value bit = nestedBuilder.create<mlir::hcl::GetIntBitOp>(
               loc, one_bit_type, input, reverse_idx);
           // Set the bit at the current position
-          nestedBuilder.create<mlir::hcl::SetIntBitOp>(loc, res, ivs[0], bit);
-          nestedBuilder.create<AffineStoreOp>(loc, res, resultMemRef,
+          Value new_val = nestedBuilder.create<mlir::hcl::SetIntBitOp>(
+              loc, res.getType(), res, ivs[0], bit);
+          nestedBuilder.create<AffineStoreOp>(loc, new_val, resultMemRef,
                                               const_0_indices);
         });
     // Load the result from resultMemRef
@@ -91,10 +93,83 @@ void lowerBitReverseOps(func::FuncOp &func) {
   }
 }
 
+void lowerSetSliceOps(func::FuncOp &func) {
+  SmallVector<Operation *, 8> setSliceOps;
+  func.walk([&](Operation *op) {
+    if (auto setSliceOp = dyn_cast<SetIntSliceOp>(op)) {
+      setSliceOps.push_back(setSliceOp);
+    }
+  });
+
+  for (auto op : setSliceOps) {
+    auto setSliceOp = dyn_cast<SetIntSliceOp>(op);
+    ValueRange operands = setSliceOp->getOperands();
+    Value input = operands[0];
+    Value hi = operands[1];
+    Value lo = operands[2];
+    Value val = operands[3];
+    Location loc = op->getLoc();
+    OpBuilder rewriter(op);
+    // Add 1 to hi to make it inclusive
+    Type i32 = rewriter.getIntegerType(32);
+    Value one_i32 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, i32);
+    Value one_idx = rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), one_i32);
+    Value ub = rewriter.create<mlir::arith::AddIOp>(loc, hi, one_idx);
+
+    // Extend val to the same width as input
+    if (val.getType().getIntOrFloatBitWidth() < input.getType().getIntOrFloatBitWidth()) {
+      val = rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
+    }
+    
+    // Create a step of 1, index type
+    Value step_i32 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, i32);
+    Value step = rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), step_i32);
+
+    // build an SCF for loop to iterate over the bits
+    scf::ForOp loop = rewriter.create<scf::ForOp>(
+        loc, lo, ub, step, ValueRange({input}),
+        [&](OpBuilder &builder, Location loc, Value iv, ValueRange ivs) {
+            // get the (iv - lo)-th bit of val
+            Value iv_sub_lo = builder.create<mlir::arith::SubIOp>(loc, iv, lo);
+            Value idx_casted = builder.create<mlir::arith::IndexCastOp>(loc, val.getType(), iv_sub_lo);
+            Value val_shifted = builder.create<mlir::arith::ShRUIOp>(loc, val, idx_casted);            
+            // Value one_vtype = builder.create<mlir::arith::ConstantIntOp>(loc, 1, val.getType());
+            // Value bit_vtype = builder.create<mlir::arith::AndIOp>(loc, val_shifted, one_vtype);
+            // // shift the bit to the correct position
+            // Value iv_casted = builder.create<mlir::arith::IndexCastOp>(loc, val.getType(), iv);
+            // Value bit_shifted = builder.create<mlir::arith::ShLIOp>(loc, bit, iv_casted);
+            // // if bit is 1, input |= bit_shifted, else input &= ~bit_shifted
+            // Value all_one = builder.create<mlir::arith::ConstantIntOp>(loc, -1, val.getType());
+            // Value bit_not = builder.create<mlir::arith::XOrIOp>(loc, all_one, bit_shifted);
+            // Value res_cond_true = builder.create<mlir::arith::OrIOp>(loc, ivs[0], bit_shifted);
+            // Value res_cond_false = builder.create<mlir::arith::AndIOp>(loc, ivs[0], bit_not);
+            // Value res_cond = builder.create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::eq, bit, one_vtype);
+            // Value res = builder.create<mlir::arith::SelectOp>(loc, res_cond, res_cond_true, res_cond_false);
+            Type one_bit_type = builder.getIntegerType(1);
+            Value bit = builder.create<mlir::arith::TruncIOp>(loc, one_bit_type, val_shifted);
+            Value res = builder.create<mlir::hcl::SetIntBitOp>(loc, ivs[0].getType(), ivs[0], iv, bit);
+            builder.create<scf::YieldOp>(loc, res);
+        });
+    
+    // replace the result of the setSliceOp with the result of the loop
+    setSliceOp->getResult(0).replaceAllUsesWith(loop.getResult(0));
+  }
+
+  // remove the setSliceOps
+  std::reverse(setSliceOps.begin(), setSliceOps.end());
+  for (auto op : setSliceOps) {
+    auto v = op->getResult(0);
+    if (v.use_empty()) {
+      op->erase();
+    }
+  }
+}
+
 /// Pass entry point
 bool applyLowerBitOps(ModuleOp &mod) {
   for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
     lowerBitReverseOps(func);
+    lowerSetSliceOps(func);
   }
   return true;
 }

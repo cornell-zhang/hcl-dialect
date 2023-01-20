@@ -23,7 +23,6 @@
 
 #include "llvm/ADT/Sequence.h"
 
-
 using namespace mlir;
 using namespace hcl;
 
@@ -91,8 +90,7 @@ public:
         rewriter.create<mlir::arith::AndIOp>(loc, input, inversed_mask);
     Value trueRes =
         rewriter.create<arith::SelectOp>(loc, val, Val1Res, Val0Res);
-    op->getOperand(0).replaceAllUsesWith(trueRes);
-    rewriter.eraseOp(op);
+    rewriter.replaceOp(op, trueRes);
     return success();
   }
 };
@@ -158,6 +156,7 @@ public:
   }
 };
 
+/*
 class SetIntSliceOpLowering : public ConversionPattern {
 public:
   explicit SetIntSliceOpLowering(MLIRContext *context)
@@ -199,20 +198,12 @@ public:
         rewriter.create<mlir::arith::ShLIOp>(loc, hi_rshifted, hi_shift_width);
 
     // Step 2: get lower slice - shift left, then shift right
-    // Note: left shifting `width` bits would result in unchanged result
-    // Therefore, we need to build a SelectOp:
-    // shifted = shift < width ? lshift : zero
-    Value shift_width =
+    Value lo_shift_width =
         rewriter.create<mlir::arith::SubIOp>(loc, width, lo_casted);
     Value lo_lshifted =
-        rewriter.create<mlir::arith::ShLIOp>(loc, input, shift_width);
-    Value lo_slice_possible =
-        rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, shift_width);
-    Value zero = rewriter.create<mlir::arith::ConstantIntOp>(loc, 0, iwidth);
-    Value condition = rewriter.create<mlir::arith::CmpIOp>(
-        loc, mlir::arith::CmpIPredicate::ult, shift_width, width);
-    Value lo_slice = rewriter.create<arith::SelectOp>(loc, condition,
-                                                      lo_slice_possible, zero);
+        rewriter.create<mlir::arith::ShLIOp>(loc, input, lo_shift_width);
+    Value lo_slice =
+        rewriter.create<mlir::arith::ShRUIOp>(loc, lo_lshifted, lo_shift_width);
 
     // Step 3: shift left val, and then use OR to "concat" three pieces
     Value val_shifted =
@@ -227,6 +218,7 @@ public:
     return success();
   }
 };
+*/
 
 } // namespace
 
@@ -278,7 +270,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   populateMathAlgebraicSimplificationPatterns(patterns);
   populateMathPolynomialApproximationPatterns(patterns);
   populateMathToLLVMConversionPatterns(typeConverter, patterns);
-  
+
   populateFuncToLLVMConversionPatterns(typeConverter, patterns);
   cf::populateControlFlowToLLVMConversionPatterns(typeConverter, patterns);
   populateReconcileUnrealizedCastsPatterns(patterns);
@@ -287,7 +279,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<CreateOpHandleOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
-  patterns.add<SetIntSliceOpLowering>(&context);
+//   patterns.add<SetIntSliceOpLowering>(&context);
   patterns.add<GetIntSliceOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This

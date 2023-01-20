@@ -12,8 +12,8 @@ module {
       %c1_i32 = arith.constant 1 : i32
       %c2 = arith.constant 2 : index
       %val = arith.constant 1 : i1
-      hcl.set_bit(%1 : i32, %c2, %val : i1)
-      affine.store %1, %res[%arg1] : memref<1xi32>
+      %2 = hcl.set_bit(%1 : i32, %c2, %val : i1) -> i32
+      affine.store %2, %res[%arg1] : memref<1xi32>
     } 
 // CHECK: 4
     %v = affine.load %res[0] : memref<1xi32>

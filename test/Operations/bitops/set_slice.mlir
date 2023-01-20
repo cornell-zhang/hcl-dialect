@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s --lower-print-ops --jit | FileCheck %s
+// RUN: hcl-opt %s --lower-print-ops --lower-bitops --jit | FileCheck %s
 // Input: 0x0000
 // By setting the 3,2,1 bits to 110, we get
 // Output: 12 (0x000C)
@@ -12,9 +12,9 @@ module {
       %lo = arith.constant 1 : index
       %hi = arith.constant 3 : index
       %val = arith.constant 6 : i3
-      hcl.set_slice(%1 : i32, %hi, %lo, %val : i3)
-      affine.store %1, %res[%arg1] : memref<1xi32>
-    } 
+      %2 = hcl.set_slice(%1 : i32, %hi, %lo, %val : i3) -> i32
+      affine.store %2, %res[%arg1] : memref<1xi32>
+    }
 // CHECK: 12
     %v = affine.load %res[0] : memref<1xi32>
     hcl.print(%v) {format="%d\n"}: i32

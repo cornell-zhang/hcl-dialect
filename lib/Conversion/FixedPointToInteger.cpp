@@ -975,24 +975,15 @@ void lowerIntToFixed(IntToFixedOp &op) {
   bool isSigned = sign == "signed";
   auto srcType = src.getType().cast<IntegerType>();
   auto dstType = IntegerType::get(op.getContext(), dst_width);
-  size_t src_width = srcType.getWidth();
+  // size_t src_width = srcType.getWidth();
   auto frac = rewriter.create<arith::ConstantOp>(
-      loc, srcType, rewriter.getIntegerAttr(srcType, dst_frac));
-  auto lshifted = rewriter.create<arith::ShLIOp>(loc, srcType, src, frac);
-  if (dst_width > src_width) {
-    if (isSigned) {
-      auto res = rewriter.create<arith::ExtSIOp>(loc, dstType, lshifted);
-      op->replaceAllUsesWith(res);
-    } else {
-      auto res = rewriter.create<arith::ExtUIOp>(loc, dstType, lshifted);
-      op->replaceAllUsesWith(res);
-    }
-  } else if (dst_width < src_width) {
-    auto res = rewriter.create<arith::TruncIOp>(loc, dstType, lshifted);
-    op->replaceAllUsesWith(res);
-  } else {
-    op->replaceAllUsesWith(lshifted);
-  }
+      loc, dstType, rewriter.getIntegerAttr(dstType, dst_frac));
+
+  Value bitAdjusted = castIntegerWidth(op->getContext(), rewriter, loc, src,
+                                       dst_width, isSigned);
+  auto lshifted = rewriter.create<arith::ShLIOp>(loc, dstType, bitAdjusted,
+                                                 frac);
+  op->replaceAllUsesWith(lshifted);
 }
 
 // src and dst is guaranteed to be of different fixed types.

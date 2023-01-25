@@ -153,14 +153,18 @@ void lowerPrintMemRef(Operation *op) {
   }
 
   // Create print function declaration
-  builder.setInsertionPointToStart(parentModule.getBody());
+  // lookup if the function already exists
+  func::FuncOp printFuncDecl;
   auto pointerType =
       UnrankedMemRefType::get(srcElementType, srcMemRefType.getMemorySpace());
-  FunctionType printMemRefType =
-      FunctionType::get(builder.getContext(), {pointerType}, {});
-  auto printFuncDecl =
-      builder.create<func::FuncOp>(loc, funcName, printMemRefType);
-  printFuncDecl.setPrivate();
+  if (!(printFuncDecl = parentModule.lookupSymbol<func::FuncOp>(funcName))) {
+    builder.setInsertionPointToStart(parentModule.getBody());
+    FunctionType printMemRefType =
+        FunctionType::get(builder.getContext(), {pointerType}, {});
+    printFuncDecl =
+        builder.create<func::FuncOp>(loc, funcName, printMemRefType);
+    printFuncDecl.setPrivate();
+  }
 
   // Use memref.cast to remove rank
   builder.setInsertionPoint(op);

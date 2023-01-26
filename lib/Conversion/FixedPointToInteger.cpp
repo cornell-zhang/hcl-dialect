@@ -771,9 +771,9 @@ void lowerFixedMin(MinFixedOp &op) {
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width, isSigned);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(2), width, isSigned);
+                               op->getOperand(1), width, isSigned);
 
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {
@@ -796,9 +796,9 @@ void lowerFixedMax(MaxFixedOp &op) {
   OpBuilder rewriter(op);
 
   Value lhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(1), width, isSigned);
+                               op->getOperand(0), width, isSigned);
   Value rhs = castIntegerWidth(op->getContext(), rewriter, op->getLoc(),
-                               op->getOperand(2), width, isSigned);
+                               op->getOperand(1), width, isSigned);
 
   Type opTy = op->getOperand(0).getType();
   if (opTy.isa<FixedType>()) {

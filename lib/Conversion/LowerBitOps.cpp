@@ -133,20 +133,13 @@ void lowerSetSliceOps(func::FuncOp &func) {
             Value iv_sub_lo = builder.create<mlir::arith::SubIOp>(loc, iv, lo);
             Value idx_casted = builder.create<mlir::arith::IndexCastOp>(loc, val.getType(), iv_sub_lo);
             Value val_shifted = builder.create<mlir::arith::ShRUIOp>(loc, val, idx_casted);            
-            // Value one_vtype = builder.create<mlir::arith::ConstantIntOp>(loc, 1, val.getType());
-            // Value bit_vtype = builder.create<mlir::arith::AndIOp>(loc, val_shifted, one_vtype);
-            // // shift the bit to the correct position
-            // Value iv_casted = builder.create<mlir::arith::IndexCastOp>(loc, val.getType(), iv);
-            // Value bit_shifted = builder.create<mlir::arith::ShLIOp>(loc, bit, iv_casted);
-            // // if bit is 1, input |= bit_shifted, else input &= ~bit_shifted
-            // Value all_one = builder.create<mlir::arith::ConstantIntOp>(loc, -1, val.getType());
-            // Value bit_not = builder.create<mlir::arith::XOrIOp>(loc, all_one, bit_shifted);
-            // Value res_cond_true = builder.create<mlir::arith::OrIOp>(loc, ivs[0], bit_shifted);
-            // Value res_cond_false = builder.create<mlir::arith::AndIOp>(loc, ivs[0], bit_not);
-            // Value res_cond = builder.create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::eq, bit, one_vtype);
-            // Value res = builder.create<mlir::arith::SelectOp>(loc, res_cond, res_cond_true, res_cond_false);
-            Type one_bit_type = builder.getIntegerType(1);
-            Value bit = builder.create<mlir::arith::TruncIOp>(loc, one_bit_type, val_shifted);
+            Value bit;
+            if (val_shifted.getType().getIntOrFloatBitWidth() > 1) {
+              Type one_bit_type = builder.getIntegerType(1);
+              bit = builder.create<mlir::arith::TruncIOp>(loc, one_bit_type, val_shifted);
+            } else {
+              bit = val_shifted;
+            }
             Value res = builder.create<mlir::hcl::SetIntBitOp>(loc, ivs[0].getType(), ivs[0], iv, bit);
             builder.create<scf::YieldOp>(loc, res);
         });

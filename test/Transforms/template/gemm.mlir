@@ -16,6 +16,7 @@ module {
         hcl.end
     }
 
+    // CHECK: #map = affine_map<(d0, d1) -> (0, d1, d0, 0)>
     func.func @top(%A: memref<64x32xi32>, %B: memref<32x64xi32>, %C: memref<64x64xi32>) -> memref<64x64xi32>
     {   
         %s1 = hcl.create_op_handle "s1"
@@ -34,6 +35,7 @@ module {
                     %sum = arith.addi %prod, %c: i32
                     affine.store %sum, %D[%i, %j] : memref<64x64xi32>
                 } { loop_name = "k1" }
+            // CHECK: pipeline_ii = 1 : i32
             } { loop_name = "j1" }
         } { loop_name = "i1", op_name = "s1" }
         %s2 = hcl.create_op_handle "s2"
@@ -52,6 +54,7 @@ module {
                     %sum = arith.addi %prod, %e: i32
                     affine.store %sum, %E[%i, %j] : memref<64x64xi32>
                 } { loop_name = "k2" }
+                // CHECK: pipeline_ii = 1 : i32
             } { loop_name = "j2" }
         } { loop_name = "i2", op_name = "s2" }
 

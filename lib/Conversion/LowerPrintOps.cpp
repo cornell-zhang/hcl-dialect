@@ -87,7 +87,7 @@ void lowerPrintOpToPrintf(Operation *op, int idx) {
   ModuleOp parentModule = op->getParentOfType<ModuleOp>();
 
   // If the PrintOp has string attribute, it is the format string
-  std::string format_str = "%.4f \0";
+  std::string format_str = "%.4f \00";
   if (op->hasAttr("format")) {
     format_str = op->getAttr("format").cast<StringAttr>().getValue().str();
     bool replaced = true;

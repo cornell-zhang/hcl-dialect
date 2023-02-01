@@ -78,8 +78,9 @@ public:
     Value bitmask =
         rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
-    Value all_one_mask =
-        rewriter.create<mlir::arith::ConstantIntOp>(loc, -1, width);
+    Value one_bit = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, 1);
+    Value all_one_mask = 
+        rewriter.create<mlir::arith::ExtSIOp>(loc, itype, one_bit);
     Value inversed_mask =
         rewriter.create<mlir::arith::XOrIOp>(loc, all_one_mask, bitmask);
     // If val == 1, SetBit should be input OR bitmask (e.g. input || 000010000)

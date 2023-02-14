@@ -79,7 +79,7 @@ cd hcl-dialect
 mkdir build && cd build
 ```
 
-> **_NOTE:_**  The HeteroCL dialect is a standalone system that can work without frontend through its command line interface `hcl-opt`. If you are using it with the HeteroCL frontend, the minimum requirement is to build with Python binding. Building with OpenSCoP extraction is optional.
+> **_NOTE:_**  The HeteroCL dialect is a standalone system that works without a frontend. If you are using it with the HeteroCL frontend, the minimum requirement is to build with Python binding. Building with OpenSCoP extraction is optional.
 
 - Build without Python binding
 ```sh

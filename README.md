@@ -1,6 +1,11 @@
-# HeteroCL Dialect Prototype
+# HeteroCL Dialect
 
-This is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for [HeteroCL](https://github.com/cornell-zhang/heterocl).
+## Overview
+
+HeteroCL dialect is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for accelerator design. HeteroCL dialect decouples algorithm from hardware customizations, and classifies them into processing and data customizations. The HeteroCL dialect is part of the [HeteroCL](https://github.com/cornell-zhang/heterocl) compilation flow. HeteroCL provides an end-to-end flow from Python to LLVM backend or C HLS FPGA backends. With HeteroCL, designers can explore tradeoffs with hardware customizations in a systematic manner and quickly obtain high-performance design with little manual effort.
+
+![flow](docs/dialect_overview.png)
+
 
 ## Building
 
@@ -150,6 +155,10 @@ export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
 # run regression tests in the HeteroCL repo
 cd tests && python3 -m pytest
 ```
+
+## HeteroCL Dialect Examples
+
+![flow](docs/dialect_examples.png)
 
 
 ## Coding Style

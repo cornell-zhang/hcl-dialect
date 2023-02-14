@@ -3030,7 +3030,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
           targetLoadOp->setAttr("map", AffineMapAttr::get(map));
           if (isMod) {
             // See the issue:
-            // https://github.com/cornell-zhang/hcl-dialect-prototype/issues/127
+            // https://github.com/cornell-zhang/hcl-dialect/issues/127
             OpBuilder builder(targetLoadOp);
             SmallVector<Value> indices(targetLoadOp.getIndices());
             int pos = -1;

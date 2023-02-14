@@ -5,7 +5,7 @@
 version: 2
 jobs:
   build:
-    working_directory: ~/hcl-dialect-prototype
+    working_directory: ~/hcl-dialect
     docker:
       - image: zzzdavid/llvm-project:15.0.0
         auth:

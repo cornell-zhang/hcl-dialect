@@ -74,8 +74,8 @@ git checkout tags/llvmorg-15.0.0
 ### Build HeteroCL Dialect
 This setup assumes that you have built LLVM and MLIR in `$LLVM_BUILD_DIR`. Please firstly clone our repository.
 ```sh
-git clone --recursive https://github.com/cornell-zhang/hcl-dialect-prototype.git
-cd hcl-dialect-prototype
+git clone --recursive git@github.com:cornell-zhang/hcl-dialect.git
+cd hcl-dialect
 mkdir build && cd build
 ```
 

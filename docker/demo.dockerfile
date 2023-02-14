@@ -38,16 +38,16 @@ RUN cd /root/ && git clone https://github.com/llvm/llvm-project.git && \
 RUN cd /root/ && export TOKEN="Username:PersonalToken" && \
     export BUILD_DIR=/root/llvm-project/build && \
     export PREFIX=/root/llvm-project/build && \
-    git clone --recursive https://$TOKEN@github.com/cornell-zhang/hcl-dialect-prototype.git && \
-    cd hcl-dialect-prototype && mkdir build && cd build && \
+    git clone --recursive https://$TOKEN@github.com/cornell-zhang/hcl-dialect.git && \
+    cd hcl-dialect && mkdir build && cd build && \
     cmake -G "Unix Makefiles" .. \
         -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
         -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
         -DPYTHON_BINDING=ON \
         -DPython3_EXECUTABLE=`which python3` && \
     make -j`nproc`
-ENV PYTHONPATH /root/hcl-dialect-prototype/build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
+ENV PYTHONPATH /root/hcl-dialect/build/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
 
 # test
-RUN cd /root/hcl-dialect-prototype/build && \
+RUN cd /root/hcl-dialect/build && \
    cmake --build . --target check-hcl

@@ -41,5 +41,4 @@ build
 *.log
 *.prj
 
-llvm-project
 tmp

@@ -1,3 +1,6 @@
-[submodule "external/openscop"]
-	path = external/openscop
+[submodule "externals/openscop"]
+	path = externals/openscop
 	url = https://github.com/periscop/openscop.git
+[submodule "externals/llvm-project"]
+	path = externals/llvm-project
+	url = https://github.com/llvm/llvm-project.git

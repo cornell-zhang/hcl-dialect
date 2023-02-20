@@ -140,17 +140,16 @@ cmake --build . --target check-hcl
 Make sure you have correctly built the above HCL-MLIR dialect, and follow the instruction below.
 
 ```sh
-# clone the HeteroCL repo and switch to the hcl-mlir branch
-git clone --recursive https://github.com/cornell-zhang/heterocl.git heterocl-mlir
+# clone the HeteroCL repo
+git clone https://github.com/cornell-zhang/heterocl.git heterocl-mlir
 cd heterocl-mlir
-git checkout hcl-mlir
 
 # install dependencies
 python3 -m pip install -r python/requirements.txt
 
 # export the library
 export HCL_HOME=$(pwd)
-export PYTHONPATH=$HCL_HOME/python:$HCL_HOME/hlib/python:${PYTHONPATH}
+export PYTHONPATH=$HCL_HOME/python:${PYTHONPATH}
 
 # run regression tests in the HeteroCL repo
 cd tests && python3 -m pytest

@@ -51,7 +51,6 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
   return result;
 }
 
-// TODO(Niansong): function calls also need to be handled
 
 /* Update the function signature and
  * Because we need to interact with numpy, which only supports up
@@ -63,9 +62,8 @@ FunctionType updateFunctionSignature(func::FuncOp &funcOp) {
   FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
-  SmallVector<Type, 8> arg_types;
-  for (const auto &argEn : llvm::enumerate(funcOp.getArguments()))
-    arg_types.push_back(argEn.value().getType());
+  SmallVector<Type, 8> arg_types = 
+      llvm::to_vector<8>(functionType.getInputs());
 
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;
@@ -986,6 +984,38 @@ void lowerIntToFixed(IntToFixedOp &op) {
   op->replaceAllUsesWith(lshifted);
 }
 
+void updateCallOp(func::CallOp &op) {
+  // get the callee function signature type
+  FunctionType callee_type = op.getCalleeType();
+  auto callee = op.getCallee();
+  assert(callee != "top" && "updateCallOp: assume callee is not top");
+  SmallVector<Type, 4> result_types =
+      llvm::to_vector<4>(callee_type.getResults());
+  llvm::SmallVector<Type, 4> new_result_types;
+  llvm::SmallVector<Type, 4> new_arg_types;
+  for (auto v : llvm::enumerate(result_types)) {
+    Type t = v.value();
+    if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
+      Type et = memrefType.getElementType();
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = et.isa<FixedType>()
+                                ? et.cast<FixedType>().getWidth()
+                                : et.cast<UFixedType>().getWidth();
+        Type newElementType = IntegerType::get(op.getContext(), width);
+        new_result_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_result_types.push_back(memrefType);
+      }
+    } else { // If result type is not memref, error out
+      op.emitError("updateCallOp: result type is not memref");
+    }
+  } 
+  // set call op result types to new_result_types
+  for (auto v : llvm::enumerate(new_result_types)) {
+    op.getResult(v.index()).setType(v.value());
+  }
+}
+
 // src and dst is guaranteed to be of different fixed types.
 // src: src_width, src_frac
 // dst: dst_width, dst_frac
@@ -1145,6 +1175,8 @@ void visitOperation(Operation &op) {
   } else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
     // llvm::outs() << "IfOp\n";
     updateSCFIfOp(new_op);
+  } else if (auto new_op = dyn_cast<func::CallOp>(op)) {
+    updateCallOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {

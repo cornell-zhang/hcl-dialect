@@ -986,7 +986,35 @@ void lowerIntToFixed(IntToFixedOp &op) {
 }
 
 void updateCallOp(func::CallOp &op) {
-  
+  // get the callee function signature type
+  FunctionType callee_type = op.getCalleeType();
+  auto callee = op.getCallee();
+  assert(callee != "top" && "updateCallOp: assume callee is not top");
+  SmallVector<Type, 4> result_types =
+      llvm::to_vector<4>(callee_type.getResults());
+  llvm::SmallVector<Type, 4> new_result_types;
+  llvm::SmallVector<Type, 4> new_arg_types;
+  for (auto v : llvm::enumerate(result_types)) {
+    Type t = v.value();
+    if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
+      Type et = memrefType.getElementType();
+      if (et.isa<FixedType, UFixedType>()) {
+        size_t width = et.isa<FixedType>()
+                                ? et.cast<FixedType>().getWidth()
+                                : et.cast<UFixedType>().getWidth();
+        Type newElementType = IntegerType::get(op.getContext(), width);
+        new_result_types.push_back(memrefType.clone(newElementType));
+      } else {
+        new_result_types.push_back(memrefType);
+      }
+    } else { // If result type is not memref, error out
+      op.emitError("updateCallOp: result type is not memref");
+    }
+  } 
+  // set call op result types to new_result_types
+  for (auto v : llvm::enumerate(new_result_types)) {
+    op.getResult(v.index()).setType(v.value());
+  }
 }
 
 // src and dst is guaranteed to be of different fixed types.

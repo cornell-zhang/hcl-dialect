@@ -51,7 +51,6 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
   return result;
 }
 
-// TODO(Niansong): function calls also need to be handled
 
 /* Update the function signature and
  * Because we need to interact with numpy, which only supports up

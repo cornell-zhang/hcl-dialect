@@ -51,7 +51,6 @@ Value castIntegerWidth(MLIRContext *ctx, OpBuilder &builder, Location loc,
   return result;
 }
 
-
 /* Update the function signature and
  * Because we need to interact with numpy, which only supports up
  * to 64-bit int/uint, so we update the input/output arguments
@@ -62,8 +61,7 @@ FunctionType updateFunctionSignature(func::FuncOp &funcOp) {
   FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
-  SmallVector<Type, 8> arg_types = 
-      llvm::to_vector<8>(functionType.getInputs());
+  SmallVector<Type, 8> arg_types = llvm::to_vector<8>(functionType.getInputs());
 
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;
@@ -258,6 +256,24 @@ void updateReturnOp(func::FuncOp &funcOp) {
       }
     }
   }
+}
+
+void updateSelectOp(arith::SelectOp &selectOp) {
+  // update the result of select op
+  // from fixed-point type to integer type
+  Type resType = selectOp.getResult().getType();
+  if (resType.isa<FixedType, UFixedType>()) {
+    int bitwidth = resType.isa<FixedType>()
+                       ? resType.cast<FixedType>().getWidth()
+                       : resType.cast<UFixedType>().getWidth();
+    Type newType = IntegerType::get(selectOp.getContext(), bitwidth);
+    selectOp.getResult().setType(newType);
+  }
+  // Check that the operands of select op have the same type
+  Type op0Type = selectOp.getOperand(1).getType(); // true branch
+  Type op1Type = selectOp.getOperand(2).getType(); // false branch
+  assert(op0Type == op1Type);
+  assert(op0Type == selectOp.getResult().getType());
 }
 
 /* Update hcl.print (PrintOp) operations.
@@ -979,8 +995,8 @@ void lowerIntToFixed(IntToFixedOp &op) {
 
   Value bitAdjusted = castIntegerWidth(op->getContext(), rewriter, loc, src,
                                        dst_width, isSigned);
-  auto lshifted = rewriter.create<arith::ShLIOp>(loc, dstType, bitAdjusted,
-                                                 frac);
+  auto lshifted =
+      rewriter.create<arith::ShLIOp>(loc, dstType, bitAdjusted, frac);
   op->replaceAllUsesWith(lshifted);
 }
 
@@ -998,9 +1014,8 @@ void updateCallOp(func::CallOp &op) {
     if (MemRefType memrefType = t.dyn_cast<MemRefType>()) {
       Type et = memrefType.getElementType();
       if (et.isa<FixedType, UFixedType>()) {
-        size_t width = et.isa<FixedType>()
-                                ? et.cast<FixedType>().getWidth()
-                                : et.cast<UFixedType>().getWidth();
+        size_t width = et.isa<FixedType>() ? et.cast<FixedType>().getWidth()
+                                           : et.cast<UFixedType>().getWidth();
         Type newElementType = IntegerType::get(op.getContext(), width);
         new_result_types.push_back(memrefType.clone(newElementType));
       } else {
@@ -1009,7 +1024,7 @@ void updateCallOp(func::CallOp &op) {
     } else { // If result type is not memref, error out
       op.emitError("updateCallOp: result type is not memref");
     }
-  } 
+  }
   // set call op result types to new_result_types
   for (auto v : llvm::enumerate(new_result_types)) {
     op.getResult(v.index()).setType(v.value());
@@ -1121,6 +1136,61 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   }
 }
 
+void validateLoweredFunc(func::FuncOp &func) {
+  // check if result types and input types are not fixed or ufixed
+  FunctionType functionType = func.getFunctionType();
+  SmallVector<Type, 4> result_types =
+      llvm::to_vector<4>(functionType.getResults());
+  SmallVector<Type, 8> arg_types = llvm::to_vector<8>(functionType.getInputs());
+  for (auto result_type : result_types) {
+    if (result_type.isa<FixedType>() || result_type.isa<UFixedType>()) {
+      func.emitError(
+          "FuncOp: " + func.getName().str() +
+          " has fixed-point type result type: " +
+          " which means it is not lowered by FixedPointToInteger pass\n");
+    }
+  }
+  for (auto arg_type : arg_types) {
+    if (arg_type.isa<FixedType>() || arg_type.isa<UFixedType>()) {
+      func.emitError(
+          "FuncOp: " + func.getName().str() +
+          " has fixed-point type arg type: " +
+          " which means it is not lowered by FixedPointToInteger pass\n");
+    }
+  }
+
+  // check if all operations are lowered
+  for (auto &block : func.getBody().getBlocks()) {
+    for (auto &op : block.getOperations()) {
+      // check the result type and arg types of op
+      if (op.getNumResults() > 0) {
+        for (auto result : op.getResults()) {
+          if (result.getType().isa<FixedType>() ||
+              result.getType().isa<UFixedType>()) {
+            op.emitError(
+                "FuncOp: " + func.getName().str() +
+                " has op: " + std::string(op.getName().getStringRef()) +
+                " with fixed-point result type" +
+                " which means it is not lowered by FixedPointToInteger pass\n");
+            llvm::errs() << "op that failed validation: " << op << "\n";
+          }
+        }
+      }
+      // check the arg types of op
+      for (auto arg : op.getOperands()) {
+        if (arg.getType().isa<FixedType>() || arg.getType().isa<UFixedType>()) {
+          op.emitError(
+              "FuncOp: " + func.getName().str() +
+              " has op: " + std::string(op.getName().getStringRef()) +
+              " with fixed-point arg type" +
+              " which means it is not lowered by FixedPointToInteger pass\n");
+          llvm::errs() << "op that failed validation: " << op << "\n";
+        }
+      }
+    }
+  }
+}
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);
@@ -1177,6 +1247,8 @@ void visitOperation(Operation &op) {
     updateSCFIfOp(new_op);
   } else if (auto new_op = dyn_cast<func::CallOp>(op)) {
     updateCallOp(new_op);
+  } else if (auto new_op = dyn_cast<arith::SelectOp>(op)) {
+    updateSelectOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {
@@ -1234,6 +1306,8 @@ bool applyFixedPointToInteger(ModuleOp &mod) {
     updateReturnOp(func);
     // llvm::outs() << "updateReturnOp done\n";
     func.setType(newFuncType);
+    // validate
+    validateLoweredFunc(func);
   }
 
   // llvm::outs() << mod << "\n";

@@ -1138,6 +1138,54 @@ void lowerFixedToFixed(FixedToFixedOp &op) {
   }
 }
 
+
+void validateLoweredFunc(func::FuncOp &func) {
+  // check if result types and input types are not fixed or ufixed
+  FunctionType functionType = func.getFunctionType();
+  SmallVector<Type, 4> result_types =
+      llvm::to_vector<4>(functionType.getResults());
+  SmallVector<Type, 8> arg_types = 
+      llvm::to_vector<8>(functionType.getInputs()); 
+  for (auto result_type : result_types) {
+    if (result_type.isa<FixedType>() || result_type.isa<UFixedType>()) {
+      func.emitError("FuncOp: " + func.getName().str() + " has fixed-point type result type: " + 
+                      " which means it is not lowered by FixedPointToInteger pass\n");
+    }
+  }
+  for (auto arg_type : arg_types) {
+    if (arg_type.isa<FixedType>() || arg_type.isa<UFixedType>()) {
+      func.emitError("FuncOp: " + func.getName().str() + " has fixed-point type arg type: " + 
+                      " which means it is not lowered by FixedPointToInteger pass\n");
+    }
+  }
+
+  // check if all operations are lowered
+    for (auto &block : func.getBody().getBlocks()) {
+      for (auto &op : block.getOperations()) {
+        // check the result type and arg types of op
+        if (op.getNumResults() > 0) {
+          for (auto result : op.getResults()) {
+            if (result.getType().isa<FixedType>() || result.getType().isa<UFixedType>()) {
+              op.emitError("FuncOp: " + func.getName().str() + " has op: " + std::string(op.getName().getStringRef()) + " with fixed-point result type" + 
+                            " which means it is not lowered by FixedPointToInteger pass\n");
+              llvm::errs() << "op that failed validation: " << op << "\n";
+            }
+          }
+        }
+        // check the arg types of op
+        for (auto arg : op.getOperands()) {
+          if (arg.getType().isa<FixedType>() || arg.getType().isa<UFixedType>()) {
+            op.emitError("FuncOp: " + func.getName().str() + " has op: " + std::string(op.getName().getStringRef()) + " with fixed-point arg type" + 
+                          " which means it is not lowered by FixedPointToInteger pass\n");
+            llvm::errs() << "op that failed validation: " << op << "\n";
+          }
+        }
+      }
+    }
+}
+
+
+
 /// Visitors to recursively update all operations
 void visitOperation(Operation &op);
 void visitRegion(Region &region);

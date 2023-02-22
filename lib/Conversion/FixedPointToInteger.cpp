@@ -985,6 +985,10 @@ void lowerIntToFixed(IntToFixedOp &op) {
   op->replaceAllUsesWith(lshifted);
 }
 
+void updateCallOp(func::CallOp &op) {
+  
+}
+
 // src and dst is guaranteed to be of different fixed types.
 // src: src_width, src_frac
 // dst: dst_width, dst_frac
@@ -1144,6 +1148,8 @@ void visitOperation(Operation &op) {
   } else if (auto new_op = dyn_cast<scf::IfOp>(op)) {
     // llvm::outs() << "IfOp\n";
     updateSCFIfOp(new_op);
+  } else if (auto new_op = dyn_cast<func::CallOp>(op)) {
+    updateCallOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {

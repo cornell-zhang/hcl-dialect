@@ -1,4 +1,4 @@
-// RUN: hcl-opt %s --fixed-to-integer
+// RUN: hcl-opt %s --fixed-to-integer | FileCheck %s
 module {
 
   func.func @issue_56(%arg0: memref<1000x!hcl.Fixed<8, 6>>) -> memref<1000x!hcl.Fixed<8, 6>> attributes {itypes = "_", otypes = "_", llvm.emit_c_interface, top} {
@@ -98,5 +98,20 @@ module {
       affine.store %3, %0[%arg2] {to = "compute_2"} : memref<100x!hcl.Fixed<6, 2>>
     } {loop_name = "x", op_name = "compute_2"}
     return %0 : memref<100x!hcl.Fixed<6, 2>>
+  }
+
+  func.func @select_op(%arg0: memref<10x!hcl.Fixed<8, 4>>, %arg1: memref<10x!hcl.Fixed<8, 4>>) attributes {itypes = "__", otypes = ""} {
+    affine.for %arg2 = 0 to 10 {
+      %0 = affine.load %arg0[%arg2] {from = "tensor_0"} : memref<10x!hcl.Fixed<8, 4>>
+      %c0_i32 = arith.constant 0 : i32
+      %1 = hcl.fixed_to_fixed(%0) : !hcl.Fixed<8, 4> -> !hcl.Fixed<36, 4>
+      %2 = hcl.int_to_fixed(%c0_i32) : i32 -> !hcl.Fixed<36, 4>
+      %3 = hcl.cmp_fixed sgt, %1, %2 : !hcl.Fixed<36, 4>
+      %4 = affine.load %arg0[%arg2] {from = "tensor_0"} : memref<10x!hcl.Fixed<8, 4>>
+      %5 = hcl.int_to_fixed(%c0_i32) : i32 -> !hcl.Fixed<8, 4>
+      %6 = arith.select %3, %4, %5 : !hcl.Fixed<8, 4> // CHECK: i8
+      affine.store %6, %arg1[%arg2] {to = "tensor_1"} : memref<10x!hcl.Fixed<8, 4>>
+    } {loop_name = "x", op_name = "tensor_1"}
+    return
   }
 }

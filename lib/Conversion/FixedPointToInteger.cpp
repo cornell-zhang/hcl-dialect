@@ -260,6 +260,23 @@ void updateReturnOp(func::FuncOp &funcOp) {
   }
 }
 
+void updateSelectOp(arith::SelectOp &selectOp) {
+  // update the result of select op
+  // from fixed-point type to integer type
+  Type resType = selectOp.getResult().getType();
+  if (resType.isa<FixedType, UFixedType>()) {
+    int bitwidth = resType.isa<FixedType>() ? resType.cast<FixedType>().getWidth()
+                                            : resType.cast<UFixedType>().getWidth();
+    Type newType = IntegerType::get(selectOp.getContext(), bitwidth);
+    selectOp.getResult().setType(newType);
+  }
+  // Check that the operands of select op have the same type
+  Type op0Type = selectOp.getOperand(1).getType(); // true branch
+  Type op1Type = selectOp.getOperand(2).getType(); // false branch
+  assert(op0Type == op1Type);
+  assert (op0Type == selectOp.getResult().getType());
+}
+
 /* Update hcl.print (PrintOp) operations.
  * Create a float64 memref to store the real value
  * of hcl.print's operand memref
@@ -1177,6 +1194,8 @@ void visitOperation(Operation &op) {
     updateSCFIfOp(new_op);
   } else if (auto new_op = dyn_cast<func::CallOp>(op)) {
     updateCallOp(new_op);
+  } else if (auto new_op = dyn_cast<arith::SelectOp>(op)) {
+    updateSelectOp(new_op);
   }
 
   for (auto &region : op.getRegions()) {

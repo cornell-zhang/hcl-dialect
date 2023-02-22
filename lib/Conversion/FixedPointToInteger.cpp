@@ -63,9 +63,8 @@ FunctionType updateFunctionSignature(func::FuncOp &funcOp) {
   FunctionType functionType = funcOp.getFunctionType();
   SmallVector<Type, 4> result_types =
       llvm::to_vector<4>(functionType.getResults());
-  SmallVector<Type, 8> arg_types;
-  for (const auto &argEn : llvm::enumerate(funcOp.getArguments()))
-    arg_types.push_back(argEn.value().getType());
+  SmallVector<Type, 8> arg_types = 
+      llvm::to_vector<8>(functionType.getInputs());
 
   SmallVector<Type, 4> new_result_types;
   SmallVector<Type, 8> new_arg_types;

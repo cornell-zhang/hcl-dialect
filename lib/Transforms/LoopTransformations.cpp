@@ -1662,6 +1662,26 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   buf->setAttr("name", StringAttr::get(buf->getContext(),
                                        StringRef(op_name.str() + "_reuse_" +
                                                  std::to_string(loopAxis))));
+  auto defOp = target.getDefiningOp();
+  if (defOp) {
+    if (defOp->hasAttr("unsigned"))
+      buf->setAttr("unsigned", out_builder.getUnitAttr());
+  } else {
+    // function argument
+    if (f->hasAttr("itypes")) {
+      auto top_itypes =
+          f->getAttr("itypes").cast<StringAttr>().getValue().str();
+      int argIdx = 0;
+      for (auto arg : f.getArguments()) {
+        if (arg == target) {
+          break;
+        }
+        argIdx++;
+      }
+      if (top_itypes[argIdx] == 'u')
+        buf->setAttr("unsigned", out_builder.getUnitAttr());
+    }
+  }
 
   // 10) link the result SSA with the buffer
   reuseAtOp.getResult().replaceAllUsesWith(buf);

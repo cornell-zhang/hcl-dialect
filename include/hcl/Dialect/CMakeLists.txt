@@ -1,3 +1,6 @@
+# Copyright HeteroCL authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 set(LLVM_TARGET_DEFINITIONS HeteroCLOps.td)
 mlir_tablegen(HeteroCLOps.h.inc -gen-op-decls)
 mlir_tablegen(HeteroCLOps.cpp.inc -gen-op-defs)

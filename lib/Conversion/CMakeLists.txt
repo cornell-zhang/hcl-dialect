@@ -1,3 +1,6 @@
+# Copyright HeteroCL authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 file(GLOB globbed *.cpp)
 
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)

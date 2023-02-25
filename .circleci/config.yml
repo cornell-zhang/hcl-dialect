@@ -1,3 +1,6 @@
+# Copyright HeteroCL authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Python CircleCI 2.0 configuration file
 #
 # Check https://circleci.com/docs/2.0/language-python/ for more details
@@ -27,6 +30,11 @@ jobs:
                 -DPython3_EXECUTABLE=`which python3`
             make -j4
             export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
+      - run:
+          name: Formatting Check
+          command: |
+            python3 -m pip install clang-format
+            bash ./.circleci/task_format.sh
       - run:
           name: Test
           command: |

@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H
 #define HCLC_SHARED_LIB_HCL_RUNTIME_UTILS_H
 

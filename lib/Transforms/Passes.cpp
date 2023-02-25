@@ -17,6 +17,4 @@ namespace {
 #include "hcl/Transforms/Passes.h.inc"
 } // end namespace
 
-void mlir::hcl::registerHCLPasses() {
-    ::registerPasses();
-}
+void mlir::hcl::registerHCLPasses() { ::registerPasses(); }

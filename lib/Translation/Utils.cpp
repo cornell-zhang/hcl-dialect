@@ -93,12 +93,13 @@ void fixUnsignedType(memref::GlobalOp &op, bool isUnsigned) {
           arrayType.getElementType().cast<IntegerType>().getWidth(),
           IntegerType::SignednessSemantics::Unsigned);
       // get a memref type attr
-      op.setTypeAttr(TypeAttr::get(MemRefType::get(arrayType.getShape(), elt,
-                                     arrayType.getLayout(),
-                                     arrayType.getMemorySpace())));
+      op.setTypeAttr(TypeAttr::get(
+          MemRefType::get(arrayType.getShape(), elt, arrayType.getLayout(),
+                          arrayType.getMemorySpace())));
     } else if (type.isa<IntegerType>()) {
-      Type type =
-          IntegerType::get(type.getContext(), type.cast<IntegerType>().getWidth(), IntegerType::SignednessSemantics::Unsigned);
+      Type type = IntegerType::get(type.getContext(),
+                                   type.cast<IntegerType>().getWidth(),
+                                   IntegerType::SignednessSemantics::Unsigned);
       op.setTypeAttr(TypeAttr::get(type));
     }
   }

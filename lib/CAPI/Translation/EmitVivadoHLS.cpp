@@ -12,8 +12,9 @@
 using namespace mlir;
 using namespace hcl;
 
-MlirLogicalResult mlirEmitVivadoHls(MlirModule module, MlirStringCallback callback,
-                                 void *userData) {
+MlirLogicalResult mlirEmitVivadoHls(MlirModule module,
+                                    MlirStringCallback callback,
+                                    void *userData) {
   mlir::detail::CallbackOstream stream(callback, userData);
   return wrap(emitVivadoHLS(unwrap(module), stream));
 }

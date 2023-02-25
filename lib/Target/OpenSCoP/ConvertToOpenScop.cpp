@@ -10,11 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "hcl/Target/OpenSCoP/OpenScop.h"
 #include "hcl/Target/OpenSCoP/OslScop.h"
 #include "hcl/Target/OpenSCoP/OslScopStmtOpSet.h"
 #include "hcl/Target/OpenSCoP/OslSymbolTable.h"
 #include "hcl/Target/OpenSCoP/ScopStmt.h"
-#include "hcl/Target/OpenSCoP/OpenScop.h"
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
@@ -28,9 +28,9 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-//#include "mlir/Transforms/LoopUtils.h"
+// #include "mlir/Transforms/LoopUtils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
-//#include "mlir/Transforms/Utils.h"
+// #include "mlir/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Translation.h"
 
@@ -42,9 +42,9 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "mlir/InitAllDialects.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
+#include "mlir/InitAllDialects.h"
 
 #include "osl/osl.h"
 

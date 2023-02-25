@@ -11,10 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Conversion/Passes.h"
-#include "hcl/Transforms/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -165,7 +165,8 @@ void lowerStructType(func::FuncOp &func) {
       // Step3: replace structGetOp with load from field memrefs
       OpBuilder load_builder(op);
       Value loaded_field = load_builder.create<AffineLoadOp>(
-          loc, field_memrefs[index], affine_load.getAffineMap(), affine_load.getIndices());
+          loc, field_memrefs[index], affine_load.getAffineMap(),
+          affine_load.getIndices());
       struct_field.replaceAllUsesWith(loaded_field);
       op->erase(); // erase structGetOp
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(defOp)) {
@@ -177,7 +178,6 @@ void lowerStructType(func::FuncOp &func) {
       llvm_unreachable("unexpected defOp for structGetOp");
     }
   }
-
 
   // Run DCE after all struct get is folded
   deadAffineLoadElimination(func);
@@ -199,8 +199,8 @@ Value buildStructFromInt(OpBuilder &builder, Location loc, Value int_value,
           loc, field_type, int_value, hi_idx, lo_idx);
       struct_elements.push_back(field_value);
     } else if (field_type.isa<StructType>()) {
-      struct_elements.push_back(
-          buildStructFromInt(builder, loc, int_value, field_type.cast<StructType>(), lo));
+      struct_elements.push_back(buildStructFromInt(
+          builder, loc, int_value, field_type.cast<StructType>(), lo));
     } else {
       llvm_unreachable("unexpected type");
     }
@@ -226,10 +226,11 @@ void lowerIntToStructOp(func::FuncOp &func) {
     OpBuilder builder(op);
     int lo = 0;
     // Step2: create struct construct op
-    auto struct_construct = buildStructFromInt(builder, loc, int_value, struct_type, lo);
+    auto struct_construct =
+        buildStructFromInt(builder, loc, int_value, struct_type, lo);
     // Step3: replace intToStructOp with struct construct
     struct_value.replaceAllUsesWith(struct_construct);
-  } 
+  }
 
   // Erase intToStructOps
   for (auto op : intToStructOps) {
@@ -242,11 +243,15 @@ bool isLegal(func::FuncOp &func) {
   func.walk([&](Operation *op) {
     if (auto structGetOp = dyn_cast<StructGetOp>(op)) {
       legal = false;
-      llvm::errs() << "Error: [Pass][LowerCompositeType] structGetOp is not legal: " << *op << "\n";
+      llvm::errs()
+          << "Error: [Pass][LowerCompositeType] structGetOp is not legal: "
+          << *op << "\n";
       WalkResult::interrupt();
     } else if (auto structConstructOp = dyn_cast<StructConstructOp>(op)) {
       legal = false;
-      llvm::errs() << "Error: [Pass][LowerCompositeType] structConstructOp is not legal: " << *op << "\n";
+      llvm::errs() << "Error: [Pass][LowerCompositeType] structConstructOp is "
+                      "not legal: "
+                   << *op << "\n";
       WalkResult::interrupt();
     }
   });

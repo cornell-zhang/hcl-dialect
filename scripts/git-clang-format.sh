@@ -41,7 +41,7 @@ if [ -z ${FILES+x} ]; then
     echo "No changes in C/C++ files"
     exit 0
 fi
-echo "Files: $FILES"
+echo "Files: ${FILES[@]}"
 
 if [[ ${INPLACE_FORMAT} -eq 1 ]]; then
     echo "Running clang-format on C/C++ files against revision" $1:

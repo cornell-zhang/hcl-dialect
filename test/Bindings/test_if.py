@@ -1,3 +1,6 @@
+# Copyright HeteroCL authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # RUN: %PYTHON %s
 
 from hcl_mlir.build_ir import IterVar

@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 // CHECK: #map0 = affine_map<(d0) -> (d0 * 16)>

@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-anywidth-integer
 module {
   func.func @top(%arg0: memref<10xi32>) -> memref<10xi2> attributes {itypes = "u", otypes = "u", llvm.emit_c_interface, top} {

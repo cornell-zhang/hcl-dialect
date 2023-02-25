@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-print-ops --jit | FileCheck %s
 // Get bit 0,1,2 from a integer, the output should be 3
 module {

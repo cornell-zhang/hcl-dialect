@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-anywidth-integer
 module {
   func.func @top_vadd(%arg0: memref<10xi10>, %arg1: memref<10xi10>) -> memref<10xi10> attributes {"top"} {

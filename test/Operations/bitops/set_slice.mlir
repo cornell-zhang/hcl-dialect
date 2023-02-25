@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-print-ops --lower-bitops --jit | FileCheck %s
 // Input: 0x0000
 // By setting the 3,2,1 bits to 110, we get

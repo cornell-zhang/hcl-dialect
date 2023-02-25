@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --fixed-to-integer --lower-print-ops --jit | FileCheck %s
 module {
   // 2.25, 2.50, 3.25, 6.25 

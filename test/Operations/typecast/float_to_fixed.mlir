@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --fixed-to-integer --lower-print-ops --jit | FileCheck %s
 module {
   memref.global "private" @float_gv : memref<2x2xf32> = dense<[[2.234, 1.223], [5.261, 1.2]]>

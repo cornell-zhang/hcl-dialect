@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //===- EmitOpenScop.cc ------------------------------------------*- C++ -*-===//
 //
 // This file implements the interfaces for emitting OpenScop representation from

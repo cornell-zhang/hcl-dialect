@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "hcl/Conversion/Passes.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"

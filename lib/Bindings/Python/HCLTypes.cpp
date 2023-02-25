@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
@@ -37,8 +36,8 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
           [](py::object cls, MlirContext ctx) {
             return cls(hclMlirOpHandleTypeGet(ctx));
           },
-          "Get an instance of OpHandleType in given context.",
-          py::arg("cls"), py::arg("context") = py::none());
+          "Get an instance of OpHandleType in given context.", py::arg("cls"),
+          py::arg("context") = py::none());
 
   mlir_type_subclass(m, "FixedType", hclMlirTypeIsAFixedType)
       .def_classmethod(
@@ -75,19 +74,20 @@ void mlir::python::populateHCLIRTypes(py::module &m) {
           "get",
           [](py::object cls, const std::vector<MlirType> &members,
              MlirContext ctx) {
-            return cls(hclMlirStructTypeGet(ctx, members.size(), members.data()));
+            return cls(
+                hclMlirStructTypeGet(ctx, members.size(), members.data()));
           },
           "Get an instance of StructType in given context.", py::arg("cls"),
           py::arg("members"), py::arg("context") = py::none())
       .def_property_readonly(
-        "field_types",
-        [](MlirType type) {
-          py::list types;
-          unsigned num_fields = hclMlirStructTypeGetNumFields(type);
-          for (size_t i = 0; i < num_fields; i++){
-            types.append(hclMlirStructGetEleType(type, i));
-          }
-          return types;
-        },
-        "Get a field type of a struct type by index.");
+          "field_types",
+          [](MlirType type) {
+            py::list types;
+            unsigned num_fields = hclMlirStructTypeGetNumFields(type);
+            for (size_t i = 0; i < num_fields; i++) {
+              types.append(hclMlirStructGetEleType(type, i));
+            }
+            return types;
+          },
+          "Get a field type of a struct type by index.");
 }

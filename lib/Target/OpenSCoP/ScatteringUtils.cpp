@@ -1,10 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-// Modified from the Polymer project [https://github.com/kumasento/polymer]
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 //===- ScatteringUtils.cc ---------------------------------------*- C++ -*-===//
 //

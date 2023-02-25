@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //===- ExtractScopStmt.cc - Extract scop stmt to func -----------------C++-===//
 //
 // This file implements the transformation that extracts scop statements into

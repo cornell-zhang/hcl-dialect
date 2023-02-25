@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
@@ -13,9 +12,9 @@
 #include "hcl-c/Dialect/Registration.h"
 #include "hcl-c/Translation/EmitIntelHLS.h"
 #include "hcl-c/Translation/EmitVivadoHLS.h"
+#include "hcl/Conversion/Passes.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Transforms/Passes.h"
-#include "hcl/Conversion/Passes.h"
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir/Bindings/Python/PybindAdaptors.h"
 #include "mlir/CAPI/IR.h"

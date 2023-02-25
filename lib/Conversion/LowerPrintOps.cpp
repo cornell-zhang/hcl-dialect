@@ -1,8 +1,8 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //===----------------------------------------------------------------------===//
 // LowerPrintOps.cpp defines a pass to lower PrintOp and PrintMemRefOp to
 // MLIR's utility printing functions or C printf functions. It also handles

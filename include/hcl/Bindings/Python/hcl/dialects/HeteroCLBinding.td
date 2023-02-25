@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #ifndef BINDINGS_PYTHON_HCL_OPS_TD
 #define BINDINGS_PYTHON_HCL_OPS_TD

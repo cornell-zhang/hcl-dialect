@@ -1148,6 +1148,7 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
   auto init_val = op.initial_value();
   if (!init_val.hasValue())
     return;
+  fixUnsignedType(op, op->hasAttr("unsigned"));
   auto attr = init_val.getValue();
   if (auto denseAttr = attr.dyn_cast<DenseElementsAttr>()) {
     os << "\n";
@@ -1184,7 +1185,10 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
       } else if (type.isInteger(1))
         os << element.cast<BoolAttr>().getValue();
       else if (type.isIntOrIndex())
-        os << element.cast<IntegerAttr>().getValue();
+        if (op->hasAttr("unsigned"))
+          os << element.cast<IntegerAttr>().getValue().getZExtValue();
+        else
+          os << element.cast<IntegerAttr>().getValue();
       else
         emitError(op, "array has unsupported element type.");
 

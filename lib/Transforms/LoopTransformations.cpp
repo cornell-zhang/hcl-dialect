@@ -1220,8 +1220,8 @@ LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
   return success();
 }
 
-LogicalResult runReplaceOp(func::FuncOp &f, ReplaceOp &replaceOp,
-                          Value &src, Value &dst) {
+LogicalResult runReplaceOp(func::FuncOp &f, ReplaceOp &replaceOp, Value &src,
+                           Value &dst) {
   // 1) Get the schedule
 
   // 2) Find the requested array
@@ -1246,6 +1246,29 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
       dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
+
+  // Determine whether the target array is unsigned
+  bool is_unsigned = false;
+  auto defOp = target.getDefiningOp();
+  if (defOp) {
+    if (defOp->hasAttr("unsigned"))
+      is_unsigned = true;
+  } else {
+    // function argument
+    if (f->hasAttr("itypes")) {
+      auto top_itypes =
+          f->getAttr("itypes").cast<StringAttr>().getValue().str();
+      int argIdx = 0;
+      for (auto arg : f.getArguments()) {
+        if (arg == target) {
+          break;
+        }
+        argIdx++;
+      }
+      if (top_itypes[argIdx] == 'u')
+        is_unsigned = true;
+    }
+  }
 
   // 2) Find the requested stage (loop nest)
   // the outermost loop of the target loop nest
@@ -1662,26 +1685,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   buf->setAttr("name", StringAttr::get(buf->getContext(),
                                        StringRef(op_name.str() + "_reuse_" +
                                                  std::to_string(loopAxis))));
-  auto defOp = target.getDefiningOp();
-  if (defOp) {
-    if (defOp->hasAttr("unsigned"))
-      buf->setAttr("unsigned", out_builder.getUnitAttr());
-  } else {
-    // function argument
-    if (f->hasAttr("itypes")) {
-      auto top_itypes =
-          f->getAttr("itypes").cast<StringAttr>().getValue().str();
-      int argIdx = 0;
-      for (auto arg : f.getArguments()) {
-        if (arg == target) {
-          break;
-        }
-        argIdx++;
-      }
-      if (top_itypes[argIdx] == 'u')
-        buf->setAttr("unsigned", out_builder.getUnitAttr());
-    }
-  }
+  if (is_unsigned)
+    buf->setAttr("unsigned", out_builder.getUnitAttr());
 
   // 10) link the result SSA with the buffer
   reuseAtOp.getResult().replaceAllUsesWith(buf);
@@ -1890,6 +1895,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
       newLoad = rewriter.create<AffineLoadOp>(op->getLoc(), buf, affineMap,
                                               memAffineIndices);
     }
+    if (is_unsigned)
+      newLoad->setAttr("unsigned", rewriter.getUnitAttr());
     op->replaceAllUsesWith(newLoad);
     opToRemove.push_back(op);
   }
@@ -2204,6 +2211,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
         load = builder.create<AffineLoadOp>(loc, target, memAffineIndices);
       }
     }
+    if (is_unsigned)
+      load->setAttr("unsigned", builder.getUnitAttr());
 
     // store the load result to buffer
     if (reductionForOps.size() > 0 && allLoadOperands[loadCnt].size() > 0)
@@ -2215,8 +2224,10 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
       allLoadOperands[loadCnt][j] =
           shiftForOps[j - size + shiftForOps.size()].getInductionVar();
     }
-    builder.create<AffineStoreOp>(loc, load, buf, allLoadAffineMaps[loadCnt],
-                                  allLoadOperands[loadCnt]);
+    auto store = builder.create<AffineStoreOp>(
+        loc, load, buf, allLoadAffineMaps[loadCnt], allLoadOperands[loadCnt]);
+    if (is_unsigned)
+      store->setAttr("unsigned", builder.getUnitAttr());
   }
 
   // 16) Remove all the useless operations
@@ -3531,7 +3542,8 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<ReplaceOp>(op)) {
         Value src, dst;
-        if (findArray(f, new_op.src(), src) && findArray(f, new_op.dst(), dst)) {
+        if (findArray(f, new_op.src(), src) &&
+            findArray(f, new_op.dst(), dst)) {
           if (failed(runReplaceOp(f, new_op, src, dst)))
             return false;
         } else {

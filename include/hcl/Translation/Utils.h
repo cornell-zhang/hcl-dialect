@@ -85,5 +85,6 @@ private:
 };
 
 void fixUnsignedType(Value &result, bool isUnsigned);
+void fixUnsignedType(memref::GlobalOp &op, bool isUnsigned);
 
 #endif // HCL_TRANSLATION_UTILS_H

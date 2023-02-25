@@ -50,5 +50,5 @@ if [[ ${INPLACE_FORMAT} -eq 1 ]]; then
     "${CMD[@]}"
 else
     echo "Running clang-format in checking mode"
-    clang-format --dry-run ${FILES[@]}
+    clang-format --dry-run --Werror ${FILES[@]}
 fi

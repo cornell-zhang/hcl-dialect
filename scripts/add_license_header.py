@@ -50,6 +50,7 @@ header_cmdstyle = """
 FMT_MAP = {
     "sh": header_pystyle,
     "cc": header_cstyle,
+    "cpp": header_cstyle,
     "c": header_cstyle,
     "cu": header_cstyle,
     "cuh": header_cstyle,

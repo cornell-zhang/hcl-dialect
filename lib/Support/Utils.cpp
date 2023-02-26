@@ -1,13 +1,12 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-// Modified from the ScaleHLS project
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ * Modification: ScaleHLS
+ * https://github.com/hanchenye/scalehls
+ */
 
-#include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Support/Utils.h"
+#include "hcl/Dialect/HeteroCLTypes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -822,10 +821,10 @@ Value mlir::hcl::castToF64(OpBuilder &rewriter, const Value &src,
   Value casted;
   if (t.isa<IndexType>()) {
     Type I32 = rewriter.getIntegerType(32);
-    Value intValue = rewriter.create<arith::IndexCastOp>(src.getLoc(), I32, src);
+    Value intValue =
+        rewriter.create<arith::IndexCastOp>(src.getLoc(), I32, src);
     return castToF64(rewriter, intValue, hasUnsignedAttr);
-  }
-  else if (t.isa<IntegerType>()) {
+  } else if (t.isa<IntegerType>()) {
     size_t iwidth = t.getIntOrFloatBitWidth();
     if (t.isUnsignedInteger() or hasUnsignedAttr) {
       Value widthAdjusted;

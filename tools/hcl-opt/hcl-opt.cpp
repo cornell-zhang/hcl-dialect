@@ -1,10 +1,7 @@
-//===- hcl-opt.cpp ---------------------------------------*- C++ -*-===//
-//
-// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
@@ -169,8 +166,7 @@ int runJiTCompiler(mlir::ModuleOp module) {
       LLVM_BUILD_DIR + "/lib/libmlir_c_runner_utils.so";
   std::string hcl_runtime_lib =
       HCL_DIALECT_BUILD_DIR + "/lib/libhcl_runtime_utils.so";
-  llvm::SmallVector<std::string, 4> shared_libs = {runner_utils,
-                                                   c_runner_utils,
+  llvm::SmallVector<std::string, 4> shared_libs = {runner_utils, c_runner_utils,
                                                    hcl_runtime_lib};
   llvm::SmallVector<llvm::SmallString<256>, 4> libPaths;
   // Use absolute library path so that gdb can find the symbol table.

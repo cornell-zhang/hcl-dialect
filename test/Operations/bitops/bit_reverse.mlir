@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-bitops | FileCheck %s
 module {
   func.func @top(%arg0: memref<10xi8>, %arg1: memref<10xi8>) attributes {bit, itypes = "uu", otypes = ""} {

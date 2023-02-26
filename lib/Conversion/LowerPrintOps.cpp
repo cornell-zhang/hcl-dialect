@@ -1,8 +1,8 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //===----------------------------------------------------------------------===//
 // LowerPrintOps.cpp defines a pass to lower PrintOp and PrintMemRefOp to
 // MLIR's utility printing functions or C printf functions. It also handles
@@ -131,7 +131,8 @@ void lowerPrintMemRef(Operation *op) {
   auto srcElementType = srcMemRefType.getElementType();
   bool unsign = op->hasAttr("unsigned");
   std::string funcName;
-  if (srcElementType.isa<FloatType>() && srcElementType.getIntOrFloatBitWidth() == 32) {
+  if (srcElementType.isa<FloatType>() &&
+      srcElementType.getIntOrFloatBitWidth() == 32) {
     funcName = "printMemrefF32";
   } else if (srcElementType.isa<FloatType>() &&
              srcElementType.getIntOrFloatBitWidth() == 64) {
@@ -168,7 +169,8 @@ void lowerPrintMemRef(Operation *op) {
 
   // Use memref.cast to remove rank
   builder.setInsertionPoint(op);
-  auto castedMemRef = builder.create<memref::CastOp>(loc, pointerType, srcMemRef);
+  auto castedMemRef =
+      builder.create<memref::CastOp>(loc, pointerType, srcMemRef);
   SmallVector<Value, 1> operands{castedMemRef};
   builder.create<func::CallOp>(loc, printFuncDecl, operands);
 }

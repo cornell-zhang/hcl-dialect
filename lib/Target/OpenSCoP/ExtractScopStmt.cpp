@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //===- ExtractScopStmt.cc - Extract scop stmt to func -----------------C++-===//
 //
 // This file implements the transformation that extracts scop statements into
@@ -6,15 +11,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Target/OpenSCoP/ExtractScopStmt.h"
+#include "hcl/Target/OpenSCoP/OpenScop.h"
 #include "hcl/Target/OpenSCoP/OslScop.h"
 #include "hcl/Target/OpenSCoP/OslScopStmtOpSet.h"
 #include "hcl/Target/OpenSCoP/OslSymbolTable.h"
 #include "hcl/Target/OpenSCoP/ScopStmt.h"
-#include "hcl/Target/OpenSCoP/OpenScop.h"
 
+#include "mlir/Analysis/SliceAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
-#include "mlir/Analysis/SliceAnalysis.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -30,16 +35,16 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Transforms/RegionUtils.h"
-//#include "mlir/Transforms/Utils.h"
-#include "mlir/IR/Location.h"
+// #include "mlir/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
+#include "mlir/IR/Location.h"
 #include "mlir/Translation.h"
 
 #include "llvm/ADT/SetVector.h"
 
-#include "mlir/InitAllDialects.h"
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
+#include "mlir/InitAllDialects.h"
 
 #include "osl/osl.h"
 
@@ -93,10 +98,11 @@ insertScratchpadForInterprocUses(mlir::Operation *defOp,
       break;
     calleeOp = calleeOp->getParentOp();
   }
-    
+
   mlir::FuncOp callee = cast<mlir::FuncOp>(calleeOp);
   mlir::Block &calleeEntryBlock = *callee.getBlocks().begin();
-  mlir::BlockArgument scratchpad = calleeEntryBlock.addArgument(memrefType, val.getLoc());
+  mlir::BlockArgument scratchpad =
+      calleeEntryBlock.addArgument(memrefType, val.getLoc());
   callee.setType(b.getFunctionType(
       TypeRange(calleeEntryBlock.getArgumentTypes()), llvm::None));
 
@@ -527,7 +533,7 @@ static mlir::FuncOp ScopExtraction(mlir::FuncOp f) {
     return nullptr;
   if (scop->getNumStatements() == 0)
     return nullptr;
-  
+
   // Print generated OpenSCoP in a file
   FILE *scopfile;
   scopfile = fopen("hcl.openscop", "w");
@@ -537,7 +543,6 @@ static mlir::FuncOp ScopExtraction(mlir::FuncOp f) {
   mlir::FuncOp g;
   return g;
 }
-
 
 LogicalResult hcl::extractOpenScop(ModuleOp module, llvm::raw_ostream &os) {
 
@@ -569,8 +574,8 @@ LogicalResult hcl::extractOpenScop(ModuleOp module, llvm::raw_ostream &os) {
 
 void hcl::registerToOpenScopExtractTranslation() {
   static TranslateFromMLIRRegistration toScopStmt(
-          "extract-scop-stmt", extractOpenScop, [&](DialectRegistry &registry){
-          // clang-format off
+      "extract-scop-stmt", extractOpenScop, [&](DialectRegistry &registry) {
+        // clang-format off
           registry.insert<
           mlir::hcl::HeteroCLDialect, 
           mlir::StandardOpsDialect,
@@ -582,6 +587,6 @@ void hcl::registerToOpenScopExtractTranslation() {
           mlir::memref::MemRefDialect,
           mlir::linalg::LinalgDialect
          >();
-         // clang-format on
+        // clang-format on
       });
 }

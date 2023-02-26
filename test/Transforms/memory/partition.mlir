@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt -opt %s | FileCheck %s
 
 // CHECK: #map0 = affine_map<(d0, d1) -> (d0 mod 4, d1 mod 4, d0 floordiv 4, d1 floordiv 4)>

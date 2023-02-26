@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 //===----------------------------------------------------------------------===//
 // LowerBitOps Pass
@@ -113,37 +112,44 @@ void lowerSetSliceOps(func::FuncOp &func) {
     // Add 1 to hi to make it inclusive
     Type i32 = rewriter.getIntegerType(32);
     Value one_i32 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, i32);
-    Value one_idx = rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), one_i32);
+    Value one_idx =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), one_i32);
     Value ub = rewriter.create<mlir::arith::AddIOp>(loc, hi, one_idx);
 
     // Extend val to the same width as input
-    if (val.getType().getIntOrFloatBitWidth() < input.getType().getIntOrFloatBitWidth()) {
+    if (val.getType().getIntOrFloatBitWidth() <
+        input.getType().getIntOrFloatBitWidth()) {
       val = rewriter.create<mlir::arith::ExtUIOp>(loc, input.getType(), val);
     }
-    
+
     // Create a step of 1, index type
     Value step_i32 = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, i32);
-    Value step = rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), step_i32);
+    Value step =
+        rewriter.create<mlir::arith::IndexCastOp>(loc, hi.getType(), step_i32);
 
     // build an SCF for loop to iterate over the bits
     scf::ForOp loop = rewriter.create<scf::ForOp>(
         loc, lo, ub, step, ValueRange({input}),
         [&](OpBuilder &builder, Location loc, Value iv, ValueRange ivs) {
-            // get the (iv - lo)-th bit of val
-            Value iv_sub_lo = builder.create<mlir::arith::SubIOp>(loc, iv, lo);
-            Value idx_casted = builder.create<mlir::arith::IndexCastOp>(loc, val.getType(), iv_sub_lo);
-            Value val_shifted = builder.create<mlir::arith::ShRUIOp>(loc, val, idx_casted);            
-            Value bit;
-            if (val_shifted.getType().getIntOrFloatBitWidth() > 1) {
-              Type one_bit_type = builder.getIntegerType(1);
-              bit = builder.create<mlir::arith::TruncIOp>(loc, one_bit_type, val_shifted);
-            } else {
-              bit = val_shifted;
-            }
-            Value res = builder.create<mlir::hcl::SetIntBitOp>(loc, ivs[0].getType(), ivs[0], iv, bit);
-            builder.create<scf::YieldOp>(loc, res);
+          // get the (iv - lo)-th bit of val
+          Value iv_sub_lo = builder.create<mlir::arith::SubIOp>(loc, iv, lo);
+          Value idx_casted = builder.create<mlir::arith::IndexCastOp>(
+              loc, val.getType(), iv_sub_lo);
+          Value val_shifted =
+              builder.create<mlir::arith::ShRUIOp>(loc, val, idx_casted);
+          Value bit;
+          if (val_shifted.getType().getIntOrFloatBitWidth() > 1) {
+            Type one_bit_type = builder.getIntegerType(1);
+            bit = builder.create<mlir::arith::TruncIOp>(loc, one_bit_type,
+                                                        val_shifted);
+          } else {
+            bit = val_shifted;
+          }
+          Value res = builder.create<mlir::hcl::SetIntBitOp>(
+              loc, ivs[0].getType(), ivs[0], iv, bit);
+          builder.create<scf::YieldOp>(loc, res);
         });
-    
+
     // replace the result of the setSliceOp with the result of the loop
     setSliceOp->getResult(0).replaceAllUsesWith(loop.getResult(0));
   }

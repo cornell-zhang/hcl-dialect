@@ -1,3 +1,8 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "hcl/Conversion/Passes.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
@@ -79,7 +84,7 @@ public:
         rewriter.create<mlir::arith::ShLIOp>(loc, const_1, idx_casted);
     // take the inverse of bitmask
     Value one_bit = rewriter.create<mlir::arith::ConstantIntOp>(loc, 1, 1);
-    Value all_one_mask = 
+    Value all_one_mask =
         rewriter.create<mlir::arith::ExtSIOp>(loc, itype, one_bit);
     Value inversed_mask =
         rewriter.create<mlir::arith::XOrIOp>(loc, all_one_mask, bitmask);
@@ -280,7 +285,7 @@ bool applyHCLToLLVMLoweringPass(ModuleOp &module, MLIRContext &context) {
   patterns.add<CreateOpHandleOpLowering>(&context);
   patterns.add<SetIntBitOpLowering>(&context);
   patterns.add<GetIntBitOpLowering>(&context);
-//   patterns.add<SetIntSliceOpLowering>(&context);
+  //   patterns.add<SetIntSliceOpLowering>(&context);
   patterns.add<GetIntSliceOpLowering>(&context);
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This

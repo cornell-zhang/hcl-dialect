@@ -1,10 +1,9 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-// Modified from the ScaleHLS project
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ * Modification: ScaleHLS
+ * https://github.com/hanchenye/scalehls
+ */
 
 #ifndef HCL_ANALYSIS_UTILS_H
 #define HCL_ANALYSIS_UTILS_H

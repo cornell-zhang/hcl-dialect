@@ -1,16 +1,15 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "PassDetail.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
-#include "hcl/Transforms/Passes.h"
 #include "hcl/Support/Utils.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -39,8 +38,12 @@ public:
   Node(Operation *op) : op(op) {}
   void addUpstream(Node *node) { upstream.push_back(node); }
   void addDownstream(Node *node) { downstream.push_back(node); }
-  void addConsumedMemRef(Operation *memRef) { consumedMemRefs.push_back(memRef); }
-  void addProducedMemRef(Operation *memRef) { producedMemRefs.push_back(memRef); }
+  void addConsumedMemRef(Operation *memRef) {
+    consumedMemRefs.push_back(memRef);
+  }
+  void addProducedMemRef(Operation *memRef) {
+    producedMemRefs.push_back(memRef);
+  }
   std::vector<Node *> getUpstream() { return this->upstream; }
   std::vector<Node *> getDownstream() { return this->downstream; }
   DeviceEnum getDevice() { return this->device; }
@@ -89,17 +92,14 @@ class DataFlowGraph {
   std::map<std::string, Node *> nodeMap;
 
 public:
-  void addNode(Node *node) { 
-    this->nodeMap[node->getName()] = node;
-  }
+  void addNode(Node *node) { this->nodeMap[node->getName()] = node; }
   void addEdge(Node *src, Node *dst) {
     src->addDownstream(dst);
     dst->addUpstream(src);
   }
-  Node* getNode(std::string name) {
-    return this->nodeMap[name];
-  }
-  void getNodeByConsumedMemRef(Operation *memRef, std::vector<Node *> &consumerNodes) {
+  Node *getNode(std::string name) { return this->nodeMap[name]; }
+  void getNodeByConsumedMemRef(Operation *memRef,
+                               std::vector<Node *> &consumerNodes) {
     for (auto node : this->nodeMap) {
       for (auto consumedMemRef : node.second->getConsumedMemRefs()) {
         if (consumedMemRef == memRef) {
@@ -138,7 +138,8 @@ public:
     for (auto node : this->nodeMap) {
       if (node.second->getDevice() == DeviceEnum::FPGADevice) {
         fpgaNodes.push_back(node.second);
-        auto op_handle = builder.create<CreateOpHandleOp>(funcOp.getLoc(), node.second->getName());
+        auto op_handle = builder.create<CreateOpHandleOp>(
+            funcOp.getLoc(), node.second->getName());
         op_handles.push_back(op_handle);
       }
     }
@@ -146,8 +147,8 @@ public:
     // for (auto op_handle : op_handles) {
     //   op_handles_values.push_back(op_handle->getResult(0));
     // }
-    // auto outline_op = builder.create<OutlineOp>(funcOp.getLoc(), op_handles_values);
-    // if (failed(runOutline(mod, funcOp, outline_op))) {
+    // auto outline_op = builder.create<OutlineOp>(funcOp.getLoc(),
+    // op_handles_values); if (failed(runOutline(mod, funcOp, outline_op))) {
     //   funcOp->emitError("Failed to outline the kernel function");
     // }
     return;
@@ -243,7 +244,8 @@ DataFlowGraph buildDFGInScope(Operation &scope_op) {
   return graph;
 }
 
-void buildHierarchicalDFG(ModuleOp &module, std::map<Operation *, DataFlowGraph> &hierarchicalDFG) {
+void buildHierarchicalDFG(
+    ModuleOp &module, std::map<Operation *, DataFlowGraph> &hierarchicalDFG) {
   // build a hierarchical data flow graph
   // given a module
   // get all the top level ops
@@ -264,7 +266,7 @@ void buildHierarchicalDFG(ModuleOp &module, std::map<Operation *, DataFlowGraph>
 bool applyDataPlacement(ModuleOp &module) {
   /* Assumptions:
    * 1. The module has a top-level function called "top"
-  */
+   */
 
   // get top-level function
   func::FuncOp func = module.lookupSymbol<func::FuncOp>("top");
@@ -300,9 +302,11 @@ bool applyDataPlacement(ModuleOp &module) {
     Operation *scope_op; // which scope of graph does the op partition
     // check if axis has value
     if (optional_axis) {
-      auto loopHandle = dyn_cast<CreateLoopHandleOp>(optional_axis.getDefiningOp());
+      auto loopHandle =
+          dyn_cast<CreateLoopHandleOp>(optional_axis.getDefiningOp());
       const auto loop_name = loopHandle.loop_name();
-      const auto op_name = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      const auto op_name =
+          dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
       // get the loop op
       AffineForOp rootForOp;
       if (failed(getStage(func, rootForOp, op_name))) {
@@ -314,7 +318,10 @@ bool applyDataPlacement(ModuleOp &module) {
       rootForOp.walk([&](Operation *op) {
         if (isa<AffineForOp>(op)) {
           AffineForOp forOp = dyn_cast<AffineForOp>(op);
-          if (forOp.getOperation()->getAttr("loop_name").cast<StringAttr>().getValue() == loop_name) {
+          if (forOp.getOperation()
+                  ->getAttr("loop_name")
+                  .cast<StringAttr>()
+                  .getValue() == loop_name) {
             axis_op = forOp.getOperation();
           }
         }
@@ -328,16 +335,19 @@ bool applyDataPlacement(ModuleOp &module) {
       scope_op = axis_op->getParentOp();
       // get the data flow graph of the scope
       DataFlowGraph graph = hierarchicalDFG[scope_op];
-      Node *target_node = axis_index == 0 ? graph.getNode(op_name.str()) : graph.getNode(loop_name.str());
+      Node *target_node = axis_index == 0 ? graph.getNode(op_name.str())
+                                          : graph.getNode(loop_name.str());
       auto device = toOp.device();
       for (auto node : target_node->getDownstream()) {
         node->setDevice(device);
-        // llvm::outs() << "set node " << node->getName() << " to device " << node->getDeviceName() << "\n";
+        // llvm::outs() << "set node " << node->getName() << " to device " <<
+        // node->getDeviceName() << "\n";
       }
     } else {
       // if axis is not specified, the memref must be a block argument
       if (!target.isa<BlockArgument>()) {
-        op->emitError("axis is not specified, but the memref is not a block argument");
+        op->emitError(
+            "axis is not specified, but the memref is not a block argument");
         return false;
       }
       scope_op = func.getOperation();
@@ -349,7 +359,8 @@ bool applyDataPlacement(ModuleOp &module) {
       auto device = toOp.device();
       for (auto node : target_nodes) {
         node->setDevice(device);
-        // llvm::outs() << "set node " << node->getName() << " to device " << node->getDeviceName() << "\n";
+        // llvm::outs() << "set node " << node->getName() << " to device " <<
+        // node->getDeviceName() << "\n";
       }
     }
     scopes.insert(scope_op);

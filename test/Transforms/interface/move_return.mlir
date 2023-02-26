@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --return-to-input
 module {
   func.func @top(%arg0: memref<10xi32>) -> (memref<10xi32>, memref<10xi32>) attributes {itypes = "s", otypes = "ss", top} {

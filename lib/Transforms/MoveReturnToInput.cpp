@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 //===----------------------------------------------------------------------===//
 // MoveReturnToInput Pass
@@ -21,9 +20,9 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -56,7 +55,7 @@ void moveReturnToInput(func::FuncOp &funcOp) {
       returnOps.push_back(op);
     }
   });
-  SmallVector<Operation*, 4> opToRemove;
+  SmallVector<Operation *, 4> opToRemove;
   for (auto op : returnOps) {
     for (unsigned i = 0; i < op->getNumOperands(); i++) {
       Value arg = op->getOperand(i);
@@ -64,7 +63,7 @@ void moveReturnToInput(func::FuncOp &funcOp) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
           opToRemove.push_back(allocOp);
           BlockArgument bArg = blockArgs[i];
-          allocOp.replaceAllUsesWith(bArg);          
+          allocOp.replaceAllUsesWith(bArg);
         }
       }
     }

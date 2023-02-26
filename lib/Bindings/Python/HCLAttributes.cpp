@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
@@ -69,7 +68,8 @@ void mlir::python::populateHCLAttributes(py::module &m) {
           py::arg("cls"), py::arg("kind"), py::arg("context") = py::none(),
           "Gets an attribute wrapping a partition kind.");
 
-  mlir_attribute_subclass(m, "NDRangeDimKindEnum", mlirAttributeIsANDRangeDimKind)
+  mlir_attribute_subclass(m, "NDRangeDimKindEnum",
+                          mlirAttributeIsANDRangeDimKind)
       .def_classmethod(
           "get",
           [](py::object cls, MlirAttribute kind, MlirContext ctx) {

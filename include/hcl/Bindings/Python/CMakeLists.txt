@@ -1,3 +1,6 @@
+# Copyright HeteroCL authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 include(AddMLIRPython)
 
 # The directory at which the Python import tree begins.

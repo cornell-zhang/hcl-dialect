@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "hcl-c/Dialect/HCLTypes.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
@@ -64,7 +63,7 @@ bool hclMlirTypeIsAStructType(MlirType type) {
 }
 
 MlirType hclMlirStructTypeGet(MlirContext ctx, intptr_t numElements,
-                                            MlirType const *elements) {
+                              MlirType const *elements) {
   SmallVector<Type, 4> types;
   ArrayRef<Type> typeRef = unwrapList(numElements, elements, types);
   return wrap(hcl::StructType::get(unwrap(ctx), typeRef));

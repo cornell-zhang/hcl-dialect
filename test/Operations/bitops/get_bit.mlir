@@ -1,3 +1,6 @@
+// Copyright HeteroCL authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // RUN: hcl-opt %s --lower-print-ops --jit 
 module {
   memref.global "private" @gv0 : memref<10xi8> = dense<[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]>

@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 //===----------------------------------------------------------------------===//
 // MemRefDCE Pass
@@ -58,22 +57,22 @@ void removeNeverLoadedMemRef(func::FuncOp &func) {
       }
     }
     if (!loaded_from) {
-        // erase op and all known uses
-        for (auto u : v.getUsers()) {
-            u->erase();
-        } 
-        op->erase();
+      // erase op and all known uses
+      for (auto u : v.getUsers()) {
+        u->erase();
+      }
+      op->erase();
     }
   }
 }
 
 /// Pass entry point
-bool applyMemRefDCE(ModuleOp &mod) { 
-    for (auto func : mod.getOps<func::FuncOp>()) {
-        removeNeverLoadedMemRef(func);
-        cleanUpUnusedOps(func);
-    }
-    return true;     
+bool applyMemRefDCE(ModuleOp &mod) {
+  for (auto func : mod.getOps<func::FuncOp>()) {
+    removeNeverLoadedMemRef(func);
+    cleanUpUnusedOps(func);
+  }
+  return true;
 }
 } // namespace hcl
 } // namespace mlir

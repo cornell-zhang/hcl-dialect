@@ -1,10 +1,9 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The HCL-MLIR Authors.
-//
-// Modified from the Polymer project [https://github.com/kumasento/polymer]
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ * Modification: Polymer
+ * https://github.com/kumasento/polymer
+ */
 
 //===- OslScopStmtOpSet.cc --------------------------------------*- C++ -*-===//
 //
@@ -16,7 +15,7 @@
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
 #include "mlir/Dialect/Affine/Analysis/AffineStructures.h"
-//#include "mlir/Analysis/Utils.h"
+// #include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/IR/Operation.h"

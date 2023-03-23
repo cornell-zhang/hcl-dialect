@@ -1696,6 +1696,9 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   nonReductionLoops[loopAxis].setConstantUpperBound(origLoopBound * stride +
                                                     distance);
   // update the expressions using nonReductionLoops[loopAxis]'s induction var
+  // new_iv = old_iv * stride + distance
+  // => old_iv = (new_iv - distance) / stride
+  // therefore, we need to replace all uses of the old_iv with (new_iv - distance) / stride
   auto iv = nonReductionLoops[loopAxis].getInductionVar();
   // get all uses of the induction variable
   for (auto &use : iv.getUses()) {
@@ -1704,7 +1707,8 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
     // %iv = arith.index_cast %iv : index to some integer type
     // %stride = arith.constant stride : some integer type
     // %iv_stride = arith.muli %iv, %stride : some integer type
-    // We need to replace the %iv_stride with the newly created induction variable
+    // We need to replace the %iv_stride with 
+    // the newly created induction variable expression
 
     // if the user is an index_cast, we need to check the next user
     if (auto indexCastOp = dyn_cast<arith::IndexCastOp>(user)) {

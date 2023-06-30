@@ -1,8 +1,7 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright 2021-2022 The hcl Authors.
-//
-//===----------------------------------------------------------------------===//
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "PassDetail.h"
 #include "hcl/Transforms/Passes.h"

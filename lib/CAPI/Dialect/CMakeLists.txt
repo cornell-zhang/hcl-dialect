@@ -17,6 +17,7 @@ add_mlir_public_c_api_library(MLIRHCLCAPI
   MLIRCAPIIR
   MLIRSupport
   MLIRHeteroCL
+  MLIRHCLTransformOps
   MLIRHCLPasses
   MLIRHCLConversion
   )

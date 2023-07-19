@@ -449,6 +449,10 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   return success();
 }
 
+LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
+  return success();
+}
+
 LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
   auto optional_factor = unrollOp.getFactor();

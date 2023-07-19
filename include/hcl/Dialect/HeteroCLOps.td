@@ -375,6 +375,26 @@ def HeteroCL_UnrollOp : HeteroCL_Op<"unroll">
     }];
 }
 
+def HeteroCL_UnfoldOp : HeteroCL_Op<"unfold"> 
+{
+    let summary = "unfold";
+    let description = [{
+        hcl.unfold(var, factor=0)
+
+        Unfold the iteration into PE array.
+
+        Parameters
+        * var (IterVar) - The iteration to be unrolled.
+        * factor (Expr) - The unfold factor. Default value  means skip unfolding.
+    }];
+
+    let arguments = (ins LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr,"1">>:$factor);
+    let results = (outs LoopHandle:$result);
+    let assemblyFormat = [{
+        `(` $loop (`,` $factor^)? `)` attr-dict
+    }];
+}
+
 def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline"> 
 {
     let summary = "pipeline";
@@ -389,7 +409,7 @@ def HeteroCL_PipelineOp : HeteroCL_Op<"pipeline">
     }];
 
     let arguments = (ins LoopHandle:$loop, OptionalAttr<DefaultValuedAttr<UI32Attr, "1">>:$ii);
-    let results = (outs );
+    let results = (outs LoopHandle:$result);
     let assemblyFormat = [{
         `(` $loop (`,` $ii^)? `)` attr-dict
     }];
@@ -574,6 +594,19 @@ def HeteroCL_HostXcelToOp : HeteroCL_Op<"host_xcel_to">
     let results = (outs );
     let assemblyFormat = [{
         `(` $target `:` type($target) `,` $device (`,` $axis^)? `)` attr-dict
+    }];
+}
+
+def HeteroCL_IntraKernelToOp : HeteroCL_Op<"intra_kernel_to">
+{
+    let summary = "intra kernel data placement";
+    let description = [{
+        hcl.to(tensor, pes)
+    }];
+    let arguments = (ins AnyMemRef:$target, LoopHandle:$pes);
+    let results = (outs AnyMemRef:$result);
+    let assemblyFormat = [{
+        `(` $target `:` type($target) `,` $pes `)` attr-dict `->` type($result)
     }];
 }
 

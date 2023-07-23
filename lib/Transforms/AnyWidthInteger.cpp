@@ -54,6 +54,8 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
       } else {
         new_result_types.push_back(memrefType);
       }
+    } else {
+      new_result_types.push_back(t);
     }
   }
 
@@ -69,6 +71,8 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
       } else {
         new_arg_types.push_back(memrefType);
       }
+    } else {
+      new_arg_types.push_back(t);
     }
   }
 
@@ -90,94 +94,105 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
       Type argType = block.getArgument(i).getType();
-      if (MemRefType memrefType = argType.cast<MemRefType>()) {
-        Type et = memrefType.getElementType();
-        if (et.isa<IntegerType>()) {
-          size_t width = 64;
-          Type newType = IntegerType::get(funcOp.getContext(), width);
-          Type newMemRefType = memrefType.clone(newType);
-          size_t oldWidth = et.cast<IntegerType>().getWidth();
-          block.getArgument(i).setType(newMemRefType);
-          bool is_unsigned = false;
-          if (i < itypes.length()) {
-            is_unsigned = itypes[i] == 'u';
-          }
-          Value newMemRef =
-              castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i),
-                            oldWidth, is_unsigned);
-          newMemRefs.push_back(newMemRef);
+      for (int i = 0; i < block.getNumArguments(); ++i) {
+        MemRefType memrefType =
+            block.getArgument(i).getType().dyn_cast<MemRefType>();
+        if (!memrefType) {
           blockArgs.push_back(block.getArgument(i));
+          continue;
         }
+
+        Type et = memrefType.getElementType();
+        if (!et.isa<IntegerType>()) {
+          blockArgs.push_back(block.getArgument(i));
+          continue;
+        }
+
+        size_t width = 64;
+        Type newType = IntegerType::get(funcOp.getContext(), width);
+        Type newMemRefType = memrefType.clone(newType);
+        block.getArgument(i).setType(newMemRefType);
+
+        bool is_unsigned = false;
+        if (i < itypes.length()) {
+          is_unsigned = itypes[i] == 'u';
+        }
+
+        Value newMemRef =
+            castIntMemRef(builder, funcOp->getLoc(), block.getArgument(i),
+                          et.cast<IntegerType>().getWidth(), is_unsigned);
+        newMemRefs.push_back(newMemRef);
+        blockArgs.push_back(block.getArgument(i));
       }
     }
-  }
 
-  // Update func::FuncOp's return types
-  SmallVector<Operation *, 4> returnOps;
-  funcOp.walk([&](Operation *op) {
-    if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
-      returnOps.push_back(op);
-    }
-  });
-  for (auto op : returnOps) {
-    OpBuilder returnRewriter(op);
-    // Cast the return values
-    for (unsigned i = 0; i < op->getNumOperands(); i++) {
-      Value arg = op->getOperand(i);
-      MemRefType type = arg.getType().cast<MemRefType>();
-      Type etype = type.getElementType();
-      if (etype.isa<IntegerType>()) {
-        if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-          bool is_unsigned = false;
-          if (i < otypes.length()) {
-            is_unsigned = otypes[i] == 'u';
+    // Update func::FuncOp's return types
+    SmallVector<Operation *, 4> returnOps;
+    funcOp.walk([&](Operation *op) {
+      if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
+        returnOps.push_back(op);
+      }
+    });
+    for (auto op : returnOps) {
+      OpBuilder returnRewriter(op);
+      // Cast the return values
+      for (unsigned i = 0; i < op->getNumOperands(); i++) {
+        Value arg = op->getOperand(i);
+        if (MemRefType type = arg.getType().dyn_cast<MemrefType>()) {
+          Type etype = type.getElementType();
+          if (etype.isa<IntegerType>()) {
+            if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+              bool is_unsigned = false;
+              if (i < otypes.length()) {
+                is_unsigned = otypes[i] == 'u';
+              }
+              Value newMemRef =
+                  castIntMemRef(returnRewriter, op->getLoc(),
+                                allocOp.getResult(), 64, is_unsigned, false);
+              // Only replace the single use of oldMemRef: returnOp
+              op->setOperand(i, newMemRef);
+            }
           }
-          Value newMemRef =
-              castIntMemRef(returnRewriter, op->getLoc(), allocOp.getResult(),
-                            64, is_unsigned, false);
-          // Only replace the single use of oldMemRef: returnOp
-          op->setOperand(i, newMemRef);
         }
       }
-    }
-    // Cast the input arguments
-    for (auto v : llvm::enumerate(newMemRefs)) {
-      Value newMemRef = v.value();
-      Value &blockArg = blockArgs[v.index()];
-      bool is_unsigned = false;
-      if (v.index() < itypes.length()) {
-        is_unsigned = itypes[v.index()] == 'u';
+      // Cast the input arguments
+      for (auto v : llvm::enumerate(newMemRefs)) {
+        Value newMemRef = v.value();
+        Value &blockArg = blockArgs[v.index()];
+        bool is_unsigned = false;
+        if (v.index() < itypes.length()) {
+          is_unsigned = itypes[v.index()] == 'u';
+        }
+        castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned,
+                      false, blockArg);
       }
-      castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned,
-                    false, blockArg);
     }
+
+    // Update function signature
+    FunctionType newFuncType =
+        FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
+    funcOp.setType(newFuncType);
   }
 
-  // Update function signature
-  FunctionType newFuncType =
-      FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
-  funcOp.setType(newFuncType);
-}
-
-/// entry point
-bool applyAnyWidthInteger(ModuleOp &mod) {
-  // Find top-level function
-  bool isFoundTopFunc = false;
-  func::FuncOp *topFunc;
-  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
-    if (func->hasAttr("top")) {
-      isFoundTopFunc = true;
-      topFunc = &func;
-      break;
+  /// entry point
+  bool applyAnyWidthInteger(ModuleOp & mod) {
+    // Find top-level function
+    bool isFoundTopFunc = false;
+    func::FuncOp *topFunc;
+    for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
+      if (func->hasAttr("top")) {
+        isFoundTopFunc = true;
+        topFunc = &func;
+        break;
+      }
     }
-  }
 
-  if (isFoundTopFunc && topFunc) {
-    updateTopFunctionSignature(*topFunc);
-  }
+    if (isFoundTopFunc && topFunc) {
+      updateTopFunctionSignature(*topFunc);
+    }
 
-  return true;
-}
+    return true;
+  }
 
 } // namespace hcl
 } // namespace mlir

@@ -93,8 +93,7 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
   OpBuilder builder(funcOp->getRegion(0));
   for (Block &block : funcOp.getBlocks()) {
     for (unsigned i = 0; i < block.getNumArguments(); i++) {
-      Type argType = block.getArgument(i).getType();
-      for (int i = 0; i < block.getNumArguments(); ++i) {
+      for (unsigned i = 0; i < block.getNumArguments(); ++i) {
         MemRefType memrefType =
             block.getArgument(i).getType().dyn_cast<MemRefType>();
         if (!memrefType) {
@@ -125,74 +124,75 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
         blockArgs.push_back(block.getArgument(i));
       }
     }
+  }
 
-    // Update func::FuncOp's return types
-    SmallVector<Operation *, 4> returnOps;
-    funcOp.walk([&](Operation *op) {
-      if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
-        returnOps.push_back(op);
-      }
-    });
-    for (auto op : returnOps) {
-      OpBuilder returnRewriter(op);
-      // Cast the return values
-      for (unsigned i = 0; i < op->getNumOperands(); i++) {
-        Value arg = op->getOperand(i);
-        if (MemRefType type = arg.getType().dyn_cast<MemrefType>()) {
-          Type etype = type.getElementType();
-          if (etype.isa<IntegerType>()) {
-            if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-              bool is_unsigned = false;
-              if (i < otypes.length()) {
-                is_unsigned = otypes[i] == 'u';
-              }
-              Value newMemRef =
-                  castIntMemRef(returnRewriter, op->getLoc(),
-                                allocOp.getResult(), 64, is_unsigned, false);
-              // Only replace the single use of oldMemRef: returnOp
-              op->setOperand(i, newMemRef);
+  // Update func::FuncOp's return types
+  SmallVector<Operation *, 4> returnOps;
+  funcOp.walk([&](Operation *op) {
+    if (auto add_op = dyn_cast<func::ReturnOp>(op)) {
+      returnOps.push_back(op);
+    }
+  });
+  for (auto op : returnOps) {
+    OpBuilder returnRewriter(op);
+    // Cast the return values
+    for (unsigned i = 0; i < op->getNumOperands(); i++) {
+      Value arg = op->getOperand(i);
+      if (MemRefType type = arg.getType().dyn_cast<MemRefType>()) {
+        Type etype = type.getElementType();
+        if (etype.isa<IntegerType>()) {
+          if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
+            bool is_unsigned = false;
+            if (i < otypes.length()) {
+              is_unsigned = otypes[i] == 'u';
             }
+            Value newMemRef =
+                castIntMemRef(returnRewriter, op->getLoc(), allocOp.getResult(),
+                              64, is_unsigned, false);
+            // Only replace the single use of oldMemRef: returnOp
+            op->setOperand(i, newMemRef);
           }
         }
       }
-      // Cast the input arguments
-      for (auto v : llvm::enumerate(newMemRefs)) {
-        Value newMemRef = v.value();
-        Value &blockArg = blockArgs[v.index()];
-        bool is_unsigned = false;
-        if (v.index() < itypes.length()) {
-          is_unsigned = itypes[v.index()] == 'u';
-        }
-        castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned,
-                      false, blockArg);
-      }
     }
-
-    // Update function signature
-    FunctionType newFuncType =
-        FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
-    funcOp.setType(newFuncType);
+    // Cast the input arguments
+    for (auto v : llvm::enumerate(newMemRefs)) {
+      Value newMemRef = v.value();
+      Value &blockArg = blockArgs[v.index()];
+      bool is_unsigned = false;
+      if (v.index() < itypes.length()) {
+        is_unsigned = itypes[v.index()] == 'u';
+      }
+      castIntMemRef(returnRewriter, op->getLoc(), newMemRef, 64, is_unsigned,
+                    false, blockArg);
+    }
   }
 
-  /// entry point
-  bool applyAnyWidthInteger(ModuleOp & mod) {
-    // Find top-level function
-    bool isFoundTopFunc = false;
-    func::FuncOp *topFunc;
-    for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
-      if (func->hasAttr("top")) {
-        isFoundTopFunc = true;
-        topFunc = &func;
-        break;
-      }
-    }
+  // Update function signature
+  FunctionType newFuncType =
+      FunctionType::get(funcOp.getContext(), new_arg_types, new_result_types);
+  funcOp.setType(newFuncType);
+}
 
-    if (isFoundTopFunc && topFunc) {
-      updateTopFunctionSignature(*topFunc);
+/// entry point
+bool applyAnyWidthInteger(ModuleOp &mod) {
+  // Find top-level function
+  bool isFoundTopFunc = false;
+  func::FuncOp *topFunc;
+  for (func::FuncOp func : mod.getOps<func::FuncOp>()) {
+    if (func->hasAttr("top")) {
+      isFoundTopFunc = true;
+      topFunc = &func;
+      break;
     }
-
-    return true;
   }
+
+  if (isFoundTopFunc && topFunc) {
+    updateTopFunctionSignature(*topFunc);
+  }
+
+  return true;
+}
 
 } // namespace hcl
 } // namespace mlir

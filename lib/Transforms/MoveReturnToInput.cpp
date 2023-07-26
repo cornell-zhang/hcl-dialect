@@ -55,27 +55,30 @@ void moveReturnToInput(func::FuncOp &funcOp) {
       returnOps.push_back(op);
     }
   });
-  SmallVector<Operation *, 4> opToRemove;
+
+  // Build loops to copy return values to block args
+  OpBuilder builder(funcOp.getContext());
+  // build right before the terminator
+  builder.setInsertionPointToEnd(&funcOp.getBlocks().back());
   for (auto op : returnOps) {
     for (unsigned i = 0; i < op->getNumOperands(); i++) {
       Value arg = op->getOperand(i);
       if (MemRefType type = arg.getType().dyn_cast<MemRefType>()) {
-        if (auto allocOp = dyn_cast<memref::AllocOp>(arg.getDefiningOp())) {
-          opToRemove.push_back(allocOp);
-          BlockArgument bArg = blockArgs[i];
-          allocOp.replaceAllUsesWith(bArg);
-        }
+        BlockArgument bArg = blockArgs[i];
+        // build an memref.copy op to copy the return value to block arg
+        builder.create<memref::CopyOp>(op->getLoc(), arg, bArg);
+      } else {
+        // issue an error
+        op->emitError("MoveReturnToInput Pass does not support non-memref "
+                      "return values now.");
       }
     }
-    // erase returnOp's operands
-    op->eraseOperands(0, op->getNumOperands());
-  }
-
-  // Remove alloc operations that was used by returnOp
-  std::reverse(opToRemove.begin(), opToRemove.end());
-  for (Operation *op : opToRemove) {
+    // erase return op
     op->erase();
   }
+  // build a new empty return op
+  builder.create<func::ReturnOp>(funcOp.getLoc());
+
   // Append resTypes to argTypes and clear resTypes
   argTypes.insert(std::end(argTypes), std::begin(resTypes), std::end(resTypes));
   resTypes.clear();

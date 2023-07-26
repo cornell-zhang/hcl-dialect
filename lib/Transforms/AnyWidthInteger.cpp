@@ -97,13 +97,11 @@ void updateTopFunctionSignature(func::FuncOp &funcOp) {
         MemRefType memrefType =
             block.getArgument(i).getType().dyn_cast<MemRefType>();
         if (!memrefType) {
-          blockArgs.push_back(block.getArgument(i));
           continue;
         }
 
         Type et = memrefType.getElementType();
         if (!et.isa<IntegerType>()) {
-          blockArgs.push_back(block.getArgument(i));
           continue;
         }
 

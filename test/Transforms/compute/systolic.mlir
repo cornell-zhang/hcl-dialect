@@ -19,7 +19,7 @@ module {
                 %prod = arith.mulf %a, %b : f32
                 %sum = arith.addf %prod, %c: f32
                 affine.store %sum, %C[%i] : memref<61xf32>
-            // CHECK:  } {dep_disstance = 1 : i64, loop_name = "j", unroll = 3 : i32}
+            // CHECK:  } {dep_distance = 0 : i64, loop_name = "i", op_name = "s"} 
             } { loop_name = "j", dep_distance = 1 }
         } { loop_name = "i", op_name = "s", dep_distance = 0 }
 

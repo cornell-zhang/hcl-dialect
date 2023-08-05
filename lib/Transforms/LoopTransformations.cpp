@@ -3459,11 +3459,10 @@ LogicalResult runReform(func::FuncOp &f, ReformOp &reformOp, Value &array) {
 }
 
 bool isHCLOp(Operation &op) {
-  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, UnfoldOp, 
-                   IntraKernelToOp, PipelineOp, ParallelOp,
-                   FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   OutlineOp, ReshapeOp, ReformOp, ThreadBindOp,
-                   InterKernelToOp, ReplaceOp>(op);
+  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, UnfoldOp,
+                   IntraKernelToOp, PipelineOp, ParallelOp, FuseOp, ComputeAtOp,
+                   PartitionOp, ReuseAtOp, BufferAtOp, OutlineOp, ReshapeOp,
+                   ReformOp, ThreadBindOp, InterKernelToOp, ReplaceOp>(op);
 }
 
 void eraseScheduleOp(func::FuncOp &f,

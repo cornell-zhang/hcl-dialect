@@ -474,9 +474,8 @@ LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
       if (forOp->hasAttr("op_name"))
         isOuterMost = true;
       if (forOp->hasAttr("dep_distance")) {
-        dependency_distance = forOp->getAttr("dep_distance")
-                                  .cast<IntegerAttr>()
-                                  .getInt();
+        dependency_distance =
+            forOp->getAttr("dep_distance").cast<IntegerAttr>().getInt();
       }
     }
   });

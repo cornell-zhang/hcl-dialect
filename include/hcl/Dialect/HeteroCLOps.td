@@ -604,12 +604,12 @@ def HeteroCL_IntraKernelToOp : HeteroCL_Op<"to">
         hcl.to(tensor, PEs)
         ---
         IntraKernelToOp takes a target memory as input, i.e., $target, and 
-        move the data to a list of PEs as represented by LoopHandle $pes
+        move the data to a list of PEs, i.e., $pe_array 
     }];
-    let arguments = (ins AnyMemRef:$target, LoopHandle:$pes);
+    let arguments = (ins AnyMemRef:$target, LoopHandle:$pe_array);
     let results = (outs AnyMemRef:$result);
     let assemblyFormat = [{
-        `(` $target `:` type($target) `,` $pes `)` attr-dict `->` type($result)
+        `(` $target `:` type($target) `,` $pe_array `)` attr-dict `->` type($result)
     }];
 }
 

@@ -450,6 +450,51 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
 }
 
 LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
+  // 1) Get the schedule
+  auto loopHandle =
+      dyn_cast<CreateLoopHandleOp>(intraOp.pe_array().getDefiningOp());
+  auto opHandle = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp());
+  const auto loop_name = loopHandle.loop_name();
+  const auto op_name = opHandle.op_name();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop
+  bool isOuterMost = false;
+  int dependency_distance = 0;
+  AffineLoopBand band;
+  rootForOp->walk([&](AffineForOp forOp) {
+    if (band.size() == 0 && loop_name == getLoopName(forOp)) {
+      band.push_back(forOp);
+      if (forOp->hasAttr("op_name"))
+        isOuterMost = true;
+      if (forOp->hasAttr("dep_distance")) {
+        dependency_distance = forOp->getAttr("dep_distance")
+                                  .cast<IntegerAttr>()
+                                  .getInt();
+      }
+    }
+  });
+
+  // 4) Get data movement direction as int array
+  Attribute attr = intraOp->getAttr("pe_index");
+  auto pe_index = attr.cast<ArrayAttr>().getValue();
+
+  // 5) Verify the intra-kernel data movement schedule
+  if (pe_index.size() == 0) {
+    intraOp.emitError("Cannot move data to null PE");
+    return failure();
+  }
+  if (dependency_distance != 0) {
+    intraOp.emitError("Cannot move the loop with non-uniform dependency");
+    return failure();
+  }
+
   return success();
 }
 
@@ -487,6 +532,7 @@ LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
     }
     return WalkResult::advance();
   });
+  // TODO: call Polymer/PoCC to inject loop information as attr
   // handle exception
   if (!result.wasInterrupted()) {
     unfoldOp.emitError("Cannot find Loop ") << loop_name.str();

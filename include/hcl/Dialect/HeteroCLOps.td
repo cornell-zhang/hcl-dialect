@@ -597,11 +597,14 @@ def HeteroCL_HostXcelToOp : HeteroCL_Op<"host_xcel_to">
     }];
 }
 
-def HeteroCL_IntraKernelToOp : HeteroCL_Op<"intra_kernel_to">
+def HeteroCL_IntraKernelToOp : HeteroCL_Op<"to">
 {
     let summary = "intra kernel data placement";
     let description = [{
-        hcl.to(tensor, pes)
+        hcl.to(tensor, PEs)
+        ---
+        IntraKernelToOp takes a target memory as input, i.e., $target, and 
+        move the data to a list of PEs as represented by LoopHandle $pes
     }];
     let arguments = (ins AnyMemRef:$target, LoopHandle:$pes);
     let results = (outs AnyMemRef:$result);

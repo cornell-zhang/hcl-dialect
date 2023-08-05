@@ -449,8 +449,51 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   return success();
 }
 
-LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
+LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
   return success();
+}
+
+LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
+  // 1) Get the schedule
+  auto optional_factor = unfoldOp.factor();
+  unsigned int factor;
+
+  if (optional_factor.hasValue()) {
+    factor = optional_factor.getValue();
+  } else {
+    factor = 0; // fully unroll
+  }
+
+  auto loopHandle =
+      dyn_cast<CreateLoopHandleOp>(unfoldOp.loop().getDefiningOp());
+  const auto loop_name = loopHandle.loop_name();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop and attach attribute
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{(int)factor};
+      setIntAttr(band, attr_arr, "unroll");
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  // handle exception
+  if (!result.wasInterrupted()) {
+    unfoldOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
+  }
+
+  return failure();
 }
 
 LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
@@ -3416,7 +3459,8 @@ LogicalResult runReform(func::FuncOp &f, ReformOp &reformOp, Value &array) {
 }
 
 bool isHCLOp(Operation &op) {
-  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
+  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, UnfoldOp, 
+                   IntraKernelToOp, PipelineOp, ParallelOp,
                    FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
                    OutlineOp, ReshapeOp, ReformOp, ThreadBindOp,
                    InterKernelToOp, ReplaceOp>(op);
@@ -3489,6 +3533,12 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
         if (failed(runUnrolling(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<UnfoldOp>(op)) {
+        if (failed(runUnfolding(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<IntraKernelToOp>(op)) {
+        if (failed(runIntraKernelOpCheck(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
         if (failed(runPipelining(f, new_op)))

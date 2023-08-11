@@ -11,7 +11,7 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/Utils.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
@@ -842,7 +842,7 @@ void lowerGetGlobalFixedOp(GetGlobalFixedOp &op) {
     isSigned = false;
   }
   auto memRefType = oldType.clone(IntegerType::get(op.getContext(), 64));
-  auto symbolName = op.name();
+  auto symbolName = op.getName();
   auto res = rewriter.create<memref::GetGlobalOp>(loc, memRefType, symbolName);
   // Truncate or Extend I64 memref to the width of the fixed-point
   size_t bitwidth;

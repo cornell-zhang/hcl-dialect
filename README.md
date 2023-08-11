@@ -13,16 +13,16 @@ HeteroCL dialect is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for ac
 ## Building
 
 ### Preliminary tools
-- gcc >= 5.4
-- cmake >= 3.19
-- python >= 3.7
+- gcc >= 9 (Please make sure you have installed the gcc that supports C++17)
+- cmake >= 3.22
+- python >= 3.9
 
-### Install LLVM 15.0.0
-- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project/releases/tag/llvmorg-15.0.0) or checkout the Github branch
+### Install LLVM 18.x
+- Download LLVM from [llvm-project](https://github.com/llvm/llvm-project) or checkout the Github branch
 ```sh
 git clone https://github.com/llvm/llvm-project.git
 cd llvm-project
-git checkout tags/llvmorg-15.0.0
+git checkout tags/llvmorg-18-init
 ```
 
 - Build
@@ -101,7 +101,8 @@ cmake -G "Unix Makefiles" .. \
    -DLLVM_EXTERNAL_LIT=$LLVM_BUILD_DIR/bin/llvm-lit \
    -DPYTHON_BINDING=ON \
    -DOPENSCOP=OFF \
-   -DPython3_EXECUTABLE=~/.venv/hcl-dev/bin/python3
+   -DPython3_EXECUTABLE=`which python3` \
+   -DCMAKE_CXX_FLAGS="-Wfatal-errors -std=c++17"
 make -j8
 
 # Export the generated HCL-MLIR Python library
@@ -169,6 +170,20 @@ We follow [Google Style Guides](https://google.github.io/styleguide/) and use
 * [clang-format](https://clang.llvm.org/docs/ClangFormat.html) for C/C++
 * [black](https://github.com/psf/black) and [pylint](https://pylint.org/) for Python
 
+To install `clang-format`, you can reuse the LLVM project by specifying the following CMake options:
+
+```sh
+# Inside the llvm-project folder
+mkdir build-clang && cd build-clang
+cmake -G Ninja ../llvm \
+   -DLLVM_ENABLE_PROJECTS="clang" \
+   -DLLVM_BUILD_EXAMPLES=ON \
+   -DLLVM_TARGETS_TO_BUILD="host" \
+   -DCMAKE_BUILD_TYPE=Release \
+   -DLLVM_ENABLE_ASSERTIONS=ON \
+   -DLLVM_INSTALL_UTILS=ON
+ninja clang-format
+```
 
 ## References
 * [ScaleHLS](https://github.com/hanchenye/scalehls)

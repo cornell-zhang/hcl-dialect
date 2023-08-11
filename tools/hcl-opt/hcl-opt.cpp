@@ -15,6 +15,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
@@ -216,6 +217,7 @@ int runJiTCompiler(mlir::ModuleOp module) {
 
   // Register the translation from MLIR to LLVM IR, which must happen before we
   // can JIT-compile.
+  mlir::registerBuiltinDialectTranslation(*module->getContext());
   mlir::registerLLVMDialectTranslation(*module->getContext());
 
   // An optimization pipeline to use within the execution engine.
@@ -327,7 +329,7 @@ int main(int argc, char **argv) {
 
   if (enableNormalize) {
     // To make all loop steps to 1.
-    optPM.addPass(mlir::createAffineLoopNormalizePass());
+    optPM.addPass(mlir::affine::createAffineLoopNormalizePass());
 
     // Sparse Conditional Constant Propagation (SCCP)
     pm.addPass(mlir::createSCCPPass());

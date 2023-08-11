@@ -12,9 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "hcl/Dialect/HeteroCLOps.h"
+#include "hcl/Dialect/HeteroCLDialect.h"
+
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/FunctionImplementation.h"
+#include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/TypeUtilities.h"
 
@@ -29,11 +33,15 @@ ParseResult CustomizationOp::parse(OpAsmParser &parser,
          std::string &) { return builder.getFunctionType(argTypes, results); };
 
   return function_interface_impl::parseFunctionOp(
-      parser, result, /*allowVariadic=*/false, buildFuncType);
+      parser, result, /*allowVariadic=*/false,
+      getFunctionTypeAttrName(result.name), buildFuncType, nullptr, nullptr);
+  // getArgAttrsAttrName(result.name), getResAttrsAttrName(result.name));
 }
 
 void CustomizationOp::print(OpAsmPrinter &p) {
-  function_interface_impl::printFunctionOp(p, *this, /*isVariadic=*/false);
+  function_interface_impl::printFunctionOp(p, *this, /*isVariadic=*/false,
+                                           getFunctionTypeAttrName(), nullptr,
+                                           nullptr);
 }
 
 LogicalResult CustomizationOp::verify() {
@@ -80,8 +88,10 @@ static void buildCmpFixedOp(OpBuilder &build, OperationState &result,
                             CmpFixedPredicate predicate, Value lhs, Value rhs) {
   result.addOperands({lhs, rhs});
   result.types.push_back(getI1SameShape(lhs.getType()));
-  result.addAttribute(CmpFixedOp::getPredicateAttrName(),
-                      build.getI64IntegerAttr(static_cast<int64_t>(predicate)));
+  // FIXME: cannot call member function ‘mlir::StringAttr
+  // mlir::hcl::CmpFixedOp::getPredicateAttrName()’ without object
+  // result.addAttribute(CmpFixedOp::getPredicateAttrName(),
+  //                     build.getI64IntegerAttr(static_cast<int64_t>(predicate)));
 }
 
 } // namespace hcl

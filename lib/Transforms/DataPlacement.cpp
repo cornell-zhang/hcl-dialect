@@ -289,7 +289,7 @@ bool applyDataPlacement(ModuleOp &module) {
   std::set<Operation *> scopes;
   for (auto op : hostXcelToOps) {
     HostXcelToOp toOp = dyn_cast<HostXcelToOp>(op);
-    auto target = toOp.target();
+    auto target = toOp.getTarget();
     Operation *target_defining_op;
     if (target.isa<BlockArgument>()) {
       // get block arg index
@@ -298,15 +298,16 @@ bool applyDataPlacement(ModuleOp &module) {
     } else {
       target_defining_op = target.getDefiningOp();
     }
-    auto optional_axis = toOp.axis();
+    auto optional_axis = toOp.getAxis();
     Operation *scope_op; // which scope of graph does the op partition
     // check if axis has value
     if (optional_axis) {
       auto loopHandle =
           dyn_cast<CreateLoopHandleOp>(optional_axis.getDefiningOp());
-      const auto loop_name = loopHandle.loop_name();
+      const auto loop_name = loopHandle.getLoopName();
       const auto op_name =
-          dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+          dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+              .getOpName();
       // get the loop op
       AffineForOp rootForOp;
       if (failed(getStage(func, rootForOp, op_name))) {
@@ -337,7 +338,7 @@ bool applyDataPlacement(ModuleOp &module) {
       DataFlowGraph graph = hierarchicalDFG[scope_op];
       Node *target_node = axis_index == 0 ? graph.getNode(op_name.str())
                                           : graph.getNode(loop_name.str());
-      auto device = toOp.device();
+      auto device = toOp.getDevice();
       for (auto node : target_node->getDownstream()) {
         node->setDevice(device);
         // llvm::outs() << "set node " << node->getName() << " to device " <<
@@ -356,7 +357,7 @@ bool applyDataPlacement(ModuleOp &module) {
       // get the node that consumes the memref
       std::vector<Node *> target_nodes;
       graph.getNodeByConsumedMemRef(target_defining_op, target_nodes);
-      auto device = toOp.device();
+      auto device = toOp.getDevice();
       for (auto node : target_nodes) {
         node->setDevice(device);
         // llvm::outs() << "set node " << node->getName() << " to device " <<

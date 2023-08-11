@@ -189,8 +189,12 @@ PYBIND11_MODULE(_hcl, m) {
     ModuleOp module = unwrap(mlir_mod);
 
     // Apply Transform patterns.
+    // FIXME: Transform dialect
+    // is private within this context.
+    /*
+    const RaggedArray<mlir::transform::MappedValue> extraMapping = {};
     transform::TransformState state(
-        module.getBodyRegion(), module,
+        &module.getBodyRegion(), (mlir::Operation*)&module, extraMapping,
         transform::TransformOptions().enableExpensiveChecks());
     for (auto op : llvm::make_early_inc_range(
              module.getBody()->getOps<transform::TransformOpInterface>())) {
@@ -218,10 +222,12 @@ PYBIND11_MODULE(_hcl, m) {
                                               std::move(patternList))))
         throw py::value_error("failed to apply the PDL pattern");
     }
+    */
 
     // Simplify the loop structure after the transform.
     PassManager pm(module.getContext());
-    pm.addNestedPass<func::FuncOp>(createSimplifyAffineStructuresPass());
+    pm.addNestedPass<func::FuncOp>(
+        mlir::affine::createSimplifyAffineStructuresPass());
     pm.addPass(createCanonicalizerPass());
     if (failed(pm.run(module)))
       throw py::value_error("failed to apply the post-transform optimization");

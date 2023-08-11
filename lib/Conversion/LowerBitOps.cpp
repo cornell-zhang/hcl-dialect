@@ -59,11 +59,11 @@ void lowerBitReverseOps(func::FuncOp &func) {
     SmallVector<int64_t, 1> steps(1, 1);
     SmallVector<int64_t, 1> lbs(1, 0);
     SmallVector<int64_t, 1> ubs(1, iwidth);
-    buildAffineLoopNest(
+    affine::buildAffineLoopNest(
         rewriter, loc, lbs, ubs, steps,
         [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
-          Value res = nestedBuilder.create<AffineLoadOp>(loc, resultMemRef,
-                                                         const_0_indices);
+          Value res = nestedBuilder.create<affine::AffineLoadOp>(
+              loc, resultMemRef, const_0_indices);
           // Get the bit at the width - current position
           Value reverse_idx = nestedBuilder.create<mlir::arith::SubIOp>(
               loc, const_width, ivs[0]);
@@ -73,12 +73,12 @@ void lowerBitReverseOps(func::FuncOp &func) {
           // Set the bit at the current position
           Value new_val = nestedBuilder.create<mlir::hcl::SetIntBitOp>(
               loc, res.getType(), res, ivs[0], bit);
-          nestedBuilder.create<AffineStoreOp>(loc, new_val, resultMemRef,
-                                              const_0_indices);
+          nestedBuilder.create<affine::AffineStoreOp>(
+              loc, new_val, resultMemRef, const_0_indices);
         });
     // Load the result from resultMemRef
-    Value res =
-        rewriter.create<mlir::AffineLoadOp>(loc, resultMemRef, const_0_indices);
+    Value res = rewriter.create<affine::AffineLoadOp>(loc, resultMemRef,
+                                                      const_0_indices);
     op->getResult(0).replaceAllUsesWith(res);
   }
 

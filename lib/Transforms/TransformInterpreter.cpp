@@ -19,13 +19,14 @@ struct TransformInterpreter
 
 void TransformInterpreter::runOnOperation() {
   ModuleOp module = getOperation();
-  transform::TransformState state(
-      module.getBodyRegion(), module,
-      transform::TransformOptions().enableExpensiveChecks());
-  for (auto op : module.getBody()->getOps<transform::TransformOpInterface>()) {
-    if (failed(state.applyTransform(op).checkAndReport()))
-      return signalPassFailure();
-  }
+  // transform::TransformState state(
+  //     module.getBodyRegion(), module,
+  //     transform::TransformOptions().enableExpensiveChecks());
+  // for (auto op : module.getBody()->getOps<transform::TransformOpInterface>())
+  // {
+  //   if (failed(state.applyTransform(op).checkAndReport()))
+  //     return signalPassFailure();
+  // }
 }
 
 std::unique_ptr<OperationPass<ModuleOp>> hcl::createTransformInterpreterPass() {

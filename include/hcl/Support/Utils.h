@@ -16,6 +16,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
+using namespace mlir::affine;
+
 namespace mlir {
 namespace hcl {
 
@@ -70,14 +72,14 @@ bool findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,
 /// AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
+std::optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
 /// Calculate the upper and lower bound of "bound" if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
+std::optional<std::pair<int64_t, int64_t>> getBoundOfAffineBound(AffineBound bound);
 
 /// Return the layout map of "memrefType".
 AffineMap getLayoutMap(MemRefType memrefType);
@@ -104,12 +106,12 @@ void getLoopBands(Block &block, AffineLoopBands &bands,
 void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
 
-Optional<unsigned> getAverageTripCount(AffineForOp forOp);
+std::optional<unsigned> getAverageTripCount(AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
 // Returns a string representation of 'sliceUnion'.
-std::string getSliceStr(const mlir::ComputationSliceState &sliceUnion);
+std::string getSliceStr(const mlir::affine::ComputationSliceState &sliceUnion);
 
 // Dependency types between two stages
 enum Dependency { RAW, RAR, WAR, WAW };

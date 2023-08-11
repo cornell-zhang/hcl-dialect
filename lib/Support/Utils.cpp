@@ -214,7 +214,7 @@ bool hcl::findContiguousNestedLoops(const AffineForOp &rootAffineForOp,
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
 // AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>>
+std::optional<std::pair<Operation *, Operation *>>
 hcl::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   // If lhsOp and rhsOp are already at the same level, return true.
   if (lhsOp->getBlock() == rhsOp->getBlock())
@@ -247,7 +247,7 @@ hcl::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
       if (lhs->getBlock() == rhs->getBlock())
         return std::pair<Operation *, Operation *>(lhs, rhs);
 
-  return Optional<std::pair<Operation *, Operation *>>();
+  return std::optional<std::pair<Operation *, Operation *>>();
 }
 
 /// Returns the number of surrounding loops common to 'loopsA' and 'loopsB',
@@ -255,8 +255,8 @@ hcl::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
 unsigned hcl::getCommonSurroundingLoops(Operation *A, Operation *B,
                                         AffineLoopBand *band) {
   SmallVector<AffineForOp, 4> loopsA, loopsB;
-  getLoopIVs(*A, &loopsA);
-  getLoopIVs(*B, &loopsB);
+  getAffineForIVs(*A, &loopsA);
+  getAffineForIVs(*B, &loopsB);
 
   unsigned minNumLoops = std::min(loopsA.size(), loopsB.size());
   unsigned numCommonLoops = 0;
@@ -271,7 +271,7 @@ unsigned hcl::getCommonSurroundingLoops(Operation *A, Operation *B,
 }
 
 /// Calculate the upper and lower bound of "bound" if possible.
-Optional<std::pair<int64_t, int64_t>>
+std::optional<std::pair<int64_t, int64_t>>
 hcl::getBoundOfAffineBound(AffineBound bound) {
   auto boundMap = bound.getMap();
   if (boundMap.isSingleConstant()) {
@@ -281,7 +281,7 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
 
   // For now, we can only handle one result affine bound.
   if (boundMap.getNumResults() != 1)
-    return Optional<std::pair<int64_t, int64_t>>();
+    return std::optional<std::pair<int64_t, int64_t>>();
 
   auto context = boundMap.getContext();
   SmallVector<int64_t, 4> lbs;
@@ -289,14 +289,14 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
   for (auto operand : bound.getOperands()) {
     // Only if the affine bound operands are induction variable, the calculation
     // is possible.
-    if (!isForInductionVar(operand))
-      return Optional<std::pair<int64_t, int64_t>>();
+    if (!isAffineForInductionVar(operand))
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     // Only if the owner for op of the induction variable has constant bound,
     // the calculation is possible.
     auto ifOp = getForInductionVarOwner(operand);
     if (!ifOp.hasConstantBounds())
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     auto lb = ifOp.getConstantLowerBound();
     auto ub = ifOp.getConstantUpperBound();
@@ -323,7 +323,7 @@ hcl::getBoundOfAffineBound(AffineBound bound) {
     if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
       results.push_back(constExpr.getValue());
     else
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
   }
 
   auto minmax = std::minmax_element(results.begin(), results.end());
@@ -495,9 +495,9 @@ void hcl::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
   }
 }
 
-Optional<unsigned> hcl::getAverageTripCount(AffineForOp forOp) {
+std::optional<unsigned> hcl::getAverageTripCount(AffineForOp forOp) {
   if (auto optionalTripCount = getConstantTripCount(forOp))
-    return optionalTripCount.getValue();
+    return optionalTripCount.value();
   else {
     // TODO: A temporary approach to estimate the trip count. For now, we take
     // the average of the upper bound and lower bound of trip count as the
@@ -507,12 +507,12 @@ Optional<unsigned> hcl::getAverageTripCount(AffineForOp forOp) {
 
     if (lowerBound && upperBound) {
       auto lowerTripCount =
-          upperBound.getValue().second - lowerBound.getValue().first;
+          upperBound.value().second - lowerBound.value().first;
       auto upperTripCount =
-          upperBound.getValue().first - lowerBound.getValue().second;
+          upperBound.value().first - lowerBound.value().second;
       return (lowerTripCount + upperTripCount + 1) / 2;
     } else
-      return Optional<unsigned>();
+      return std::optional<unsigned>();
   }
 }
 
@@ -700,11 +700,12 @@ inline static unsigned getBlockIndex(Operation &op) {
 }
 
 // Returns a string representation of 'sliceUnion'.
-std::string hcl::getSliceStr(const mlir::ComputationSliceState &sliceUnion) {
+std::string
+hcl::getSliceStr(const mlir::affine::ComputationSliceState &sliceUnion) {
   std::string result;
   llvm::raw_string_ostream os(result);
   // Slice insertion point format [loop-depth, operation-block-index]
-  unsigned ipd = mlir::getNestingDepth(&*sliceUnion.insertPoint);
+  unsigned ipd = mlir::affine::getNestingDepth(&*sliceUnion.insertPoint);
   unsigned ipb = getBlockIndex(*sliceUnion.insertPoint);
   os << "insert point: (" << std::to_string(ipd) << ", " << std::to_string(ipb)
      << ")";

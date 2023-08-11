@@ -10,11 +10,15 @@ include "hcl/Dialect/HeteroCLDialect.td"
 include "hcl/Dialect/HeteroCLTypes.td"
 include "hcl/Dialect/HeteroCLAttrs.td"
 
+include "mlir/IR/EnumAttr.td"
 include "mlir/IR/BuiltinTypes.td"
+include "mlir/IR/OpAsmInterface.td"
+include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
-include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/IR/FunctionInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 
 //===----------------------------------------------------------------------===//
@@ -60,7 +64,8 @@ def HeteroCL_CreateLoopHandleOp : HeteroCL_Op<"create_loop_handle">
 //===----------------------------------------------------------------------===//
 
 def CustomizationOp : HeteroCL_Op<"customization", [
-    CallableOpInterface, FunctionOpInterface, IsolatedFromAbove, Symbol
+    AffineScope, AutomaticAllocationScope, CallableOpInterface,
+    FunctionOpInterface, IsolatedFromAbove, OpAsmOpInterface
   ]> {
   let summary = "user defined customization";
   let description = [{
@@ -85,10 +90,6 @@ def CustomizationOp : HeteroCL_Op<"customization", [
     CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)
   >];
   let extraClassDeclaration = [{
-    FunctionType getFunctionType() {
-        return function_type();
-    }
-
     //===------------------------------------------------------------------===//
     // CallableOpInterface
     //===------------------------------------------------------------------===//
@@ -102,6 +103,40 @@ def CustomizationOp : HeteroCL_Op<"customization", [
     /// executed.
     ArrayRef<Type> getCallableResults() { return getFunctionType().getResults(); }
 
+    /// Returns the argument attributes for all callable region arguments or
+    /// null if there are none.
+    ::mlir::ArrayAttr getCallableArgAttrs() {
+      return nullptr; /// getArgAttrs().value_or(nullptr);
+    }
+
+    /// Returns the result attributes for all callable region results or
+    /// null if there are none.
+    ::mlir::ArrayAttr getCallableResAttrs() {
+      return nullptr; /// getResAttrs().value_or(nullptr);
+    }
+
+    ::mlir::ArrayAttr getArgAttrsAttr() {
+      return nullptr;
+    }
+
+    ::mlir::ArrayAttr getResAttrsAttr() {
+      return nullptr;
+    }
+
+    void setArgAttrsAttr(::mlir::ArrayAttr attrs) {
+    }
+
+    void setResAttrsAttr(::mlir::ArrayAttr attrs) {
+    }
+
+    ::mlir::Attribute removeArgAttrsAttr() {
+        return nullptr;
+    }
+
+    ::mlir::Attribute removeResAttrsAttr() {
+        return nullptr;
+    }
+
     //===------------------------------------------------------------------===//
     // FunctionOpInterface Methods
     //===------------------------------------------------------------------===//
@@ -113,6 +148,13 @@ def CustomizationOp : HeteroCL_Op<"customization", [
     ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
 
     //===------------------------------------------------------------------===//
+    // OpAsmOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    /// Allow the dialect prefix to be omitted.
+    static StringRef getDefaultDialect() { return "hcl"; }
+
+    //===------------------------------------------------------------------===//
     // SymbolOpInterface Methods
     //===------------------------------------------------------------------===//
 
@@ -122,7 +164,7 @@ def CustomizationOp : HeteroCL_Op<"customization", [
   bit hasVerifier = 1;
 }
 
-def EndOp : HeteroCL_Op<"end", [NoSideEffect, HasParent<"CustomizationOp">, Terminator]> {
+def EndOp : HeteroCL_Op<"end", [NoMemoryEffect, HasParent<"CustomizationOp">, Terminator]> {
   let summary = "end operation";
   let description = [{
     The "end" operation represents a return operation within a customization.
@@ -179,6 +221,11 @@ def ApplyOp : HeteroCL_Op<"apply", [CallOpInterface,
     /// Return the callee of this operation.
     CallInterfaceCallable getCallableForCallee() {
       return (*this)->getAttrOfType<SymbolRefAttr>("callee");
+    }
+
+    /// Set the callee for this operation.
+    void setCalleeFromCallable(CallInterfaceCallable callee) {
+      (*this)->setAttr("callee", callee.get<SymbolRefAttr>());
     }
   }];
 }
@@ -622,7 +669,7 @@ def DivFixedOp : FixedBinaryOp<"div_fixed"> {
   let summary = "fixed point division operation";
 }
 
-def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, TypesMatchWith<
+def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoMemoryEffect, SameTypeOperands, TypesMatchWith<
     "result type has i1 element type and same shape as operands",
     "lhs", "result", "getI1SameShape($_self)">] # ElementwiseMappable.traits> {
   let summary = "fixed-point comparison operation";
@@ -634,20 +681,14 @@ def CmpFixedOp : HeteroCL_Op<"cmp_fixed", [NoSideEffect, SameTypeOperands, Types
   );
   let results = (outs BoolLike:$result);
 
-  let builders = [
-    OpBuilder<(ins "CmpFixedPredicate":$predicate, "Value":$lhs,
-                 "Value":$rhs), [{
-      mlir::hcl::buildCmpFixedOp($_builder, $_state, predicate, lhs, rhs);
-    }]>];
+//   let builders = [
+//     OpBuilder<(ins "CmpFixedPredicate":$predicate, "Value":$lhs,
+//                  "Value":$rhs), [{
+//       mlir::hcl::buildCmpFixedOp($_builder, $_state, predicate, lhs, rhs);
+//     }]>];
 
   let extraClassDeclaration = [{
-    static StringRef getPredicateAttrName() { return "predicate"; }
     static CmpFixedPredicate getPredicateByName(StringRef name);
-
-    CmpFixedPredicate getPredicate() {
-      return (CmpFixedPredicate)(*this)->getAttrOfType<IntegerAttr>(
-          getPredicateAttrName()).getInt();
-    }
   }];
 
   bit hasVerifier = 0;
@@ -663,7 +704,7 @@ def MaxFixedOp : FixedBinaryOp<"max_fixed"> {
   let summary = "fixed point maximum operation";
 }
 
-def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed", [NoSideEffect]> {
+def GetGlobalFixedOp : HeteroCL_Op<"get_global_fixed", [NoMemoryEffect]> {
     let summary = "generates a fixed point memref from a int global memref";
     let arguments = (ins FlatSymbolRefAttr:$name);
     let results = (outs AnyStaticShapeMemRef:$result);
@@ -810,7 +851,7 @@ def OrOp : HeteroCL_Op<"or"> {
 // YieldOp
 //===----------------------------------------------------------------------===//
 
-def YieldOp : HeteroCL_Op<"yield", [NoSideEffect, Terminator,
+def YieldOp : HeteroCL_Op<"yield", [NoMemoryEffect, Terminator,
                                ParentOneOf<["AndOp, OrOp"]>]> {
   let summary = "yield and termination operation";
   let description = [{
@@ -852,7 +893,7 @@ def PrintMemRefOp : HeteroCL_Op<"print_memref"> {
   let assemblyFormat = "`(` $input `)` attr-dict `:` type($input)";
 }
 
-def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
+def StructConstructOp : HeteroCL_Op<"struct_construct", [NoMemoryEffect]> {
     let summary = "struct construct";
     let description = [{
         The "struct_construct" builtin operation constructs a struct from
@@ -866,7 +907,7 @@ def StructConstructOp : HeteroCL_Op<"struct_construct", [NoSideEffect]> {
     }];
 }
 
-def StructGetOp : HeteroCL_Op<"struct_get", [NoSideEffect]> {
+def StructGetOp : HeteroCL_Op<"struct_get", [NoMemoryEffect]> {
     let summary = "struct get";
     let description = [{
         The "struct_get" operation gets a field from a struct.

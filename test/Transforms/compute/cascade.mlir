@@ -3,7 +3,7 @@
 
 // RUN: hcl-opt -opt %s | FileCheck %s
 
-// CHECK: #map0 = affine_map<(d0) -> (d0 * 16)>
+// CHECK: #map = affine_map<(d0) -> (d0 * 16)>
 // CHECK: #map1 = affine_map<(d0, d1) -> (d1 + d0)>
 // CHECK: #map2 = affine_map<(d0) -> (d0 * 2)>
 // CHECK: #map3 = affine_map<(d0) -> (d0 * 4)>

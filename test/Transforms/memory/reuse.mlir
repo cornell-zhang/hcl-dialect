@@ -3,7 +3,7 @@
 
 // RUN: hcl-opt -opt %s | FileCheck %s
 
-// CHECK: #set0 = affine_set<(d0) : (d0 - 2 >= 0)>
+// CHECK: #set = affine_set<(d0) : (d0 - 2 >= 0)>
 module {
     func.func @blur(%A: memref<10x10xf32>, %B: memref<10x8xf32>)
     {
@@ -18,7 +18,7 @@ module {
                 // CHECK: affine.store %[[VAR2]], %[[VAR]][1] : memref<3xf32>
                 // CHECK: %[[VAR3:.*]] = affine.load {{.*}}[{{.*}}, {{.*}}] : memref<10x10xf32>
                 // CHECK: affine.store %[[VAR3]], %[[VAR]][2] : memref<3xf32>
-                // CHECK: affine.if #set0(%arg3) {
+                // CHECK: affine.if #set(%arg3) {
                 // CHECK:   {{.*}} = affine.load %[[VAR]][0] : memref<3xf32>
                 // CHECK:   {{.*}} = affine.load %[[VAR]][1] : memref<3xf32>
                 // CHECK:   {{.*}} = affine.load %[[VAR]][2] : memref<3xf32>

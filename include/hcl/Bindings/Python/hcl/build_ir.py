@@ -1347,7 +1347,6 @@ class CmpOp(BinaryOp):
 
     def build(self):
         self.built_op = self.op(
-            self.dtype,
             IntegerAttr.get(IntegerType.get_signless(64), self.arg),
             self.lhs.result,
             self.rhs.result,

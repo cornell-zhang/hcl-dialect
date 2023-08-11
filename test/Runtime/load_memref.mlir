@@ -16,15 +16,15 @@ module {
     func.func @top () -> () {
         %0 = memref.alloc() : memref<2x2xi64>
         %1 = memref.cast %0 : memref<2x2xi64> to memref<*xi64>
-        %2 = llvm.mlir.addressof @str_global : !llvm.ptr<array<10xi8>>
+        %2 = llvm.mlir.addressof @str_global : !llvm.ptr<array<10 x i8>>
         %3 = llvm.mlir.constant(0 : index) : i64
-        %4 = llvm.getelementptr %2[%3, %3] : (!llvm.ptr<array<10xi8>>, i64, i64) -> !llvm.ptr<i8>
+        %4 = llvm.getelementptr %2[%3, %3] : (!llvm.ptr<array<10 x i8>>, i64, i64) -> !llvm.ptr<i8>
         call @readMemrefI64(%1, %4) : (memref<*xi64>, !llvm.ptr<i8>) -> ()
         call @printMemrefI64(%1) : (memref<*xi64>) -> ()
 
-        %5 = llvm.mlir.addressof @str_global2 : !llvm.ptr<array<11xi8>>
+        %5 = llvm.mlir.addressof @str_global2 : !llvm.ptr<array<11 x i8>>
         %6 = llvm.mlir.constant(0 : index) : i64
-        %7 = llvm.getelementptr %5[%6, %6] : (!llvm.ptr<array<11xi8>>, i64, i64) -> !llvm.ptr<i8>
+        %7 = llvm.getelementptr %5[%6, %6] : (!llvm.ptr<array<11 x i8>>, i64, i64) -> !llvm.ptr<i8>
         call @writeMemrefI64(%1, %7) : (memref<*xi64>, !llvm.ptr<i8>) -> ()
         return
     }

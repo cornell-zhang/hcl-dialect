@@ -3,7 +3,7 @@
 
 // RUN: hcl-opt -opt %s | FileCheck %s
 
-// CHECK: #map0 = affine_map<(d0, d1) -> (d0 mod 4, d1 mod 4, d0 floordiv 4, d1 floordiv 4)>
+// CHECK: #map = affine_map<(d0, d1) -> (d0 mod 4, d1 mod 4, d0 floordiv 4, d1 floordiv 4)>
 // CHECK: #map1 = affine_map<(d0, d1) -> (d0 floordiv 256, d1 floordiv 512, d0 mod 256, d1 mod 512)>
 // CHECK: #map2 = affine_map<(d0, d1) -> (d0, 0, 0, d1)>
 module {

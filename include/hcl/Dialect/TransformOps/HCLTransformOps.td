@@ -7,7 +7,6 @@
 #define HCL_TRANSFORM_OPS
 
 include "mlir/Dialect/Transform/IR/TransformDialect.td"
-include "mlir/Dialect/Transform/IR/TransformEffects.td"
 include "mlir/Dialect/Transform/IR/TransformInterfaces.td"
 include "mlir/Dialect/PDL/IR/PDLTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
@@ -27,7 +26,7 @@ def HCLParentLoopOp : Op<Transform_Dialect, "hcl.parent_loop",
   }];
 
   let arguments = (ins PDL_Operation:$target, DefaultValuedAttr<
-                         Confined<I64Attr, [IntPositive]>, "1">:$num_loops);
+                       ConfinedAttr<I64Attr, [IntPositive]>, "1">:$num_loops);
   let results = (outs PDL_Operation:$parent);
 
   let assemblyFormat = "$target attr-dict";
@@ -46,14 +45,15 @@ def HCLUnrollOp : Op<Transform_Dialect, "hcl.unroll",
   }];
 
   let arguments = (ins PDL_Operation:$target,
-                       Confined<I64Attr, [IntPositive]>:$factor);
+                       ConfinedAttr<I64Attr, [IntPositive]>:$factor);
 
   let assemblyFormat = "$target attr-dict";
 
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
-        ::mlir::AffineForOp target, 
-        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformRewriter &rewriter, 
+        ::mlir::affine::AffineForOp target, 
+        ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
 }
@@ -68,15 +68,16 @@ def HCLSplitOp : Op<Transform_Dialect, "hcl.split",
   }];
 
   let arguments = (ins PDL_Operation:$target,
-                       Confined<I64Attr, [IntPositive]>:$factor);
+                       ConfinedAttr<I64Attr, [IntPositive]>:$factor);
   let results = (outs PDL_Operation:$outer, PDL_Operation:$inner);
 
   let assemblyFormat = "$target attr-dict";
 
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
-        ::mlir::AffineForOp target, 
-        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformRewriter &rewriter, 
+        ::mlir::affine::AffineForOp target, 
+        ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
 }
@@ -91,15 +92,16 @@ def HCLPipelineOp : Op<Transform_Dialect, "hcl.pipeline",
   }];
 
   let arguments = (ins PDL_Operation:$target,
-                       Confined<I64Attr, [IntPositive]>:$initialInterval);
+                       ConfinedAttr<I64Attr, [IntPositive]>:$initialInterval);
   let results = (outs PDL_Operation:$result);
 
   let assemblyFormat = "$target attr-dict";
 
   let extraClassDeclaration = [{
     ::mlir::DiagnosedSilenceableFailure applyToOne(
-        ::mlir::AffineForOp target, 
-        ::llvm::SmallVector<::mlir::Operation *> &results, 
+        ::mlir::transform::TransformRewriter &rewriter, 
+        ::mlir::affine::AffineForOp target, 
+        ::mlir::transform::ApplyToEachResultList &results,
         ::mlir::transform::TransformState &state);
   }];
 }

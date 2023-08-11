@@ -9,7 +9,7 @@
 
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/Passes.h"
-#include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
+#include "mlir/Dialect/Arith/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/Passes.h"
@@ -23,8 +23,8 @@
 void hclMlirRegisterAllDialects(MlirContext context) {
   mlir::DialectRegistry registry;
   registry.insert<mlir::hcl::HeteroCLDialect, mlir::func::FuncDialect,
-                  mlir::arith::ArithmeticDialect, mlir::tensor::TensorDialect,
-                  mlir::AffineDialect, mlir::math::MathDialect,
+                  mlir::arith::ArithDialect, mlir::tensor::TensorDialect,
+                  mlir::affine::AffineDialect, mlir::math::MathDialect,
                   mlir::memref::MemRefDialect, mlir::pdl::PDLDialect,
                   mlir::transform::TransformDialect>();
   mlir::hcl::registerTransformDialectExtension(registry);
@@ -40,8 +40,8 @@ void hclMlirRegisterAllPasses() {
   mlir::registerConversionPasses();
 
   // Dialect passes
-  mlir::registerAffinePasses();
-  mlir::arith::registerArithmeticPasses();
+  mlir::affine::registerAffinePasses();
+  mlir::arith::registerArithPasses();
   mlir::LLVM::registerLLVMPasses();
   mlir::memref::registerMemRefPasses();
   mlir::registerLinalgPasses();

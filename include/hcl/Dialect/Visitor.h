@@ -9,7 +9,7 @@
 #define HCL_DIALECT_HLSCPP_VISITOR_H
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -35,10 +35,10 @@ public:
             scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
             scf::ReduceReturnOp, scf::YieldOp,
             // Affine statements.
-            AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
-            AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
-            AffineYieldOp, AffineVectorLoadOp, AffineVectorStoreOp,
-            AffineDmaStartOp, AffineDmaWaitOp,
+            affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp, affine::AffineApplyOp,
+            affine::AffineMaxOp, affine::AffineMinOp, affine::AffineLoadOp, affine::AffineStoreOp,
+            affine::AffineYieldOp, affine::AffineVectorLoadOp, affine::AffineVectorStoreOp,
+            affine::AffineDmaStartOp, affine::AffineDmaWaitOp,
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
             memref::GetGlobalOp, hcl::GetGlobalFixedOp, memref::GlobalOp,
@@ -107,19 +107,19 @@ public:
   HANDLE(scf::YieldOp);
 
   // Affine statements.
-  HANDLE(AffineForOp);
-  HANDLE(AffineIfOp);
-  HANDLE(AffineParallelOp);
-  HANDLE(AffineApplyOp);
-  HANDLE(AffineMaxOp);
-  HANDLE(AffineMinOp);
-  HANDLE(AffineLoadOp);
-  HANDLE(AffineStoreOp);
-  HANDLE(AffineYieldOp);
-  HANDLE(AffineVectorLoadOp);
-  HANDLE(AffineVectorStoreOp);
-  HANDLE(AffineDmaStartOp);
-  HANDLE(AffineDmaWaitOp);
+  HANDLE(affine::AffineForOp);
+  HANDLE(affine::AffineIfOp);
+  HANDLE(affine::AffineParallelOp);
+  HANDLE(affine::AffineApplyOp);
+  HANDLE(affine::AffineMaxOp);
+  HANDLE(affine::AffineMinOp);
+  HANDLE(affine::AffineLoadOp);
+  HANDLE(affine::AffineStoreOp);
+  HANDLE(affine::AffineYieldOp);
+  HANDLE(affine::AffineVectorLoadOp);
+  HANDLE(affine::AffineVectorStoreOp);
+  HANDLE(affine::AffineDmaStartOp);
+  HANDLE(affine::AffineDmaWaitOp);
 
   // Memref-related statements.
   HANDLE(memref::AllocOp);

@@ -61,7 +61,7 @@ void deadMemRefAllocElimination(func::FuncOp &func) {
 void deadAffineLoadElimination(func::FuncOp &func) {
   SmallVector<Operation *, 8> affineLoadOps;
   func.walk([&](Operation *op) {
-    if (auto affineLoadOp = dyn_cast<AffineLoadOp>(op)) {
+    if (auto affineLoadOp = dyn_cast<affine::AffineLoadOp>(op)) {
       affineLoadOps.push_back(affineLoadOp);
     }
   });
@@ -92,7 +92,7 @@ void lowerStructType(func::FuncOp &func) {
     Value struct_value = structGetOp->getOperand(0);
     Value struct_field = structGetOp->getResult(0);
     Location loc = op->getLoc();
-    auto index = structGetOp.index();
+    auto index = structGetOp.getIndex();
 
     // This flag indicates whether we can erase
     // struct construct and relevant ops.
@@ -103,7 +103,7 @@ void lowerStructType(func::FuncOp &func) {
     // Load: we are operating on a memref of struct
     // Construct: we are operating on a struct value
     Operation *defOp = struct_value.getDefiningOp();
-    if (auto affine_load = dyn_cast<AffineLoadOp>(defOp)) {
+    if (auto affine_load = dyn_cast<affine::AffineLoadOp>(defOp)) {
       // Case 1: defOp is loadOp from memref
       // Note: the idea to lower struct from memref is to
       // first create a memref for each struct field, and then
@@ -140,7 +140,7 @@ void lowerStructType(func::FuncOp &func) {
 
       // Step2: add store to each field memref
       for (auto &use : struct_memref.getUses()) {
-        if (auto storeOp = dyn_cast<AffineStoreOp>(use.getOwner())) {
+        if (auto storeOp = dyn_cast<affine::AffineStoreOp>(use.getOwner())) {
           // Find a storeOp to the struct memref, we add
           // store to each field memref here.
           OpBuilder builder(storeOp);
@@ -150,7 +150,7 @@ void lowerStructType(func::FuncOp &func) {
             // Find the struct_construct op
             auto struct_construct_op = dyn_cast<StructConstructOp>(
                 storeOp.getOperand(0).getDefiningOp());
-            builder.create<AffineStoreOp>(
+            builder.create<affine::AffineStoreOp>(
                 loc, struct_construct_op.getOperand(field_index), field_memref,
                 storeOp.getAffineMap(), storeOp.getIndices());
           }
@@ -164,7 +164,7 @@ void lowerStructType(func::FuncOp &func) {
 
       // Step3: replace structGetOp with load from field memrefs
       OpBuilder load_builder(op);
-      Value loaded_field = load_builder.create<AffineLoadOp>(
+      Value loaded_field = load_builder.create<affine::AffineLoadOp>(
           loc, field_memrefs[index], affine_load.getAffineMap(),
           affine_load.getIndices());
       struct_field.replaceAllUsesWith(loaded_field);

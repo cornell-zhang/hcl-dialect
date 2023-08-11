@@ -34,15 +34,15 @@ module {
     %14 = call @pool_1(%13) : (memref<1x16x10x10xi8>) -> memref<1x16x5x5xi8>
     %15 = call @flatten(%14) : (memref<1x16x5x5xi8>) -> memref<1x400xi8>
     %16 = call @fc1(%15, %3, %4) : (memref<1x400xi8>, memref<120x400xf32>, memref<1x120xf32>) -> memref<1x120x!hcl.Fixed<8, 4>>
-    // CHECK: %16 = call @fc1(%15, %3, %4) : (memref<1x400xi8>, memref<120x400xf32>, memref<1x120xf32>) -> memref<1x120xi8>
+    // CHECK: call @fc1(%6, %alloc_2, %alloc_3) : (memref<1x400xi8>, memref<120x400xf32>, memref<1x120xf32>) -> memref<1x120xi8>
     %17 = call @relu_2(%16) : (memref<1x120x!hcl.Fixed<8, 4>>) -> memref<1x120x!hcl.Fixed<8, 4>>
-    // CHECK: %17 = call @relu_2(%16) : (memref<1x120xi8>) -> memref<1x120xi8>
+    // CHECK: call @relu_2(%7) : (memref<1x120xi8>) -> memref<1x120xi8>
     %18 = call @fc2(%17, %5, %6) : (memref<1x120x!hcl.Fixed<8, 4>>, memref<84x120xf32>, memref<1x84xf32>) -> memref<1x84x!hcl.Fixed<8, 4>>
-    // CHECK: %18 = call @fc2(%17, %5, %6) : (memref<1x120xi8>, memref<84x120xf32>, memref<1x84xf32>) -> memref<1x84xi8>
+    // CHECK: call @fc2(%8, %alloc_4, %alloc_5) : (memref<1x120xi8>, memref<84x120xf32>, memref<1x84xf32>) -> memref<1x84xi8>
     %19 = call @relu_3(%18) : (memref<1x84x!hcl.Fixed<8, 4>>) -> memref<1x84x!hcl.Fixed<8, 4>>
-    // CHECK: %19 = call @relu_3(%18) : (memref<1x84xi8>) -> memref<1x84xi8>
+    // CHECK: call @relu_3(%9) : (memref<1x84xi8>) -> memref<1x84xi8>
     %20 = call @fc3(%19, %7, %8) : (memref<1x84x!hcl.Fixed<8, 4>>, memref<10x84xf32>, memref<1x10xf32>) -> memref<1x10xf32>
-    // CHECK: %20 = call @fc3(%19, %7, %8) : (memref<1x84xi8>, memref<10x84xf32>, memref<1x10xf32>) -> memref<1x10xf32>
+    // CHECK: call @fc3(%10, %alloc_6, %alloc_7) : (memref<1x84xi8>, memref<10x84xf32>, memref<1x10xf32>) -> memref<1x10xf32>
     return
   }
 }

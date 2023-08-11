@@ -281,7 +281,8 @@ public:
   bool visitOp(arith::ShRUIOp op) { return emitter.emitBinary(op, ">>"), true; }
 
   /// Unary expressions.
-  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsIOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
@@ -1189,16 +1190,17 @@ LogicalResult hcl::emitIntelHLS(ModuleOp module, llvm::raw_ostream &os) {
 }
 
 void hcl::registerEmitIntelHLSTranslation() {
-  static TranslateFromMLIRRegistration toIntelHLS(
-      "emit-intel-hls", emitIntelHLS, [&](DialectRegistry &registry) {
+  TranslateFromMLIRRegistration toIntelHLS(
+      "emit-intel-hls", "Emit Intel HLS", emitIntelHLS,
+      [](DialectRegistry &registry) {
         // clang-format off
         registry.insert<
           mlir::hcl::HeteroCLDialect,
           mlir::func::FuncDialect,
-          mlir::arith::ArithmeticDialect,
+          mlir::arith::ArithDialect,
           mlir::tensor::TensorDialect,
           mlir::scf::SCFDialect,
-          mlir::AffineDialect,
+          mlir::affine::AffineDialect,
           mlir::math::MathDialect,
           mlir::memref::MemRefDialect,
           mlir::linalg::LinalgDialect

@@ -382,7 +382,8 @@ public:
   }
 
   /// Unary expressions.
-  bool visitOp(math::AbsOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsFOp op) { return emitter.emitUnary(op, "abs"), true; }
+  bool visitOp(math::AbsIOp op) { return emitter.emitUnary(op, "abs"), true; }
   bool visitOp(math::CeilOp op) { return emitter.emitUnary(op, "ceil"), true; }
   bool visitOp(math::CosOp op) { return emitter.emitUnary(op, "cos"), true; }
   bool visitOp(math::SinOp op) { return emitter.emitUnary(op, "sin"), true; }
@@ -1129,7 +1130,7 @@ void ModuleEmitter::emitGetGlobal(memref::GetGlobalOp op) {
   os << "// placeholder for const ";
   Value result = op.getResult();
   fixUnsignedType(result, op->hasAttr("unsigned"));
-  emitValue(result, 0, false /*isPtr*/, op.name().str());
+  emitValue(result, 0, false /*isPtr*/, op.getName().str());
   emitInfoAndNewLine(op);
 }
 
@@ -1138,25 +1139,25 @@ void ModuleEmitter::emitGetGlobalFixed(hcl::GetGlobalFixedOp op) {
   os << "// const ";
   Value result = op.getResult();
   fixUnsignedType(result, op->hasAttr("unsigned"));
-  emitValue(result, 0, false /*isPtr*/, op.name().str());
+  emitValue(result, 0, false /*isPtr*/, op.getName().str());
   os << "; /* placeholder */ ";
   emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
-  auto init_val = op.initial_value();
-  if (!init_val.hasValue())
+  auto init_val = op.getInitialValue();
+  if (!init_val.has_value())
     return;
   fixUnsignedType(op, op->hasAttr("unsigned"));
-  auto attr = init_val.getValue();
+  auto attr = init_val.value();
   if (auto denseAttr = attr.dyn_cast<DenseElementsAttr>()) {
     os << "\n";
     indent();
-    auto arrayType = op.type().cast<ShapedType>();
+    auto arrayType = op.getType().cast<ShapedType>();
     auto type = arrayType.getElementType();
     os << "const ";
     os << getTypeName(type);
-    os << " " << op.sym_name();
+    os << " " << op.getSymName();
     for (auto &shape : arrayType.getShape())
       os << "[" << shape << "]";
     os << " = {";
@@ -1204,8 +1205,8 @@ void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.tensor());
-  for (auto index : op.indices()) {
+  emitValue(op.getTensor());
+  for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
     os << "]";
@@ -1216,14 +1217,14 @@ void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {
 
 void ModuleEmitter::emitTensorInsert(tensor::InsertOp op) {
   indent();
-  emitValue(op.dest());
-  for (auto index : op.indices()) {
+  emitValue(op.getDest());
+  for (auto index : op.getIndices()) {
     os << "[";
     emitValue(index);
     os << "]";
   }
   os << " = ";
-  emitValue(op.scalar());
+  emitValue(op.getScalar());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1338,20 +1339,20 @@ void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
   fixUnsignedType(result, op->hasAttr("unsigned"));
   emitValue(result);
   os << " = ";
-  emitValue(op.num());
+  emitValue(op.getNum());
   os << "[";
-  emitValue(op.index());
+  emitValue(op.getIndex());
   os << "];";
   emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitSetBit(hcl::SetIntBitOp op) {
   indent();
-  emitValue(op.num());
+  emitValue(op.getNum());
   os << "[";
-  emitValue(op.index());
+  emitValue(op.getIndex());
   os << "] = ";
-  emitValue(op.val());
+  emitValue(op.getVal());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1362,24 +1363,24 @@ void ModuleEmitter::emitGetSlice(hcl::GetIntSliceOp op) {
   fixUnsignedType(result, op->hasAttr("unsigned"));
   emitValue(result);
   os << " = ";
-  emitValue(op.num());
+  emitValue(op.getNum());
   os << "(";
-  emitValue(op.hi());
+  emitValue(op.getHi());
   os << ", ";
-  emitValue(op.lo());
+  emitValue(op.getLo());
   os << ");";
   emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitSetSlice(hcl::SetIntSliceOp op) {
   indent();
-  emitValue(op.num());
+  emitValue(op.getNum());
   os << "(";
-  emitValue(op.hi());
+  emitValue(op.getHi());
   os << ", ";
-  emitValue(op.lo());
+  emitValue(op.getLo());
   os << ") = ";
-  emitValue(op.val());
+  emitValue(op.getVal());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1390,7 +1391,7 @@ void ModuleEmitter::emitBitReverse(hcl::BitReverseOp op) {
   fixUnsignedType(result, op->hasAttr("unsigned"));
   emitValue(result);
   os << " = ";
-  emitValue(op.num());
+  emitValue(op.getNum());
   os << ".reverse();";
   emitInfoAndNewLine(op);
 }
@@ -2083,7 +2084,7 @@ using namespace std;
 
 )XXX";
 
-  if (module.getName().hasValue() && module.getName().getValue() == "host") {
+  if (module.getName().has_value() && module.getName().value() == "host") {
     os << host_header;
     for (auto op : module.getOps<func::FuncOp>()) {
       if (op.getName() == "main")
@@ -2116,15 +2117,16 @@ LogicalResult hcl::emitVivadoHLS(ModuleOp module, llvm::raw_ostream &os) {
 
 void hcl::registerEmitVivadoHLSTranslation() {
   static TranslateFromMLIRRegistration toVivadoHLS(
-      "emit-vivado-hls", emitVivadoHLS, [&](DialectRegistry &registry) {
+      "emit-vivado-hls", "Emit Vivado HLS", emitVivadoHLS,
+      [&](DialectRegistry &registry) {
         // clang-format off
         registry.insert<
           mlir::hcl::HeteroCLDialect,
           mlir::func::FuncDialect,
-          mlir::arith::ArithmeticDialect,
+          mlir::arith::ArithDialect,
           mlir::tensor::TensorDialect,
           mlir::scf::SCFDialect,
-          mlir::AffineDialect,
+          mlir::affine::AffineDialect,
           mlir::math::MathDialect,
           mlir::memref::MemRefDialect,
           mlir::linalg::LinalgDialect

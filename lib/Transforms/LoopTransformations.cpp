@@ -14,12 +14,12 @@
 #include "mlir/Dialect/Affine/LoopFusionUtils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/Dialect/Affine/Utils.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/RegionUtils.h"
@@ -68,12 +68,13 @@ Attribute createZeroAttr(OpBuilder &builder, mlir::Type elementType) {
 
 LogicalResult runSplitting(func::FuncOp &f, SplitOp &splitOp) {
   // 1) Get the schedule
-  unsigned int factor = splitOp.factor();
+  unsigned int factor = splitOp.getFactor();
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(splitOp.loop().getDefiningOp());
-  auto opHandle = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
-  const auto op_name = opHandle.op_name();
+      dyn_cast<CreateLoopHandleOp>(splitOp.getLoop().getDefiningOp());
+  auto opHandle =
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
+  const auto op_name = opHandle.getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -196,16 +197,19 @@ LogicalResult runSplitting(func::FuncOp &f, SplitOp &splitOp) {
 
 LogicalResult runTiling(func::FuncOp &f, TileOp &tileOp) {
   // 1) Get the schedule
-  unsigned int x_factor = tileOp.x_factor();
-  unsigned int y_factor = tileOp.y_factor();
+  unsigned int x_factor = tileOp.getXFactor();
+  unsigned int y_factor = tileOp.getYFactor();
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(tileOp.x_loop().getDefiningOp());
-  auto opHandle = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp());
+      dyn_cast<CreateLoopHandleOp>(tileOp.getXLoop().getDefiningOp());
+  auto opHandle =
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp());
   const auto x_loop =
-      dyn_cast<CreateLoopHandleOp>(tileOp.x_loop().getDefiningOp()).loop_name();
+      dyn_cast<CreateLoopHandleOp>(tileOp.getXLoop().getDefiningOp())
+          .getLoopName();
   const auto y_loop =
-      dyn_cast<CreateLoopHandleOp>(tileOp.y_loop().getDefiningOp()).loop_name();
-  const auto op_name = opHandle.op_name();
+      dyn_cast<CreateLoopHandleOp>(tileOp.getYLoop().getDefiningOp())
+          .getLoopName();
+  const auto op_name = opHandle.getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -337,11 +341,12 @@ LogicalResult runTiling(func::FuncOp &f, TileOp &tileOp) {
 
 LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   // 1) Get the schedule
-  const auto loopsToReorder = reorderOp.loops(); // operand_range
+  const auto loopsToReorder = reorderOp.getLoops(); // operand_range
   auto loopHandle =
       dyn_cast<CreateLoopHandleOp>(loopsToReorder[0].getDefiningOp());
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
   if (loopsToReorder.size() < 2) {
     reorderOp.emitError("Should at least input 2 loops to be reordered");
     return failure();
@@ -446,18 +451,19 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
 
 LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
-  auto optional_factor = unrollOp.factor();
+  auto optional_factor = unrollOp.getFactor();
   unsigned int factor;
-  if (optional_factor.hasValue()) {
-    factor = optional_factor.getValue();
+  if (optional_factor.has_value()) {
+    factor = optional_factor.value();
   } else {
     factor = 0; // fully unroll
   }
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(unrollOp.loop().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(unrollOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -488,10 +494,11 @@ LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
 LogicalResult runParallel(func::FuncOp &f, ParallelOp &parallelOp) {
   // 1) Get the schedule
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(parallelOp.loop().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(parallelOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -521,18 +528,19 @@ LogicalResult runParallel(func::FuncOp &f, ParallelOp &parallelOp) {
 
 LogicalResult runPipelining(func::FuncOp &f, PipelineOp &pipelineOp) {
   // 1) Get the schedule
-  auto optional_ii = pipelineOp.ii();
+  auto optional_ii = pipelineOp.getIi();
   unsigned int ii;
-  if (optional_ii.hasValue()) {
-    ii = optional_ii.getValue();
+  if (optional_ii.has_value()) {
+    ii = optional_ii.value();
   } else {
     ii = 1;
   }
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(pipelineOp.loop().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(pipelineOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -561,12 +569,13 @@ LogicalResult runPipelining(func::FuncOp &f, PipelineOp &pipelineOp) {
 
 LogicalResult runThreadBind(func::FuncOp &f, ThreadBindOp &threadBindOp) {
   // 1) Get the schedule
-  auto target_dim = threadBindOp.dim();
+  auto target_dim = threadBindOp.getDim();
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(threadBindOp.loop().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(threadBindOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -713,7 +722,7 @@ LogicalResult coalesceLoops(MutableArrayRef<AffineForOp> loops,
 // which fuses contiguous loops. This is actually the case of hcl.compute_at.
 LogicalResult runFusing(func::FuncOp &f, FuseOp &fuseOp) {
   // 1) Get the schedule
-  const auto loopsToFuse = fuseOp.loops(); // operand_range
+  const auto loopsToFuse = fuseOp.getLoops(); // operand_range
   unsigned int sizeOfFusedLoops = loopsToFuse.size();
   if (sizeOfFusedLoops < 2) {
     fuseOp.emitError("Should at least input 2 loops to be fused");
@@ -721,11 +730,11 @@ LogicalResult runFusing(func::FuncOp &f, FuseOp &fuseOp) {
   }
   auto opHandle = dyn_cast<CreateLoopHandleOp>(loopsToFuse[0].getDefiningOp());
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(opHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(opHandle.getOp().getDefiningOp()).getOpName();
   SmallVector<StringRef, 6> nameArr;
   for (auto loop : loopsToFuse) {
     nameArr.push_back(
-        dyn_cast<CreateLoopHandleOp>(loop.getDefiningOp()).loop_name());
+        dyn_cast<CreateLoopHandleOp>(loop.getDefiningOp()).getLoopName());
   }
 
   // 2) Find the requested stage
@@ -809,14 +818,14 @@ LogicalResult runFusing(func::FuncOp &f, FuseOp &fuseOp) {
 LogicalResult runComputeAt(func::FuncOp &f, ComputeAtOp &computeAtOp) {
   // 1) Get the schedule
   const auto loop_name =
-      dyn_cast<CreateLoopHandleOp>(computeAtOp.axis().getDefiningOp())
-          .loop_name();
+      dyn_cast<CreateLoopHandleOp>(computeAtOp.getAxis().getDefiningOp())
+          .getLoopName();
   const auto producer_name =
-      dyn_cast<CreateOpHandleOp>(computeAtOp.producer().getDefiningOp())
-          .op_name();
+      dyn_cast<CreateOpHandleOp>(computeAtOp.getProducer().getDefiningOp())
+          .getOpName();
   const auto consumer_name =
-      dyn_cast<CreateOpHandleOp>(computeAtOp.consumer().getDefiningOp())
-          .op_name();
+      dyn_cast<CreateOpHandleOp>(computeAtOp.getConsumer().getDefiningOp())
+          .getOpName();
 
   // 2) Traverse all the outer-most loops and find the requested one
   AffineForOp producerFor;
@@ -1125,13 +1134,13 @@ bool findArray(func::FuncOp &f, const Value &target, Value &ret_array) {
 LogicalResult runPartition(func::FuncOp &f, PartitionOp &partitionOp,
                            Value &array) {
   // 1) Get the schedule
-  // auto memref = partitionOp.target(); // return a Value type
-  auto kind = partitionOp.partition_kind();
-  unsigned int target_dim = partitionOp.dim();
-  auto optional_factor = partitionOp.factor();
+  // auto memref = partitionOp.getTarget(); // return a Value type
+  auto kind = partitionOp.getPartitionKind();
+  unsigned int target_dim = partitionOp.getDim();
+  auto optional_factor = partitionOp.getFactor();
   int factor = 0;
-  if (optional_factor.hasValue()) {
-    factor = optional_factor.getValue();
+  if (optional_factor.has_value()) {
+    factor = optional_factor.value();
   } else {
     factor = -1;
     if (kind != PartitionKindEnum::CompletePartition) {
@@ -1236,13 +1245,14 @@ LogicalResult runReplaceOp(func::FuncOp &f, ReplaceOp &replaceOp, Value &src,
 LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
   // 1) Get the schedule
   // target is the target tensor to reuse
-  auto target = reuseAtOp.target(); // return a Value type
+  auto target = reuseAtOp.getTarget(); // return a Value type
   // the loop at which level the target tensor is reused
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(reuseAtOp.axis().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(reuseAtOp.getAxis().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
   auto arrayType = target.getType().dyn_cast<MemRefType>();
   unsigned int rank = arrayType.getRank();
 
@@ -2273,12 +2283,13 @@ LogicalResult runReuseAt(func::FuncOp &f, ReuseAtOp &reuseAtOp) {
 
 LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
   // 1) Get the schedule
-  auto target = bufferAtOp.target(); // return a Value type
+  auto target = bufferAtOp.getTarget(); // return a Value type
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(bufferAtOp.axis().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(bufferAtOp.getAxis().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -2356,7 +2367,7 @@ LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get({1}, elementType));
     auto zero = builder.create<arith::ConstantOp>(
-        loc_front, elementType, createZeroAttr(builder, elementType));
+        loc_front, elementType, builder.getZeroAttr(elementType));
     // no need to create an explicit loop
     auto idx = builder.create<arith::ConstantIndexOp>(loc_front, 0);
     memIndices.push_back(idx);
@@ -2424,7 +2435,7 @@ LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
     auto buf = builder.create<memref::AllocOp>(
         loc_front, MemRefType::get(ubs, elementType));
     auto zero = builder.create<arith::ConstantOp>(
-        loc_front, elementType, createZeroAttr(builder, elementType));
+        loc_front, elementType, builder.getZeroAttr(elementType));
 
     // a.2) Create initialization loop
     //      need to create an explicit loop
@@ -2546,7 +2557,7 @@ LogicalResult runBufferAt(func::FuncOp &f, BufferAtOp &bufferAtOp) {
 LogicalResult runReshape(func::FuncOp &f, ReshapeOp &reshapeOp, Value &array) {
   // 1) Get the schedule
   auto oldType = array.getType().dyn_cast<MemRefType>();
-  auto newType = reshapeOp.output().getType().dyn_cast<MemRefType>();
+  auto newType = reshapeOp.getOutput().getType().dyn_cast<MemRefType>();
   int oldRank = oldType.getRank();
   int newRank = newType.getRank();
   auto oldShape = oldType.getShape();
@@ -2761,14 +2772,14 @@ void getOutputMemRefs(AffineForOp stage, SmallVector<Value> &allMemrefs,
 
 LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
   // 1) Get the schedule
-  auto stages = outlineOp.stages();
+  auto stages = outlineOp.getStages();
   SmallVector<AffineForOp> rootForOps;
   SmallVector<Value> allMemrefs;
   std::vector<std::string> stageNames;
   std::set<Operation *> opToMove;
   for (auto stage : stages) {
     const auto op_name =
-        dyn_cast<CreateOpHandleOp>(stage.getDefiningOp()).op_name();
+        dyn_cast<CreateOpHandleOp>(stage.getDefiningOp()).getOpName();
     stageNames.push_back(op_name.str());
 
     // 2) Find the requested stages
@@ -3239,7 +3250,7 @@ LogicalResult runOutline(ModuleOp &mod, func::FuncOp &f, OutlineOp &outlineOp) {
     targetForOp = rootForOps[rootForOps.size() - 1];
   }
   TypeRange argTypes(TypeArr);
-  FunctionType funcType = builder.getFunctionType(argTypes, llvm::None);
+  FunctionType funcType = builder.getFunctionType(argTypes, std::nullopt);
   std::string func_name = "Stage";
   for (auto op_name : stageNames) {
     func_name += "_" + op_name;
@@ -3431,7 +3442,7 @@ void applyCustomization(
     SmallVector<Operation *, 10> &opToRemove) {
   auto builder = OpBuilder::atBlockTerminator(&(top_func.getBody().front()));
   for (auto applyOp : top_func.getOps<hcl::ApplyOp>()) {
-    auto c = customizationMap[applyOp.callee().str()];
+    auto c = customizationMap[applyOp.getCallee().str()];
     DenseMap<Value, Value> arg2operand;
     for (auto item : llvm::enumerate(c.getArguments())) {
       arg2operand[item.value()] = applyOp.getOperand(item.index());
@@ -3439,7 +3450,7 @@ void applyCustomization(
     for (Operation &op : c.getOps()) {
       if (llvm::isa<hcl::EndOp>(op))
         continue;
-      BlockAndValueMapping mapping;
+      mlir::IRMapping mapping;
       for (auto item : llvm::enumerate(op.getOperands())) {
         if (arg2operand.count(item.value()) > 0) {
           mapping.map(item.value(), arg2operand[item.value()]);
@@ -3492,7 +3503,7 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<PartitionOp>(op)) {
         Value array;
-        if (findArray(f, new_op.target(), array)) {
+        if (findArray(f, new_op.getTarget(), array)) {
           if (failed(runPartition(f, new_op, array)))
             return false;
         } else {
@@ -3506,7 +3517,7 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<ReshapeOp>(op)) {
         Value array;
-        if (findArray(f, new_op.target(), array)) {
+        if (findArray(f, new_op.getTarget(), array)) {
           if (failed(runReshape(f, new_op, array)))
             return false;
         } else {
@@ -3514,7 +3525,7 @@ bool applyLoopTransformationOnSingleFunction(
         }
       } else if (auto new_op = dyn_cast<ReformOp>(op)) {
         Value array;
-        if (findArray(f, new_op.target(), array)) {
+        if (findArray(f, new_op.getTarget(), array)) {
           if (failed(runReform(f, new_op, array)))
             return false;
         } else {
@@ -3522,14 +3533,14 @@ bool applyLoopTransformationOnSingleFunction(
         }
       } else if (auto new_op = dyn_cast<InterKernelToOp>(op)) {
         Value array;
-        auto optional_fifo_depth = new_op.fifo_depth();
+        auto optional_fifo_depth = new_op.getFifoDepth();
         unsigned int fifo_depth;
-        if (optional_fifo_depth.hasValue()) {
-          fifo_depth = optional_fifo_depth.getValue();
+        if (optional_fifo_depth.has_value()) {
+          fifo_depth = optional_fifo_depth.value();
         } else {
           fifo_depth = -1; // conservative assumption
         }
-        if (findArray(f, new_op.target(), array)) {
+        if (findArray(f, new_op.getTarget(), array)) {
           if (failed(
                   runInterKernelDataPlacementSingleFunction(array, fifo_depth)))
             return false;
@@ -3541,8 +3552,8 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<ReplaceOp>(op)) {
         Value src, dst;
-        if (findArray(f, new_op.src(), src) &&
-            findArray(f, new_op.dst(), dst)) {
+        if (findArray(f, new_op.getSrc(), src) &&
+            findArray(f, new_op.getDst(), dst)) {
           if (failed(runReplaceOp(f, new_op, src, dst)))
             return false;
         } else {

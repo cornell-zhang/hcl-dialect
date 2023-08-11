@@ -45,7 +45,7 @@ void removeNeverLoadedMemRef(func::FuncOp &func) {
       if (isa<memref::LoadOp>(u)) {
         loaded_from = true;
         break;
-      } else if (isa<AffineLoadOp>(u)) {
+      } else if (isa<affine::AffineLoadOp>(u)) {
         loaded_from = true;
         break;
       } else if (isa<func::ReturnOp>(u)) {

@@ -10,7 +10,7 @@ jobs:
   build:
     working_directory: ~/hcl-dialect
     docker:
-      - image: zzzdavid/llvm-project:15.0.0
+      - image: chhzh123/llvm-project:18.x
         auth:
           username: $DOCKERHUB_USERNAME
           password: $DOCKERHUB_PASSWORD
@@ -20,23 +20,27 @@ jobs:
       - run:
           name: Build HCL-MLIR
           command: |
-            export BUILD_DIR=/home/circleci/llvm-project/build
-            export PREFIX=/home/circleci/llvm-project/build
+            export BUILD_DIR=/root/llvm-project/build
+            export PREFIX=/root/llvm-project/build
+            source activate hcl-dev
             mkdir -p build && cd build
             cmake -G "Unix Makefiles" .. \
                 -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
                 -DLLVM_EXTERNAL_LIT=$BUILD_DIR/bin/llvm-lit \
                 -DPYTHON_BINDING=ON \
-                -DPython3_EXECUTABLE=`which python3`
+                -DPython3_EXECUTABLE=`which python3` \
+                -DCMAKE_CXX_FLAGS="-Wfatal-errors -std=c++17"
             make -j4
             export PYTHONPATH=$(pwd)/tools/hcl/python_packages/hcl_core:${PYTHONPATH}
       - run:
           name: Formatting Check
           command: |
+            source activate hcl-dev
             python3 -m pip install clang-format
             bash ./.circleci/task_format.sh
       - run:
           name: Test
           command: |
+            source activate hcl-dev
             cd build
             cmake --build . --target check-hcl

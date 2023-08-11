@@ -18,6 +18,12 @@ jobs:
     steps:
       - checkout  # checkout source code to working directory
       - run:
+          name: Init conda environment
+          command: |
+            conda init bash
+            source ~/.bashrc
+            conda activate hcl-dev
+      - run:
           name: Build HCL-MLIR
           command: |
             export BUILD_DIR=/root/llvm-project/build

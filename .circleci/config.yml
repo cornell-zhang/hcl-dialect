@@ -18,15 +18,11 @@ jobs:
     steps:
       - checkout  # checkout source code to working directory
       - run:
-          name: Init conda environment
-          command: |
-            conda init bash
-      - run:
           name: Build HCL-MLIR
           command: |
             export BUILD_DIR=/root/llvm-project/build
             export PREFIX=/root/llvm-project/build
-            conda activate hcl-dev
+            source activate hcl-dev
             mkdir -p build && cd build
             cmake -G "Unix Makefiles" .. \
                 -DMLIR_DIR=$PREFIX/lib/cmake/mlir \
@@ -39,12 +35,12 @@ jobs:
       - run:
           name: Formatting Check
           command: |
-            conda activate hcl-dev
+            source activate hcl-dev
             python3 -m pip install clang-format
             bash ./.circleci/task_format.sh
       - run:
           name: Test
           command: |
-            conda activate hcl-dev
+            source activate hcl-dev
             cd build
             cmake --build . --target check-hcl

@@ -15,7 +15,7 @@ HeteroCL dialect is an out-of-tree [MLIR](https://mlir.llvm.org/) dialect for ac
 ### Preliminary tools
 - gcc >= 9 (Please make sure you have installed the gcc that supports C++17)
 - cmake >= 3.22
-- python >= 3.9
+- python >= 3.8
 
 ### Install LLVM 18.x
 - Download LLVM from [llvm-project](https://github.com/llvm/llvm-project) or checkout the Github branch
@@ -50,8 +50,6 @@ git checkout tags/llvmorg-18-init
 
    # Install required packages. Suppose you are inside the llvm-project folder.
    python3 -m pip install -r mlir/python/requirements.txt
-   # for Python<=3.6, you need to install the following package
-   python3 -m pip install contextvars
 
    # Run cmake
    mkdir build && cd build

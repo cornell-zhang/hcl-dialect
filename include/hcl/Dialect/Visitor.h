@@ -35,9 +35,10 @@ public:
             scf::ForOp, scf::IfOp, scf::ParallelOp, scf::ReduceOp,
             scf::ReduceReturnOp, scf::YieldOp,
             // Affine statements.
-            affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp, affine::AffineApplyOp,
-            affine::AffineMaxOp, affine::AffineMinOp, affine::AffineLoadOp, affine::AffineStoreOp,
-            affine::AffineYieldOp, affine::AffineVectorLoadOp, affine::AffineVectorStoreOp,
+            affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp,
+            affine::AffineApplyOp, affine::AffineMaxOp, affine::AffineMinOp,
+            affine::AffineLoadOp, affine::AffineStoreOp, affine::AffineYieldOp,
+            affine::AffineVectorLoadOp, affine::AffineVectorStoreOp,
             affine::AffineDmaStartOp, affine::AffineDmaWaitOp,
             // Memref-related statements.
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
@@ -48,8 +49,9 @@ public:
             tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp,
             tensor::SplatOp, memref::DimOp, memref::RankOp,
             // Unary expressions.
-            math::CosOp, math::SinOp, math::TanhOp, math::SqrtOp, math::RsqrtOp,
-            math::ExpOp, math::Exp2Op, math::PowFOp, math::LogOp, math::Log2Op,
+            math::AbsFOp, math::AbsIOp, math::CeilOp, math::CosOp, math::SinOp,
+            math::TanhOp, math::SqrtOp, math::RsqrtOp, math::ExpOp,
+            math::Exp2Op, math::PowFOp, math::LogOp, math::Log2Op,
             math::Log10Op, arith::NegFOp,
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
@@ -145,6 +147,9 @@ public:
   HANDLE(memref::RankOp);
 
   // Unary expressions.
+  HANDLE(math::AbsFOp);
+  HANDLE(math::AbsIOp);
+  HANDLE(math::CeilOp);
   HANDLE(math::CosOp);
   HANDLE(math::SinOp);
   HANDLE(math::TanhOp);

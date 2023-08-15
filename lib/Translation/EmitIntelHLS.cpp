@@ -111,6 +111,7 @@ public:
   /// Standard expression emitters.
   void emitBinary(Operation *op, const char *syntax);
   void emitUnary(Operation *op, const char *syntax);
+  void emitPower(Operation *op);
 
   /// Special operation emitters.
   void emitConstant(arith::ConstantOp op);
@@ -293,6 +294,7 @@ public:
   }
   bool visitOp(math::ExpOp op) { return emitter.emitUnary(op, "exp"), true; }
   bool visitOp(math::Exp2Op op) { return emitter.emitUnary(op, "exp2"), true; }
+  bool visitOp(math::PowFOp op) { return emitter.emitPower(op), true; }
   bool visitOp(math::LogOp op) { return emitter.emitUnary(op, "log"), true; }
   bool visitOp(math::Log2Op op) { return emitter.emitUnary(op, "log2"), true; }
   bool visitOp(math::Log10Op op) {
@@ -864,6 +866,19 @@ void ModuleEmitter::emitUnary(Operation *op, const char *syntax) {
   emitValue(result, rank);
   os << " = " << syntax << "(";
   emitValue(op->getOperand(0), rank);
+  os << ");";
+  emitInfoAndNewLine(op);
+  emitNestedLoopTail(rank);
+}
+
+void ModuleEmitter::emitPower(Operation *op) {
+  auto rank = emitNestedLoopHead(op->getResult(0));
+  indent();
+  emitValue(op->getResult(0), rank);
+  os << " = pow(";
+  emitValue(op->getOperand(0), rank);
+  os << ", ";
+  emitValue(op->getOperand(1), rank);
   os << ");";
   emitInfoAndNewLine(op);
   emitNestedLoopTail(rank);

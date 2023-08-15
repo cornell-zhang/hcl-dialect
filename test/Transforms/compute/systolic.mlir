@@ -24,7 +24,7 @@ module {
         affine.for %i = 0 to 61 {
             affine.for %j = 0 to 3 {
                 func.call @S0(%i, %j, %C, %j, %A, %W) : (index, index, memref<61xf32>, index, memref<64xf32>, memref<3xf32>) -> ()
-            // CHECK:  } {dep_distance = 0 : i64, loop_name = "i", op_name = "s"} 
+            // CHECK:  } {dep_distance = 1 : i64, loop_name = "j", unroll = 3 : i32}
             } { loop_name = "j", dep_distance = 1 }
         } { loop_name = "i", op_name = "s", dep_distance = 0 }
 

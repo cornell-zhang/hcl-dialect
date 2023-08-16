@@ -452,10 +452,11 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
 LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
   // 1) Get the schedule
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(intraOp.pe_array().getDefiningOp());
-  auto opHandle = dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
-  const auto op_name = opHandle.op_name();
+      dyn_cast<CreateLoopHandleOp>(intraOp.getPeArray().getDefiningOp());
+  auto opHandle =
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
+  const auto op_name = opHandle.getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;
@@ -499,20 +500,21 @@ LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
 
 LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
   // 1) Get the schedule
-  auto optional_factor = unfoldOp.factor();
+  auto optional_factor = unfoldOp.getFactor();
   unsigned int factor;
 
-  if (optional_factor.hasValue()) {
-    factor = optional_factor.getValue();
+  if (optional_factor.has_value()) {
+    factor = optional_factor.value();
   } else {
     factor = 0; // fully unroll
   }
 
   auto loopHandle =
-      dyn_cast<CreateLoopHandleOp>(unfoldOp.loop().getDefiningOp());
-  const auto loop_name = loopHandle.loop_name();
+      dyn_cast<CreateLoopHandleOp>(unfoldOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
   const auto op_name =
-      dyn_cast<CreateOpHandleOp>(loopHandle.op().getDefiningOp()).op_name();
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
 
   // 2) Find the requested stage
   AffineForOp rootForOp;

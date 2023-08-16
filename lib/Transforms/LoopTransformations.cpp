@@ -449,6 +449,100 @@ LogicalResult runReordering(func::FuncOp &f, ReorderOp &reorderOp) {
   return success();
 }
 
+LogicalResult runIntraKernelOpCheck(func::FuncOp &f, IntraKernelToOp &intraOp) {
+  // 1) Get the schedule
+  auto loopHandle =
+      dyn_cast<CreateLoopHandleOp>(intraOp.getPeArray().getDefiningOp());
+  auto opHandle =
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
+  const auto op_name = opHandle.getOpName();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop
+  bool isOuterMost = false;
+  int dependency_distance = 0;
+  AffineLoopBand band;
+  rootForOp->walk([&](AffineForOp forOp) {
+    if (band.size() == 0 && loop_name == getLoopName(forOp)) {
+      band.push_back(forOp);
+      if (forOp->hasAttr("op_name"))
+        isOuterMost = true;
+      if (forOp->hasAttr("dep_distance")) {
+        dependency_distance =
+            forOp->getAttr("dep_distance").cast<IntegerAttr>().getInt();
+      }
+    }
+  });
+
+  // 4) Get data movement direction as int array
+  Attribute attr = intraOp->getAttr("pe_index");
+  auto pe_index = attr.cast<ArrayAttr>().getValue();
+
+  // 5) Verify the intra-kernel data movement schedule
+  if (pe_index.size() == 0) {
+    intraOp.emitError("Cannot move data to null PE");
+    return failure();
+  }
+  if (dependency_distance != 0) {
+    intraOp.emitError("Cannot move the loop with non-uniform dependency");
+    return failure();
+  }
+
+  return success();
+}
+
+LogicalResult runUnfolding(func::FuncOp &f, UnfoldOp &unfoldOp) {
+  // 1) Get the schedule
+  auto optional_factor = unfoldOp.getFactor();
+  unsigned int factor;
+
+  if (optional_factor.has_value()) {
+    factor = optional_factor.value();
+  } else {
+    factor = 0; // fully unroll
+  }
+
+  auto loopHandle =
+      dyn_cast<CreateLoopHandleOp>(unfoldOp.getLoop().getDefiningOp());
+  const auto loop_name = loopHandle.getLoopName();
+  const auto op_name =
+      dyn_cast<CreateOpHandleOp>(loopHandle.getOp().getDefiningOp())
+          .getOpName();
+
+  // 2) Find the requested stage
+  AffineForOp rootForOp;
+  if (failed(getStage(f, rootForOp, op_name))) {
+    f.emitError("Cannot find Stage ") << op_name.str();
+    return failure();
+  }
+
+  // 3) Find the requested loop and attach attribute
+  WalkResult result = rootForOp.walk([&](AffineForOp forOp) -> WalkResult {
+    if (loop_name == getLoopName(forOp)) {
+      AffineLoopBand band{forOp};
+      SmallVector<int, 6> attr_arr{(int)factor};
+      setIntAttr(band, attr_arr, "unroll");
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  // TODO: call Polymer/PoCC to inject loop information as attr
+  // handle exception
+  if (!result.wasInterrupted()) {
+    unfoldOp.emitError("Cannot find Loop ") << loop_name.str();
+    return failure();
+  }
+
+  return failure();
+}
+
 LogicalResult runUnrolling(func::FuncOp &f, UnrollOp &unrollOp) {
   // 1) Get the schedule
   auto optional_factor = unrollOp.getFactor();
@@ -3412,10 +3506,10 @@ LogicalResult runReform(func::FuncOp &f, ReformOp &reformOp, Value &array) {
 }
 
 bool isHCLOp(Operation &op) {
-  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, PipelineOp, ParallelOp,
-                   FuseOp, ComputeAtOp, PartitionOp, ReuseAtOp, BufferAtOp,
-                   OutlineOp, ReshapeOp, ReformOp, ThreadBindOp,
-                   InterKernelToOp, ReplaceOp>(op);
+  return llvm::isa<SplitOp, TileOp, ReorderOp, UnrollOp, UnfoldOp,
+                   IntraKernelToOp, PipelineOp, ParallelOp, FuseOp, ComputeAtOp,
+                   PartitionOp, ReuseAtOp, BufferAtOp, OutlineOp, ReshapeOp,
+                   ReformOp, ThreadBindOp, InterKernelToOp, ReplaceOp>(op);
 }
 
 void eraseScheduleOp(func::FuncOp &f,
@@ -3485,6 +3579,12 @@ bool applyLoopTransformationOnSingleFunction(
           return false;
       } else if (auto new_op = dyn_cast<UnrollOp>(op)) {
         if (failed(runUnrolling(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<UnfoldOp>(op)) {
+        if (failed(runUnfolding(f, new_op)))
+          return false;
+      } else if (auto new_op = dyn_cast<IntraKernelToOp>(op)) {
+        if (failed(runIntraKernelOpCheck(f, new_op)))
           return false;
       } else if (auto new_op = dyn_cast<PipelineOp>(op)) {
         if (failed(runPipelining(f, new_op)))

@@ -36,6 +36,7 @@
 #include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
+#include "taskflow/taskflow.hpp"
 #include <iostream>
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
@@ -371,8 +372,10 @@ int main(int argc, char **argv) {
   outfile->os() << "\n";
 
   // run JiT
-  if (runJiT)
+  if (runJiT) {
+    tf::Executor executor;
     return runJiTCompiler(*module);
+  }
 
   return 0;
 }

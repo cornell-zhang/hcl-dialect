@@ -13,11 +13,11 @@ try:
         get_default_loc_context as _ods_get_default_loc_context,
     )
     from ._ods_common import _cext as _ods_cext
+
     _ods_ir = _ods_cext.ir
     from .._mlir_libs._mlirDialectsLinalg import fill_builtin_region
 except ImportError as e:
     raise RuntimeError("Error loading imports from extension module") from e
-
 
 
 def isa(cls: Type, ty: Type):
@@ -54,6 +54,12 @@ def select_opview_mixin(parent_opview_cls):
         return StructuredOpMixin
 
 
+def get_element_type(dtype):
+    if MemRefType.isinstance(dtype):
+        return MemRefType(dtype).element_type
+    return RankedTensorType(dtype).element_type
+
+
 class BroadcastOp:
     def __init__(self, inputs, outputs, dimensions, *, loc=None, ip=None):
         operands = []
@@ -73,7 +79,9 @@ class BroadcastOp:
                 dimensions, context=_ods_context
             )
         )
-        results.extend([])
+        for output in outputs:
+            if isinstance(output.type, RankedTensorType):
+                results.append(output.type)
         _ods_successors = None
         super().__init__(
             self.build_generic(
@@ -86,8 +94,8 @@ class BroadcastOp:
                 ip=ip,
             )
         )
-        types = [MemRefType(inp.type).element_type for inp in inputs] + [
-            MemRefType(out.type).element_type for out in outputs
+        types = [get_element_type(inp.type) for inp in inputs] + [
+            get_element_type(out.type) for out in outputs
         ]
         self.regions[0].blocks.append(*types)
         from ._linalg_ops_gen import YieldOp
@@ -117,7 +125,9 @@ class TransposeOp:
                 permutation, context=_ods_context
             )
         )
-        results.extend([])
+        for output in outputs:
+            if isinstance(output.type, RankedTensorType):
+                results.append(output.type)
         _ods_successors = None
         super().__init__(
             self.build_generic(
@@ -130,8 +140,8 @@ class TransposeOp:
                 ip=ip,
             )
         )
-        types = [MemRefType(inp.type).element_type for inp in inputs] + [
-            MemRefType(out.type).element_type for out in outputs
+        types = [get_element_type(inp.type) for inp in inputs] + [
+            get_element_type(out.type) for out in outputs
         ]
         self.regions[0].blocks.append(*types)
         from ._linalg_ops_gen import YieldOp

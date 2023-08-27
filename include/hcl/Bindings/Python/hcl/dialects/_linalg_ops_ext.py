@@ -105,6 +105,10 @@ class BroadcastOp:
             ip=InsertionPoint(self.regions[0].blocks[0]),
         )
 
+    @property
+    def result(self):
+        return self.operation.results[0]
+
 
 class TransposeOp:
     def __init__(self, inputs, outputs, permutation, *, loc=None, ip=None):
@@ -150,3 +154,7 @@ class TransposeOp:
             [self.regions[0].blocks[0].arguments[0]],
             ip=InsertionPoint(self.regions[0].blocks[0]),
         )
+
+    @property
+    def result(self):
+        return self.operation.results[0]

@@ -161,7 +161,8 @@ static bool memRefDCE(MlirModule &mlir_mod) {
 // TaskFlow APIs
 //===----------------------------------------------------------------------===//
 #ifdef TASKFLOW
-// runTaskFlowExecutor takes a map of names to MLIR modules and a dependncy graph that specifies the inter-module dependencies.
+// runTaskFlowExecutor takes a map of names to MLIR modules and a dependncy
+// graph that specifies the inter-module dependencies.
 static bool runTaskFlowExecutor(
     std::map<std::string, MlirModule> &mlir_mods,
     std::map<std::string, std::vector<std::string>> &dependency_graph) {
@@ -172,7 +173,6 @@ static bool runTaskFlowExecutor(
   return applyTaskFlowExecutor(mods, dependency_graph);
 }
 #endif
-
 
 //===----------------------------------------------------------------------===//
 // HCL Python module definition

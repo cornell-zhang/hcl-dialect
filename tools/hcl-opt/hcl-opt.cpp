@@ -380,11 +380,7 @@ int main(int argc, char **argv) {
     int ret = 0;
     tf::Executor executor;
     tf::Taskflow taskflow;
-    auto task = taskflow.emplace(
-      [&] () {
-        ret = runJiTCompiler(*module);
-      }
-    );
+    auto task = taskflow.emplace([&]() { ret = runJiTCompiler(*module); });
 
     task.name("top");
     executor.run(taskflow).wait();

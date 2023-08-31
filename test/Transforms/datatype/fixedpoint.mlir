@@ -117,4 +117,44 @@ module {
     } {loop_name = "x", op_name = "tensor_1"}
     return
   }
+
+  func.func @foo(%arg0: i32) -> i32 attributes {itypes = "s", otypes = "s"} {
+    %0 = arith.extsi %arg0 : i32 to i33
+    %c1_i32 = arith.constant 1 : i32
+    %1 = arith.extsi %c1_i32 : i32 to i33
+    %2 = arith.addi %0, %1 : i33
+    %3 = arith.trunci %2 : i33 to i32
+    return %3 : i32
+  }
+  func.func @issue_193(%arg0: memref<10xi32>) -> memref<10xi32> attributes {itypes = "s", otypes = "s"} {
+    %alloc = memref.alloc() {name = "B"} : memref<10xi32>
+    %c0_i32 = arith.constant 0 : i32
+    linalg.fill ins(%c0_i32 : i32) outs(%alloc : memref<10xi32>)
+    affine.for %arg1 = 0 to 10 {
+      %0 = affine.load %arg0[%arg1] {from = "A"} : memref<10xi32>
+      %1 = func.call @foo(%0) : (i32) -> i32
+      affine.store %1, %alloc[%arg1] {to = "B"} : memref<10xi32>
+    } {loop_name = "i", op_name = "S_i_0"}
+    return %alloc : memref<10xi32>
+  }
+
+  func.func @issue_194(%arg0: !hcl.Fixed<8, 3>) -> i32 attributes {itypes = "s", otypes = "s"} {
+    %alloc = memref.alloc() {name = "B"} : memref<1x!hcl.Fixed<8, 3>>
+    %c0_i32 = arith.constant 0 : i32
+    %0 = hcl.int_to_fixed(%c0_i32) : i32 -> !hcl.Fixed<8, 3>
+    affine.store %0, %alloc[0] {to = "B"} : memref<1x!hcl.Fixed<8, 3>>
+    %1 = affine.load %alloc[0] {from = "B"} : memref<1x!hcl.Fixed<8, 3>>
+    %2 = hcl.cmp_fixed ugt, %arg0, %1 : !hcl.Fixed<8, 3>
+    %3 = hcl.fixed_to_fixed(%arg0) : !hcl.Fixed<8, 3> -> !hcl.Fixed<35, 3>
+    %c0_i32_0 = arith.constant 0 : i32
+    %4 = hcl.int_to_fixed(%c0_i32_0) : i32 -> !hcl.Fixed<35, 3>
+    %5 = hcl.cmp_fixed ugt, %3, %4 : !hcl.Fixed<35, 3>
+    %6 = arith.andi %2, %5 : i1
+    scf.if %6 {
+      affine.store %arg0, %alloc[0] {to = "B"} : memref<1x!hcl.Fixed<8, 3>>
+    }
+    %7 = affine.load %alloc[0] {from = "B"} : memref<1x!hcl.Fixed<8, 3>>
+    %8 = hcl.fixed_to_int(%7) : !hcl.Fixed<8, 3> -> i32
+    return %8 : i32
+  }
 }

@@ -179,11 +179,6 @@ void updateSelectOp(arith::SelectOp &selectOp) {
     Type newType = IntegerType::get(selectOp.getContext(), bitwidth);
     selectOp.getResult().setType(newType);
   }
-  // Check that the operands of select op have the same type
-  Type op0Type = selectOp.getOperand(1).getType(); // true branch
-  Type op1Type = selectOp.getOperand(2).getType(); // false branch
-  assert(op0Type == op1Type);
-  assert(op0Type == selectOp.getResult().getType());
 }
 
 /* Update hcl.print (PrintOp) operations.

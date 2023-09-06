@@ -3534,6 +3534,9 @@ void applyCustomization(
     func::FuncOp &top_func,
     std::map<std::string, hcl::CustomizationOp> &customizationMap,
     SmallVector<Operation *, 10> &opToRemove) {
+  // skip if top_func has no body
+  if (top_func.getBlocks().size() == 0)
+    return;
   auto builder = OpBuilder::atBlockTerminator(&(top_func.getBody().front()));
   for (auto applyOp : top_func.getOps<hcl::ApplyOp>()) {
     auto c = customizationMap[applyOp.getCallee().str()];

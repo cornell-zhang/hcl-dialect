@@ -10,6 +10,7 @@
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
@@ -50,9 +51,19 @@ void removeStrideMap(func::FuncOp &func) {
   SmallVector<Type, 8> new_arg_types;
   for (auto result_type : result_types) {
     if (result_type.isa<MemRefType>()) {
-      MemRefType new_result_type =
-          MemRefType::get(result_type.cast<MemRefType>().getShape(),
-                          result_type.cast<MemRefType>().getElementType());
+      MemRefType new_result_type;
+      if (auto layout = dyn_cast<AffineMapAttr>(
+              result_type.cast<MemRefType>().getLayout())) {
+        // array partition
+        new_result_type =
+            MemRefType::get(result_type.cast<MemRefType>().getShape(),
+                            result_type.cast<MemRefType>().getElementType());
+      } else {
+        new_result_type =
+            MemRefType::get(result_type.cast<MemRefType>().getShape(),
+                            result_type.cast<MemRefType>().getElementType(),
+                            result_type.cast<MemRefType>().getLayout());
+      }
       new_result_types.push_back(new_result_type);
     } else {
       new_result_types.push_back(result_type);
@@ -60,9 +71,19 @@ void removeStrideMap(func::FuncOp &func) {
   }
   for (auto arg_type : arg_types) {
     if (arg_type.isa<MemRefType>()) {
-      MemRefType new_arg_type =
-          MemRefType::get(arg_type.cast<MemRefType>().getShape(),
-                          arg_type.cast<MemRefType>().getElementType());
+      MemRefType new_arg_type;
+      if (auto layout = dyn_cast<AffineMapAttr>(
+              arg_type.cast<MemRefType>().getLayout())) {
+        // array partition
+        new_arg_type =
+            MemRefType::get(arg_type.cast<MemRefType>().getShape(),
+                            arg_type.cast<MemRefType>().getElementType());
+      } else {
+        new_arg_type =
+            MemRefType::get(arg_type.cast<MemRefType>().getShape(),
+                            arg_type.cast<MemRefType>().getElementType(),
+                            arg_type.cast<MemRefType>().getLayout());
+      }
       new_arg_types.push_back(new_arg_type);
     } else {
       new_arg_types.push_back(arg_type);

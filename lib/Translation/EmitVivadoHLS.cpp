@@ -312,9 +312,7 @@ public:
   }
   bool visitOp(memref::GlobalOp op) { return emitter.emitGlobal(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
-  bool visitOp(memref::SubViewOp op) {
-    return emitter.emitSubView(op), true;
-  }
+  bool visitOp(memref::SubViewOp op) { return emitter.emitSubView(op), true; }
 
   /// Tensor-related statements.
   bool visitOp(tensor::ExtractOp op) {
@@ -1623,6 +1621,14 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
 
         // Add the new value to nameTable and emit its name.
         os << addName(array, /*isPtr=*/false, name);
+
+        auto attr_str = attr.cast<StringAttr>().getValue().str();
+        int S_index = attr_str.find("S"); // spatial
+        int T_index = attr_str.find("T"); // temporal
+        if (arrayType.getShape().size() > T_index - S_index) {
+          for (int i = 0; i < T_index - S_index; ++i)
+            os << "[" << arrayType.getShape()[i] << "]";
+        }
         // Add original array declaration as comment
         os << " /* ";
         emitValue(array, 0, false, name);
@@ -1823,7 +1829,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
       os << "#pragma HLS stream variable=";
       emitValue(memref);
       os << " depth=";
-      os << attr_str.substr(7, std::string::npos);
+      int semicolon_index = attr_str.find(";");
+      os << attr_str.substr(7, semicolon_index - 7);
       os << "\n";
     }
   }

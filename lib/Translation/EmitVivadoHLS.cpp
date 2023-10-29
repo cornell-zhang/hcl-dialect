@@ -127,6 +127,7 @@ public:
   void emitGetGlobal(memref::GetGlobalOp op);
   void emitGetGlobalFixed(hcl::GetGlobalFixedOp op);
   void emitGlobal(memref::GlobalOp op);
+  void emitSubView(memref::SubViewOp op);
 
   /// Tensor-related statement emitters.
   void emitTensorExtract(tensor::ExtractOp op);
@@ -311,6 +312,7 @@ public:
   }
   bool visitOp(memref::GlobalOp op) { return emitter.emitGlobal(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
+  bool visitOp(memref::SubViewOp op) { return emitter.emitSubView(op), true; }
 
   /// Tensor-related statements.
   bool visitOp(tensor::ExtractOp op) {
@@ -880,14 +882,31 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
   auto memref = op.getMemRef();
   emitValue(memref, 0, false, load_from_name);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
-  if (attr &&
-      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
-    os << ".read(); // ";
-    emitValue(memref, 0, false, load_from_name); // comment
-  }
   auto affineMap = op.getAffineMap();
   AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
                                   op.getMapOperands());
+  if (attr &&
+      attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+    auto attr_str = attr.cast<StringAttr>().getValue().str();
+    int S_index = attr_str.find("S"); // spatial
+    int T_index = attr_str.find("T"); // temporal
+    if (S_index != -1 && T_index != -1) {
+      auto st_str = attr_str.substr(S_index, T_index - S_index + 1);
+      std::reverse(st_str.begin(), st_str.end());
+      auto results = affineMap.getResults();
+      st_str = st_str.substr(0, results.size());
+      std::reverse(st_str.begin(), st_str.end());
+      for (int i = 0; i < results.size(); ++i) {
+        if (st_str[i] == 'S') {
+          os << "[";
+          affineEmitter.emitAffineExpr(results[i]);
+          os << "]";
+        }
+      }
+    }
+    os << ".read(); // ";
+    emitValue(memref, 0, false, load_from_name); // comment
+  }
   auto arrayType = memref.getType().cast<ShapedType>();
   if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
     // do nothing;
@@ -911,16 +930,33 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
   auto memref = op.getMemRef();
   emitValue(memref, 0, false, store_to_name);
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
+  auto affineMap = op.getAffineMap();
+  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
+                                  op.getMapOperands());
   if (attr &&
       attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+    auto attr_str = attr.cast<StringAttr>().getValue().str();
+    int S_index = attr_str.find("S"); // spatial
+    int T_index = attr_str.find("T"); // temporal
+    if (S_index != -1 && T_index != -1) {
+      auto st_str = attr_str.substr(S_index, T_index - S_index + 1);
+      std::reverse(st_str.begin(), st_str.end());
+      auto results = affineMap.getResults();
+      st_str = st_str.substr(0, results.size());
+      std::reverse(st_str.begin(), st_str.end());
+      for (int i = 0; i < results.size(); ++i) {
+        if (st_str[i] == 'S') {
+          os << "[";
+          affineEmitter.emitAffineExpr(results[i]);
+          os << "]";
+        }
+      }
+    }
     os << ".write(";
     emitValue(op.getValueToStore());
     os << "); // ";
     emitValue(memref, 0, false, store_to_name); // comment
   }
-  auto affineMap = op.getAffineMap();
-  AffineExprEmitter affineEmitter(state, affineMap.getNumDims(),
-                                  op.getMapOperands());
   auto arrayType = memref.getType().cast<ShapedType>();
   if (arrayType.getShape().size() == 1 && arrayType.getShape()[0] == 1) {
     // do nothing;
@@ -1090,6 +1126,23 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
   if (attr &&
       attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+    auto attr_str = attr.cast<StringAttr>().getValue().str();
+    int S_index = attr_str.find("S"); // spatial
+    int T_index = attr_str.find("T"); // temporal
+    if (S_index != -1 && T_index != -1) {
+      auto st_str = attr_str.substr(S_index, T_index - S_index + 1);
+      std::reverse(st_str.begin(), st_str.end());
+      auto indices = op.getIndices();
+      st_str = st_str.substr(0, indices.size());
+      std::reverse(st_str.begin(), st_str.end());
+      for (int i = 0; i < indices.size(); ++i) {
+        if (st_str[i] == 'S') {
+          os << "[";
+          emitValue(indices[i]);
+          os << "]";
+        }
+      }
+    }
     os << ".read(); // ";
     emitValue(memref); // comment
   }
@@ -1109,6 +1162,23 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
   auto attr = memref.getType().dyn_cast<MemRefType>().getMemorySpace();
   if (attr &&
       attr.cast<StringAttr>().getValue().str().substr(0, 6) == "stream") {
+    auto attr_str = attr.cast<StringAttr>().getValue().str();
+    int S_index = attr_str.find("S"); // spatial
+    int T_index = attr_str.find("T"); // temporal
+    if (S_index != -1 && T_index != -1) {
+      auto st_str = attr_str.substr(S_index, T_index - S_index + 1);
+      std::reverse(st_str.begin(), st_str.end());
+      auto indices = op.getIndices();
+      st_str = st_str.substr(0, indices.size());
+      std::reverse(st_str.begin(), st_str.end());
+      for (int i = 0; i < indices.size(); ++i) {
+        if (st_str[i] == 'S') {
+          os << "[";
+          emitValue(indices[i]);
+          os << "]";
+        }
+      }
+    }
     os << ".write(";
     emitValue(op.getValueToStore());
     os << "); // ";
@@ -1199,6 +1269,20 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
     emitInfoAndNewLine(op);
     os << "\n";
   }
+}
+
+void ModuleEmitter::emitSubView(memref::SubViewOp op) {
+  indent();
+  emitArrayDecl(op.getResult(), true);
+  os << " = ";
+  emitValue(op.getSource());
+  for (auto index : op.getOffsets()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
+  }
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {
@@ -1605,6 +1689,14 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
 
         // Add the new value to nameTable and emit its name.
         os << addName(array, /*isPtr=*/false, name);
+
+        auto attr_str = attr.cast<StringAttr>().getValue().str();
+        int S_index = attr_str.find("S"); // spatial
+        int T_index = attr_str.find("T"); // temporal
+        if (arrayType.getShape().size() > T_index - S_index) {
+          for (int i = 0; i < T_index - S_index; ++i)
+            os << "[" << arrayType.getShape()[i] << "]";
+        }
         // Add original array declaration as comment
         os << " /* ";
         emitValue(array, 0, false, name);
@@ -1805,7 +1897,8 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
       os << "#pragma HLS stream variable=";
       emitValue(memref);
       os << " depth=";
-      os << attr_str.substr(7, std::string::npos);
+      int semicolon_index = attr_str.find(";");
+      os << attr_str.substr(7, semicolon_index - 7);
       os << "\n";
     }
   }

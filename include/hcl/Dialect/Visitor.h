@@ -44,7 +44,7 @@ public:
             memref::AllocOp, memref::AllocaOp, memref::LoadOp, memref::StoreOp,
             memref::GetGlobalOp, hcl::GetGlobalFixedOp, memref::GlobalOp,
             memref::DeallocOp, memref::DmaStartOp, memref::DmaWaitOp,
-            memref::ViewOp, memref::SubViewOp, memref::AtomicRMWOp,
+            memref::ViewOp, memref::SubViewOp, memref::ReinterpretCastOp, memref::AtomicRMWOp,
             // Tensor-related statements.
             tensor::ExtractOp, tensor::InsertOp, memref::TensorStoreOp,
             tensor::SplatOp, memref::DimOp, memref::RankOp,
@@ -137,6 +137,7 @@ public:
   HANDLE(memref::AtomicRMWOp);
   HANDLE(memref::ViewOp);
   HANDLE(memref::SubViewOp);
+  HANDLE(memref::ReinterpretCastOp);
 
   // Tensor-related statements.
   HANDLE(tensor::ExtractOp);

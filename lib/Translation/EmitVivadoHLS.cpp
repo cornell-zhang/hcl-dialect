@@ -1273,7 +1273,7 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
 
 void ModuleEmitter::emitSubView(memref::SubViewOp op) {
   indent();
-  emitArrayDecl(op.getResult());
+  emitArrayDecl(op.getResult(), true);
   os << " = ";
   emitValue(op.getSource());
   for (auto index : op.getOffsets()) {

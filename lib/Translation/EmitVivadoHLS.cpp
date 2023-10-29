@@ -127,6 +127,7 @@ public:
   void emitGetGlobal(memref::GetGlobalOp op);
   void emitGetGlobalFixed(hcl::GetGlobalFixedOp op);
   void emitGlobal(memref::GlobalOp op);
+  void emitSubView(memref::SubViewOp op);
 
   /// Tensor-related statement emitters.
   void emitTensorExtract(tensor::ExtractOp op);
@@ -311,6 +312,9 @@ public:
   }
   bool visitOp(memref::GlobalOp op) { return emitter.emitGlobal(op), true; }
   bool visitOp(memref::DeallocOp op) { return true; }
+  bool visitOp(memref::SubViewOp op) {
+    return emitter.emitSubView(op), true;
+  }
 
   /// Tensor-related statements.
   bool visitOp(tensor::ExtractOp op) {
@@ -1199,6 +1203,20 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
     emitInfoAndNewLine(op);
     os << "\n";
   }
+}
+
+void ModuleEmitter::emitSubView(memref::SubViewOp op) {
+  indent();
+  emitArrayDecl(op.getResult());
+  os << " = ";
+  emitValue(op.getSource());
+  for (auto index : op.getOffsets()) {
+    os << "[";
+    emitValue(index);
+    os << "]";
+  }
+  os << ";";
+  emitInfoAndNewLine(op);
 }
 
 void ModuleEmitter::emitTensorExtract(tensor::ExtractOp op) {

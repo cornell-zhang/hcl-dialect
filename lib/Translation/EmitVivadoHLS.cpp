@@ -1221,7 +1221,6 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
   fixUnsignedType(op, op->hasAttr("unsigned"));
   auto attr = init_val.value();
   if (auto denseAttr = attr.dyn_cast<DenseElementsAttr>()) {
-    os << "\n";
     indent();
     auto arrayType = op.getType().cast<ShapedType>();
     auto type = arrayType.getElementType();

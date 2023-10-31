@@ -1225,7 +1225,9 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
     indent();
     auto arrayType = op.getType().cast<ShapedType>();
     auto type = arrayType.getElementType();
-    os << "const ";
+    if (op->hasAttr("constant")) {
+      os << "const ";
+    }
     os << getTypeName(type);
     os << " " << op.getSymName();
     for (auto &shape : arrayType.getShape())
@@ -1267,7 +1269,6 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
     }
     os << "};";
     emitInfoAndNewLine(op);
-    os << "\n";
   }
 }
 

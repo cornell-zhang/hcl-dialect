@@ -896,7 +896,7 @@ void ModuleEmitter::emitAffineLoad(AffineLoadOp op) {
       auto results = affineMap.getResults();
       st_str = st_str.substr(0, results.size());
       std::reverse(st_str.begin(), st_str.end());
-      for (int i = 0; i < results.size(); ++i) {
+      for (unsigned i = 0; i < results.size(); ++i) {
         if (st_str[i] == 'S') {
           os << "[";
           affineEmitter.emitAffineExpr(results[i]);
@@ -944,7 +944,7 @@ void ModuleEmitter::emitAffineStore(AffineStoreOp op) {
       auto results = affineMap.getResults();
       st_str = st_str.substr(0, results.size());
       std::reverse(st_str.begin(), st_str.end());
-      for (int i = 0; i < results.size(); ++i) {
+      for (unsigned i = 0; i < results.size(); ++i) {
         if (st_str[i] == 'S') {
           os << "[";
           affineEmitter.emitAffineExpr(results[i]);
@@ -1135,7 +1135,7 @@ void ModuleEmitter::emitLoad(memref::LoadOp op) {
       auto indices = op.getIndices();
       st_str = st_str.substr(0, indices.size());
       std::reverse(st_str.begin(), st_str.end());
-      for (int i = 0; i < indices.size(); ++i) {
+      for (unsigned i = 0; i < indices.size(); ++i) {
         if (st_str[i] == 'S') {
           os << "[";
           emitValue(indices[i]);
@@ -1171,7 +1171,7 @@ void ModuleEmitter::emitStore(memref::StoreOp op) {
       auto indices = op.getIndices();
       st_str = st_str.substr(0, indices.size());
       std::reverse(st_str.begin(), st_str.end());
-      for (int i = 0; i < indices.size(); ++i) {
+      for (unsigned i = 0; i < indices.size(); ++i) {
         if (st_str[i] == 'S') {
           os << "[";
           emitValue(indices[i]);
@@ -1693,7 +1693,7 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
         auto attr_str = attr.cast<StringAttr>().getValue().str();
         int S_index = attr_str.find("S"); // spatial
         int T_index = attr_str.find("T"); // temporal
-        if (arrayType.getShape().size() > T_index - S_index) {
+        if ((int)(arrayType.getShape().size()) > T_index - S_index) {
           for (int i = 0; i < T_index - S_index; ++i)
             os << "[" << arrayType.getShape()[i] << "]";
         }
@@ -1824,6 +1824,24 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   bool emitPragmaFlag = false;
   auto type = memref.getType().cast<MemRefType>();
 
+  // streaming
+  auto attr = type.getMemorySpace();
+  if (attr) {
+    std::string attr_str = attr.cast<StringAttr>().getValue().str();
+    if (attr_str.substr(0, 6) == "stream") {
+      indent();
+      os << "#pragma HLS stream variable=";
+      emitValue(memref);
+      os << " depth=";
+      int semicolon_index = attr_str.find(";");
+      os << attr_str.substr(7, semicolon_index - 7);
+      os << "\n";
+      // if the array is a FIFO, then it cannot be further partitioned
+      // so directly return
+      return;
+    }
+  }
+
   if (auto layoutMap = getLayoutMap(type)) {
     // Emit array_partition pragma(s).
     SmallVector<int64_t, 8> factors;
@@ -1887,21 +1905,6 @@ void ModuleEmitter::emitArrayDirectives(Value memref) {
   //     os << "ram_s2p_bram";
   //   os << "\n";
   // }
-
-  // streaming
-  auto attr = type.getMemorySpace();
-  if (attr) {
-    std::string attr_str = attr.cast<StringAttr>().getValue().str();
-    if (attr_str.substr(0, 6) == "stream") {
-      indent();
-      os << "#pragma HLS stream variable=";
-      emitValue(memref);
-      os << " depth=";
-      int semicolon_index = attr_str.find(";");
-      os << attr_str.substr(7, semicolon_index - 7);
-      os << "\n";
-    }
-  }
 
   // Emit an empty line.
   if (emitPragmaFlag)

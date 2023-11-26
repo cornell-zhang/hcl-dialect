@@ -157,4 +157,27 @@ module {
     %8 = hcl.fixed_to_int(%7) : !hcl.Fixed<8, 3> -> i32
     return %8 : i32
   }
+
+  func.func @callee(%arg0: f32, %arg1: f32) -> f32 attributes {itypes = "__", otypes = "_"} {
+    %0 = arith.addf %arg0, %arg1 : f32
+    %alloc = memref.alloc() {name = "c"} : memref<1xf32>
+    affine.store %0, %alloc[0] {to = "c"} : memref<1xf32>
+    %1 = affine.load %alloc[0] {from = "c"} : memref<1xf32>
+    %2 = affine.load %alloc[0] {from = "c"} : memref<1xf32>
+    return %2 : f32
+  }
+
+  func.func @test_scalar_result_func_calls(%arg0: memref<10xf32>, %arg1: memref<10xf32>) -> memref<10xf32> attributes {itypes = "__", otypes = "_"} {
+    %c0_i32 = arith.constant 0 : i32
+    %0 = arith.sitofp %c0_i32 : i32 to f32
+    %alloc = memref.alloc() {name = "C"} : memref<10xf32>
+    linalg.fill ins(%0 : f32) outs(%alloc : memref<10xf32>)
+    affine.for %arg2 = 0 to 10 {
+      %1 = affine.load %arg0[%arg2] {from = "A"} : memref<10xf32>
+      %2 = affine.load %arg1[%arg2] {from = "B"} : memref<10xf32>
+      %3 = func.call @callee(%1, %2) : (f32, f32) -> f32
+      affine.store %3, %alloc[%arg2] {to = "C"} : memref<10xf32>
+    } {loop_name = "i", op_name = "S_i_0"}
+    return %alloc : memref<10xf32>
+  }
 }

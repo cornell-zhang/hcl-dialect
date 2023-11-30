@@ -37,6 +37,9 @@ git checkout tags/llvmorg-18-init
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DLLVM_INSTALL_UTILS=ON
    make -j8
+   # You can either use ninja to build
+   # cmake -G Ninja
+   # ninja
    ```
    - With Python binding: Please follow the [official guide](https://mlir.llvm.org/docs/Bindings/Python/#generating-_dialect_namespace_ops_genpy-wrapper-modules) to set up the environment. In the following, we set up a virtual environment called `hcl-dev` using Python venv, but we prefer you to install Anaconda3 and create an environment there. If you want to use your own Python environment, please specify the path for `-DPython3_EXECUTABLE`.
    ```sh
@@ -63,6 +66,9 @@ git checkout tags/llvmorg-18-init
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
       -DPython3_EXECUTABLE=`which python3`
    make -j8
+   # You can either use ninja to build
+   # cmake -G Ninja
+   # ninja
 
    # Export the LLVM build directory
    export LLVM_BUILD_DIR=$(pwd)

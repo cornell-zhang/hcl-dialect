@@ -18,7 +18,7 @@ PASSWORD="$1"
 shift 1
 
 LOCAL_IMAGE_NAME=hcl-dialect:latest
-REMOTE_IMAGE_NAME_VER=${DOCKER_HUB_ACCOUNT}/llvm-project:18.x
+REMOTE_IMAGE_NAME_VER=${DOCKER_HUB_ACCOUNT}/hcl-dialect:llvm-18.x-py3.12
 
 echo "Login docker hub"
 docker login -u ${DOCKER_HUB_ACCOUNT} -p ${PASSWORD}

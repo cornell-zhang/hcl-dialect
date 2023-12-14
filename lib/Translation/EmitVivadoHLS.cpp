@@ -1445,10 +1445,18 @@ void ModuleEmitter::emitGetSlice(hcl::GetIntSliceOp op) {
   indent();
   Value result = op.getResult();
   fixUnsignedType(result, op->hasAttr("unsigned"));
+  // generate ap_int types
+  os << "ap_int<" << op.getNum().getType().getIntOrFloatBitWidth() << "> ";
+  emitValue(op.getNum());
+  os << "_tmp = ";
+  emitValue(op.getNum());
+  os << ";\n";
+  // generate bit slicing
+  indent();
   emitValue(result);
   os << " = ";
   emitValue(op.getNum());
-  os << "(";
+  os << "_tmp(";
   emitValue(op.getHi());
   os << ", ";
   emitValue(op.getLo());
@@ -1458,14 +1466,31 @@ void ModuleEmitter::emitGetSlice(hcl::GetIntSliceOp op) {
 
 void ModuleEmitter::emitSetSlice(hcl::SetIntSliceOp op) {
   indent();
+  // T v;
+  // v(a, b) = x;
+  // c = v; // <- Need to redirect to the updated variable.
+  // generate ap_int types
+  os << "ap_int<" << op.getNum().getType().getIntOrFloatBitWidth() << "> ";
   emitValue(op.getNum());
-  os << "(";
+  os << "_tmp = ";
+  emitValue(op.getNum());
+  os << ";\n";
+  // generate bit slicing
+  indent();
+  emitValue(op.getNum());
+  os << "_tmp(";
   emitValue(op.getHi());
   os << ", ";
   emitValue(op.getLo());
   os << ") = ";
   emitValue(op.getVal());
-  os << ";";
+  os << ";\n";
+  // write back
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.getNum());
+  os << "_tmp;";
   emitInfoAndNewLine(op);
 }
 

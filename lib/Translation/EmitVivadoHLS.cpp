@@ -1256,10 +1256,17 @@ void ModuleEmitter::emitGlobal(memref::GlobalOp op) {
       } else if (type.isInteger(1))
         os << element.cast<BoolAttr>().getValue();
       else if (type.isIntOrIndex())
-        if (op->hasAttr("unsigned"))
+        if (op->hasAttr("unsigned")) {
+          auto intType = type.dyn_cast<IntegerType>();
           os << element.cast<IntegerAttr>().getValue().getZExtValue();
-        else
+          if (intType.getWidth() > 64)
+            os << "ULL";
+        } else {
+          auto intType = type.dyn_cast<IntegerType>();
           os << element.cast<IntegerAttr>().getValue();
+          if (intType.getWidth() > 64)
+            os << "LL";
+        }
       else
         emitError(op, "array has unsupported element type.");
 
@@ -1421,10 +1428,18 @@ void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
   indent();
   Value result = op.getResult();
   fixUnsignedType(result, op->hasAttr("unsigned"));
+  // generate ap_int types
+  os << "ap_int<" << op.getNum().getType().getIntOrFloatBitWidth() << "> ";
+  emitValue(op.getNum());
+  os << "_tmp = ";
+  emitValue(op.getNum());
+  os << ";\n";
+  // generate bit indexing
+  indent();
   emitValue(result);
   os << " = ";
   emitValue(op.getNum());
-  os << "[";
+  os << "_tmp[";
   emitValue(op.getIndex());
   os << "];";
   emitInfoAndNewLine(op);
@@ -1432,12 +1447,26 @@ void ModuleEmitter::emitGetBit(hcl::GetIntBitOp op) {
 
 void ModuleEmitter::emitSetBit(hcl::SetIntBitOp op) {
   indent();
+  // generate ap_int types
+  os << "ap_int<" << op.getNum().getType().getIntOrFloatBitWidth() << "> ";
   emitValue(op.getNum());
-  os << "[";
+  os << "_tmp = ";
+  emitValue(op.getNum());
+  os << ";\n";
+  // generate bit indexing
+  indent();
+  emitValue(op.getNum());
+  os << "_tmp[";
   emitValue(op.getIndex());
   os << "] = ";
   emitValue(op.getVal());
   os << ";";
+  // write back
+  indent();
+  emitValue(op.getResult());
+  os << " = ";
+  emitValue(op.getNum());
+  os << "_tmp;";
   emitInfoAndNewLine(op);
 }
 
@@ -2000,6 +2029,11 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
   if (func->hasAttr("dataflow")) {
     indent();
     os << "#pragma HLS dataflow\n";
+  }
+
+  if (func->hasAttr("inline")) {
+    indent();
+    os << "#pragma HLS inline\n";
   }
 
   // Emit other pragmas for function ports.

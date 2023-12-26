@@ -1737,16 +1737,18 @@ void ModuleEmitter::emitArrayDecl(Value array, bool isFunc, std::string name) {
 
         // print stream type
         os << "hls::stream< " << getTypeName(array) << " > ";
-        if (isFunc) {
-          os << "&"; // pass by reference
-        }
-
-        // Add the new value to nameTable and emit its name.
-        os << addName(array, /*isPtr=*/false, name);
 
         auto attr_str = attr.cast<StringAttr>().getValue().str();
         int S_index = attr_str.find("S"); // spatial
         int T_index = attr_str.find("T"); // temporal
+        if (isFunc &&
+            !(((int)(arrayType.getShape().size()) > T_index - S_index) &&
+              (T_index > S_index))) {
+          os << "&"; // pass by reference, only non-array needs reference
+        }
+
+        // Add the new value to nameTable and emit its name.
+        os << addName(array, /*isPtr=*/false, name);
         if ((int)(arrayType.getShape().size()) > T_index - S_index) {
           for (int i = 0; i < T_index - S_index; ++i)
             os << "[" << arrayType.getShape()[i] << "]";
@@ -1849,8 +1851,11 @@ void ModuleEmitter::emitLoopDirectives(Operation *op) {
   if (auto ii = getLoopDirective(op, "pipeline_ii")) {
     reduceIndent();
     indent();
-    os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue()
-       << "\n";
+    os << "#pragma HLS pipeline II=" << ii.cast<IntegerAttr>().getValue();
+    // https://docs.xilinx.com/r/en-US/ug1399-vitis-hls/Rewinding-Pipelined-Loops-for-Performance
+    if (op->hasAttr("rewind"))
+      os << " rewind";
+    os << "\n";
     addIndent();
   }
 

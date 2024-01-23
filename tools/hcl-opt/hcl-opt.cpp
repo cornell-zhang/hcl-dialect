@@ -97,6 +97,12 @@ static llvm::cl::opt<bool> removeStrideMap("remove-stride-map",
                                            llvm::cl::desc("Remove stride map"),
                                            llvm::cl::init(false));
 
+static llvm::cl::opt<bool> foldBitWidth(
+    "fold-bit-width",
+    llvm::cl::desc(
+        "Remove ext and trunc operations surrounding wrap-around ops"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<bool> lowerPrintOps("lower-print-ops",
                                          llvm::cl::desc("Lower print ops"),
                                          llvm::cl::init(false));
@@ -317,6 +323,10 @@ int main(int argc, char **argv) {
 
   if (removeStrideMap) {
     pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  }
+
+  if (foldBitWidth) {
+    pm.addPass(mlir::hcl::createFoldBitWidthPass());
   }
 
   if (bufferization) {

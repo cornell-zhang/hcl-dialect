@@ -8,6 +8,7 @@ add_mlir_library(MLIRHCLPasses
     Passes.cpp
     LegalizeCast.cpp
     RemoveStrideMap.cpp
+    FoldBitWidth.cpp
     MemRefDCE.cpp
     DataPlacement.cpp
     TransformInterpreter.cpp

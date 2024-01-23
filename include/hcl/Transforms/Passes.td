@@ -38,6 +38,11 @@ def RemoveStrideMap : Pass<"remove-stride-map", "ModuleOp"> {
   let constructor = "mlir::hcl::createRemoveStrideMapPass()";
 }
 
+def FoldBitWidth : Pass<"fold-bit-width", "ModuleOp"> {
+  let summary = "Remove ext and trunc operations surrounding wrap-around ops";
+  let constructor = "mlir::hcl::createFoldBitWidthPass()";
+}
+
 def MemRefDCE : Pass<"memref-dce", "ModuleOp"> {
   let summary = "Remove MemRefs that are never loaded from";
   let constructor = "mlir::hcl::createMemRefDCEPass()";

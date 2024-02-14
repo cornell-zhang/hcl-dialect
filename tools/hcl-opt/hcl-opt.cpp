@@ -36,6 +36,10 @@
 #include "hcl/Support/Utils.h"
 #include "hcl/Transforms/Passes.h"
 
+#ifdef TASKFLOW
+#include "taskflow/taskflow.hpp"
+#endif
+
 #include <iostream>
 
 static llvm::cl::opt<std::string> inputFilename(llvm::cl::Positional,
@@ -371,8 +375,20 @@ int main(int argc, char **argv) {
   outfile->os() << "\n";
 
   // run JiT
-  if (runJiT)
+  if (runJiT) {
+#ifdef TASKFLOW
+    int ret = 0;
+    tf::Executor executor;
+    tf::Taskflow taskflow;
+    auto task = taskflow.emplace([&]() { ret = runJiTCompiler(*module); });
+
+    task.name("top");
+    executor.run(taskflow).wait();
+    return ret;
+#else
     return runJiTCompiler(*module);
+#endif
+  }
 
   return 0;
 }

@@ -153,7 +153,7 @@ git clone https://github.com/cornell-zhang/heterocl.git heterocl-mlir
 cd heterocl-mlir
 
 # install dependencies
-python3 -m pip install -r python/requirements.txt
+python3 -m pip install -r requirements.txt
 
 # export the library
 export HCL_HOME=$(pwd)

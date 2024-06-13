@@ -39,6 +39,15 @@ if(OPENSCOP)
   include_directories("${OSL_INCLUDE_DIR}")
 endif()
 
+if(TASKFLOW)
+  message(STATUS "Building Taskflow")
+  find_package(protobuf REQUIRED)
+  include_directories(${PROTOBUF_INCLUDE_DIRS})
+
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lprotobuf")
+  include_directories(${PROJECT_SOURCE_DIR}/externals/taskflow)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(TableGen)

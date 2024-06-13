@@ -1,0 +1,25 @@
+/*
+ * Copyright HeteroCL authors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+// protoc --cpp_out=. IpArguments.proto
+syntax = "proto3";
+
+message Tensor {
+  repeated int32 dimensions = 1;
+  repeated float values = 2;
+}
+
+message Param {
+  string name = 1;
+  string data_type = 2;
+  int32 bit_width = 3;
+  int32 int_width = 4;
+  int32 frac_width = 5;
+  Tensor tensor = 6;
+}
+
+message ObjectList {
+  repeated Param objects = 1;
+}

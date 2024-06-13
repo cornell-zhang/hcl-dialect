@@ -27,6 +27,7 @@ set(LIBS
 add_llvm_executable(hcl-opt hcl-opt.cpp)
 
 llvm_update_compile_flags(hcl-opt)
+target_compile_options(hcl-opt PRIVATE -fexceptions)
 target_link_libraries(hcl-opt PRIVATE ${LIBS})
 
 mlir_check_all_link_libraries(hcl-opt)

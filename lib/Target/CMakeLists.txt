@@ -4,3 +4,7 @@
 if (OPENSCOP)
     add_subdirectory(OpenSCoP)
 endif()
+
+if (TASKFLOW)
+    add_subdirectory(TaskFlow)
+endif()

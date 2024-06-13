@@ -158,6 +158,23 @@ static bool memRefDCE(MlirModule &mlir_mod) {
 }
 
 //===----------------------------------------------------------------------===//
+// TaskFlow APIs
+//===----------------------------------------------------------------------===//
+#ifdef TASKFLOW
+// runTaskFlowExecutor takes a map of names to MLIR modules and a dependncy
+// graph that specifies the inter-module dependencies.
+static bool runTaskFlowExecutor(
+    std::map<std::string, MlirModule> &mlir_mods,
+    std::map<std::string, std::vector<std::string>> &dependency_graph) {
+  std::map<std::string, ModuleOp> mods;
+  for (auto &mod : mlir_mods) {
+    mods[mod.first] = unwrap(mod.second);
+  }
+  return applyTaskFlowExecutor(mods, dependency_graph);
+}
+#endif
+
+//===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
 
@@ -249,6 +266,11 @@ PYBIND11_MODULE(_hcl, m) {
   hcl_m.def("lower_fixed_to_int", &lowerFixedPointToInteger);
   hcl_m.def("lower_anywidth_int", &lowerAnyWidthInteger);
   hcl_m.def("move_return_to_input", &moveReturnToInput);
+
+#ifdef TASKFLOW
+  // TaskFlow backend APIs.
+  hcl_m.def("lower_hcl_to_taskflow", &runTaskFlowExecutor);
+#endif
 
   // Lowering APIs.
   hcl_m.def("lower_composite_type", &lowerCompositeType);

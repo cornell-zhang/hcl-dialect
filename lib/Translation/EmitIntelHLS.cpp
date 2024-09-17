@@ -1062,14 +1062,14 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //===------------------------------------------------------------*- DPC++ -*-===//
 //
 // Automatically generated file for Intel High-level Synthesis (HLS).
-//
+// For DPC++ compiler version: 20242.1
 //===----------------------------------------------------------------------===//
 #include <sycl/sycl.hpp>
 #include <vector>
 #include <iostream>
 #include <string>
 #include <sycl/ext/intel/fpga_extensions.hpp>
-//test
+
 // dpc_common.hpp can be found in the dev-utilities include folder.
 // e.g., $ONEAPI_ROOT/dev-utilities//include/dpc_common.hpp
 #include "dpc_common.hpp"

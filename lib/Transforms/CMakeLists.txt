@@ -11,6 +11,7 @@ add_mlir_library(MLIRHCLPasses
     MemRefDCE.cpp
     DataPlacement.cpp
     TransformInterpreter.cpp
+    UnifyKernels.cpp
 
     ADDITIONAL_HEADER_DIRS
     ${PROJECT_SOURCE_DIR}/include/hcl

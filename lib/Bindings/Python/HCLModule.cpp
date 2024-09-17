@@ -157,6 +157,12 @@ static bool memRefDCE(MlirModule &mlir_mod) {
   return applyMemRefDCE(mod);
 }
 
+static MlirModule UnifyKernels(MlirModule &mlir_mod1, MlirModule &mlir_mod2) {
+  auto mod1 = unwrap(mlir_mod1);
+  auto mod2 = unwrap(mlir_mod2);
+  return wrap(applyUnifyKernels(mod1, mod2));
+}
+
 //===----------------------------------------------------------------------===//
 // HCL Python module definition
 //===----------------------------------------------------------------------===//
@@ -259,4 +265,5 @@ PYBIND11_MODULE(_hcl, m) {
 
   // Utility pass APIs.
   hcl_m.def("memref_dce", &memRefDCE);
+  hcl_m.def("unify_kernels", &UnifyKernels);
 }

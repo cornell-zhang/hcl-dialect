@@ -1059,15 +1059,16 @@ void ModuleEmitter::emitFunction(func::FuncOp func, bool isAccessor) {
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
   std::string snippet = R"XXX(
-//===------------------------------------------------------------*- C++ -*-===//
+//===------------------------------------------------------------*- DPC++ -*-===//
 //
 // Automatically generated file for Intel High-level Synthesis (HLS).
-//
+// For DPC++ compiler version: 2024.2.1
 //===----------------------------------------------------------------------===//
-#include <CL/sycl.hpp>
-#include <iostream>
-#include <sycl/ext/intel/fpga_extensions.hpp>
+#include <sycl/sycl.hpp>
 #include <vector>
+#include <iostream>
+#include <string>
+#include <sycl/ext/intel/fpga_extensions.hpp>
 
 // dpc_common.hpp can be found in the dev-utilities include folder.
 // e.g., $ONEAPI_ROOT/dev-utilities//include/dpc_common.hpp
@@ -1086,20 +1087,26 @@ int main() {
   os << snippet;
 
   snippet = R"XXX(
-  // Select either:
-  //  - the FPGA emulator device (CPU emulation of the FPGA)
-  //  - the FPGA device (a real FPGA)
-#if defined(FPGA_EMULATOR)
-  ext::intel::fpga_emulator_selector device_selector;
+
+#if FPGA_EMULATOR
+  // Intel extension: FPGA emulator selector on systems without FPGA card.
+  auto selector = sycl::ext::intel::fpga_emulator_selector_v;
+#elif FPGA_SIMULATOR
+  // Intel extension: FPGA simulator selector on systems without FPGA card.
+  auto selector = sycl::ext::intel::fpga_simulator_selector_v;
+#elif FPGA_HARDWARE
+  // Intel extension: FPGA selector on systems with FPGA card.
+  auto selector = sycl::ext::intel::fpga_selector_v;
 #else
-  ext::intel::fpga_selector device_selector;
+  // since FPGALoopControls is only supported on FPGA emulator, default has been set to FPGA emulator
+  auto selector = sycl::ext::intel::fpga_emulator_selector_v;
 #endif
 
   try {
 
     // Create a queue bound to the chosen device.
     // If the device is unavailable, a SYCL runtime exception is thrown.
-    queue q(device_selector, dpc_common::exception_handler);
+    queue q(selector, dpc_common::exception_handler);
 
     // Print out the device information.
     std::cout << "Running on device: "
@@ -1110,6 +1117,7 @@ int main() {
       // The runtime will copy the necessary data to the FPGA device memory
       // when the kernel is launched.
 )XXX";
+
   os << snippet;
 
   addIndent();

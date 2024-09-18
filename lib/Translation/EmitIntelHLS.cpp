@@ -1062,7 +1062,7 @@ void ModuleEmitter::emitModule(ModuleOp module) {
 //===------------------------------------------------------------*- DPC++ -*-===//
 //
 // Automatically generated file for Intel High-level Synthesis (HLS).
-// For DPC++ compiler version: 20242.1
+// For DPC++ compiler version: 2024.2.1
 //===----------------------------------------------------------------------===//
 #include <sycl/sycl.hpp>
 #include <vector>

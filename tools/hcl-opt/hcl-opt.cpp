@@ -243,136 +243,201 @@ int runJiTCompiler(mlir::ModuleOp module) {
   return 0;
 }
 
+void test() {
+  #include "mlir/Dialect/Func/IR/FuncOps.h"
+  #include "mlir/Dialect/SCF/IR/SCF.h"
+  #include "mlir/Dialect/Arith/IR/Arith.h"
+  // 创建一个 MLIRContext
+    mlir::MLIRContext context;
+    context.getOrLoadDialect<mlir::func::FuncDialect>();
+  context.getOrLoadDialect<mlir::scf::SCFDialect>();
+
+    // 创建第一个 ModuleOp
+    mlir::OpBuilder builder1(&context);
+    auto module1 = mlir::ModuleOp::create(builder1.getUnknownLoc());
+
+    // 在 module1 中添加一个空函数
+    builder1.setInsertionPointToEnd(module1.getBody());
+    mlir::FunctionType funcType1 = builder1.getFunctionType({}, builder1.getI32Type());
+    mlir::func::FuncOp func1 = builder1.create<mlir::func::FuncOp>(
+        builder1.getUnknownLoc(),
+        "func1",
+        funcType1
+    );
+    mlir::Block *entryBlock1 = func1.addEntryBlock();
+
+    // 在函数中添加常量和返回操作
+    builder1.setInsertionPointToStart(entryBlock1);
+    auto constant1 = builder1.create<mlir::arith::ConstantOp>(
+        builder1.getUnknownLoc(),
+        builder1.getI32Type(),
+        builder1.getI32IntegerAttr(42) // 常量值为 42
+    );
+    builder1.create<mlir::func::ReturnOp>(builder1.getUnknownLoc(), constant1.getResult());
+
+    // 打印第一个 ModuleOp
+    module1.dump();
+
+    // 创建第二个 ModuleOp
+    mlir::OpBuilder builder2(&context);
+    auto module2 = mlir::ModuleOp::create(builder2.getUnknownLoc());
+
+    // 在 module2 中添加一个空函数
+    mlir::FunctionType funcType2 = builder2.getFunctionType({}, builder2.getI32Type());
+    builder2.setInsertionPointToEnd(module2.getBody());
+    mlir::func::FuncOp func2 = builder2.create<mlir::func::FuncOp>(
+        builder2.getUnknownLoc(),
+        "func2",
+        funcType2
+    );
+    mlir::Block *entryBlock2 = func2.addEntryBlock();
+
+    // 在函数中添加常量和返回操作
+    builder2.setInsertionPointToStart(entryBlock2);
+    auto constant2 = builder2.create<mlir::arith::ConstantOp>(
+        builder2.getUnknownLoc(),
+        builder2.getI32Type(),
+        builder2.getI32IntegerAttr(7) // 常量值为 7
+    );
+    builder2.create<mlir::func::ReturnOp>(builder2.getUnknownLoc(), constant2.getResult());
+
+    // 打印第二个 ModuleOp
+    module2.dump();
+
+    // mlir::hcl::applyUnifyKernels(module1, module2);
+}
+
 int main(int argc, char **argv) {
+  test();
   // Register dialects and passes in current context
-  mlir::DialectRegistry registry;
-  mlir::registerAllDialects(registry);
-  registry.insert<mlir::hcl::HeteroCLDialect>();
-  mlir::hcl::registerTransformDialectExtension(registry);
+  // mlir::DialectRegistry registry;
+  // mlir::registerAllDialects(registry);
+  // registry.insert<mlir::hcl::HeteroCLDialect>();
+  // mlir::hcl::registerTransformDialectExtension(registry);
 
-  mlir::MLIRContext context;
-  context.appendDialectRegistry(registry);
-  context.allowUnregisteredDialects(true);
-  context.printOpOnDiagnostic(true);
-  context.loadAllAvailableDialects();
+  // mlir::MLIRContext context;
+  // context.appendDialectRegistry(registry);
+  // context.allowUnregisteredDialects(true);
+  // context.printOpOnDiagnostic(true);
+  // context.loadAllAvailableDialects();
 
-  mlir::registerAllPasses();
-  mlir::hcl::registerHCLPasses();
-  mlir::hcl::registerHCLConversionPasses();
+  // mlir::registerAllPasses();
+  // mlir::hcl::registerHCLPasses();
+  // mlir::hcl::registerHCLConversionPasses();
 
-  // Parse pass names in main to ensure static initialization completed
-  llvm::cl::ParseCommandLineOptions(argc, argv,
-                                    "MLIR modular optimizer driver\n");
+  // // Parse pass names in main to ensure static initialization completed
+  // llvm::cl::ParseCommandLineOptions(argc, argv,
+  //                                   "MLIR modular optimizer driver\n");
 
-  mlir::OwningOpRef<mlir::ModuleOp> module;
-  if (int error = loadMLIR(context, module))
-    return error;
+  // mlir::OwningOpRef<mlir::ModuleOp> module;
+  // if (int error = loadMLIR(context, module))
+  //   return error;
 
-  // Initialize a pass manager
-  // https://mlir.llvm.org/docs/PassManagement/
-  // Operation agnostic passes
-  mlir::PassManager pm(&context);
-  // Operation specific passes
-  mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-  if (enableOpt) {
-    pm.addPass(mlir::hcl::createLoopTransformationPass());
-  }
+  // // Initialize a pass manager
+  // // https://mlir.llvm.org/docs/PassManagement/
+  // // Operation agnostic passes
+  // mlir::PassManager pm(&context);
+  // // Operation specific passes
+  // mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
+  // if (enableOpt) {
+  //   pm.addPass(mlir::hcl::createLoopTransformationPass());
+  // }
 
-  if (dataPlacement) {
-    pm.addPass(mlir::hcl::createDataPlacementPass());
-  }
+  // if (dataPlacement) {
+  //   pm.addPass(mlir::hcl::createDataPlacementPass());
+  // }
 
-  if (memRefDCE) {
-    pm.addPass(mlir::hcl::createMemRefDCEPass());
-  }
+  // if (memRefDCE) {
+  //   pm.addPass(mlir::hcl::createMemRefDCEPass());
+  // }
 
-  if (lowerComposite) {
-    pm.addPass(mlir::hcl::createLowerCompositeTypePass());
-  }
+  // if (lowerComposite) {
+  //   pm.addPass(mlir::hcl::createLowerCompositeTypePass());
+  // }
 
-  if (fixedPointToInteger) {
-    pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
-  }
+  // if (fixedPointToInteger) {
+  //   pm.addPass(mlir::hcl::createFixedPointToIntegerPass());
+  // }
 
-  // lowerPrintOps should be run after lowering fixed point to integer
-  if (lowerPrintOps) {
-    pm.addPass(mlir::hcl::createLowerPrintOpsPass());
-  }
+  // // lowerPrintOps should be run after lowering fixed point to integer
+  // if (lowerPrintOps) {
+  //   pm.addPass(mlir::hcl::createLowerPrintOpsPass());
+  // }
 
-  if (anyWidthInteger) {
-    pm.addPass(mlir::hcl::createAnyWidthIntegerPass());
-  }
+  // if (anyWidthInteger) {
+  //   pm.addPass(mlir::hcl::createAnyWidthIntegerPass());
+  // }
 
-  if (moveReturnToInput) {
-    pm.addPass(mlir::hcl::createMoveReturnToInputPass());
-  }
+  // if (moveReturnToInput) {
+  //   pm.addPass(mlir::hcl::createMoveReturnToInputPass());
+  // }
 
-  if (lowerBitOps) {
-    pm.addPass(mlir::hcl::createLowerBitOpsPass());
-  }
+  // if (lowerBitOps) {
+  //   pm.addPass(mlir::hcl::createLowerBitOpsPass());
+  // }
 
-  if (legalizeCast) {
-    pm.addPass(mlir::hcl::createLegalizeCastPass());
-  }
+  // if (legalizeCast) {
+  //   pm.addPass(mlir::hcl::createLegalizeCastPass());
+  // }
 
-  if (removeStrideMap) {
-    pm.addPass(mlir::hcl::createRemoveStrideMapPass());
-  }
+  // if (removeStrideMap) {
+  //   pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  // }
 
-  if (bufferization) {
-    pm.addPass(mlir::bufferization::createOneShotBufferizePass());
-  }
+  // if (bufferization) {
+  //   pm.addPass(mlir::bufferization::createOneShotBufferizePass());
+  // }
 
-  if (linalgConversion) {
-    optPM.addPass(mlir::createConvertLinalgToAffineLoopsPass());
-  }
+  // if (linalgConversion) {
+  //   optPM.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+  // }
 
-  if (enableNormalize) {
-    // To make all loop steps to 1.
-    optPM.addPass(mlir::affine::createAffineLoopNormalizePass());
+  // if (enableNormalize) {
+  //   // To make all loop steps to 1.
+  //   optPM.addPass(mlir::affine::createAffineLoopNormalizePass());
 
-    // Sparse Conditional Constant Propagation (SCCP)
-    pm.addPass(mlir::createSCCPPass());
+  //   // Sparse Conditional Constant Propagation (SCCP)
+  //   pm.addPass(mlir::createSCCPPass());
 
-    // To factor out the redundant AffineApply/AffineIf operations.
-    // optPM.addPass(mlir::createCanonicalizerPass());
-    // optPM.addPass(mlir::createSimplifyAffineStructuresPass());
+  //   // To factor out the redundant AffineApply/AffineIf operations.
+  //   // optPM.addPass(mlir::createCanonicalizerPass());
+  //   // optPM.addPass(mlir::createSimplifyAffineStructuresPass());
 
-    // To simplify the memory accessing.
-    pm.addPass(mlir::memref::createNormalizeMemRefsPass());
+  //   // To simplify the memory accessing.
+  //   pm.addPass(mlir::memref::createNormalizeMemRefsPass());
 
-    // Generic common sub expression elimination.
-    // pm.addPass(mlir::createCSEPass());
-  }
+  //   // Generic common sub expression elimination.
+  //   // pm.addPass(mlir::createCSEPass());
+  // }
 
-  if (applyTransform)
-    pm.addPass(mlir::hcl::createTransformInterpreterPass());
+  // if (applyTransform)
+  //   pm.addPass(mlir::hcl::createTransformInterpreterPass());
 
-  if (runJiT || lowerToLLVM) {
-    if (!removeStrideMap) {
-      pm.addPass(mlir::hcl::createRemoveStrideMapPass());
-    }
-    pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
-  }
+  // if (runJiT || lowerToLLVM) {
+  //   if (!removeStrideMap) {
+  //     pm.addPass(mlir::hcl::createRemoveStrideMapPass());
+  //   }
+  //   pm.addPass(mlir::hcl::createHCLToLLVMLoweringPass());
+  // }
 
-  // Run the pass pipeline
-  if (mlir::failed(pm.run(*module))) {
-    return 4;
-  }
+  // // Run the pass pipeline
+  // if (mlir::failed(pm.run(*module))) {
+  //   return 4;
+  // }
 
-  // print output
-  std::string errorMessage;
-  auto outfile = mlir::openOutputFile(outputFilename, &errorMessage);
-  if (!outfile) {
-    llvm::errs() << errorMessage << "\n";
-    return 2;
-  }
-  module->print(outfile->os());
-  outfile->os() << "\n";
+  // // print output
+  // std::string errorMessage;
+  // auto outfile = mlir::openOutputFile(outputFilename, &errorMessage);
+  // if (!outfile) {
+  //   llvm::errs() << errorMessage << "\n";
+  //   return 2;
+  // }
+  // module->print(outfile->os());
+  // outfile->os() << "\n";
 
-  // run JiT
-  if (runJiT)
-    return runJiTCompiler(*module);
+  // // run JiT
+  // if (runJiT)
+  //   return runJiTCompiler(*module);
 
   return 0;
 }

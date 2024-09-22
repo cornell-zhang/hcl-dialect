@@ -11,7 +11,12 @@
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
 #include "hcl/Transforms/Passes.h"
+#include "hcl/Dialect/TransformOps/HCLTransformOps.h"
 
+#include "hcl-c/Dialect/Dialects.h"
+#include "mlir/CAPI/IR.h"
+
+#include "mlir/InitAllDialects.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/IRMapping.h"
@@ -94,7 +99,8 @@ bool compareAffineForOps(affine::AffineForOp &affineForOp1, affine::AffineForOp 
   return true;
 }
 
-void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp &op2, Value conditionArg, bool &foundDifference) {
+void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp &op2, IRMapping &mapping1, IRMapping &mapping2,
+ Value conditionArg, bool &foundDifference) {
   auto loc = op1->getLoc();
 
   // Save insertion point
@@ -117,6 +123,14 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
   // Set insertion point to current loop body
   builder.setInsertionPointToStart(newBody);
 
+  // Add IRMapping for latter cloning
+  for (size_t i = 0; i < body1->getNumArguments(); ++i) {
+    mapping1.map(body1->getArgument(i), newBody->getArgument(i));
+  }
+  for (size_t i = 0; i < body2->getNumArguments(); ++i) {
+    mapping2.map(body2->getArgument(i), newBody->getArgument(i));
+  }
+
   auto body1It = body1->begin();
   auto body2It = body2->begin();
 
@@ -130,7 +144,7 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
         auto affineForOp2 = dyn_cast<affine::AffineForOp>(&(*body2It));
         if (affineForOp1 && affineForOp2 && 
             compareAffineForOps(affineForOp1, affineForOp2)) {
-          mergeLoop(builder, affineForOp1, affineForOp2, conditionArg, foundDifference);
+          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2, conditionArg, foundDifference);
         }
         else {
           foundDifference = true;
@@ -147,12 +161,14 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
   }
 
   // Create branch for the rest after difference is found
-  IRMapping mapping1;
-  IRMapping mapping2;
   builder.create<scf::IfOp>(
     loc, conditionArg,
     [&](OpBuilder &thenBuilder, Location thenLoc) {
       while (body1It != body1->end()) {
+        auto &op = *body1It;
+        if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
+          break;
+        }
         thenBuilder.clone(*body1It, mapping1);
         ++body1It;
       }
@@ -160,27 +176,16 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
     },
     [&](OpBuilder &elseBuilder, Location elseLoc) {
       while (body2It != body2->end()) {
+        auto &op = *body2It;
+        if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
+          break;
+        }
         elseBuilder.clone(*body2It, mapping2);
         ++body2It;
       }
       elseBuilder.create<scf::YieldOp>(elseLoc);
     }
   );
-}
-
-void printIRMapping(mlir::IRMapping &mapping) {
-    llvm::outs() << "IRMapping contents:\n";
-    for (auto &kv : mapping.getValueMap()) {
-        llvm::outs() << "From Value: " << kv.first << " To Value: " << kv.second << "\n";
-    }
-
-    for (auto &kv : mapping.getBlockMap()) {
-        llvm::outs() << "From Block: ";
-        kv.first->print(llvm::outs());
-        llvm::outs() << " To Block: ";
-        kv.second->print(llvm::outs());
-        llvm::outs() << "\n";
-    }
 }
 
 func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &builder) {
@@ -190,13 +195,13 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
   // Create new FuncOp with additional parameter
   auto oldFuncType = func1.getFunctionType();
   auto oldInputTypes = oldFuncType.getInputs();
-  auto resultTypes = oldFuncType.getResults();
   auto loc = builder.getUnknownLoc();
   SmallVector<Type, 4> newInputTypes(oldInputTypes.begin(), oldInputTypes.end());
+  auto newOutputTypes = oldFuncType.getResults();
   Type instType = builder.getI1Type();
   newInputTypes.push_back(instType);
-  auto newFuncType = builder.getFunctionType(newInputTypes, resultTypes);
-  auto newFuncOp = func::FuncOp::create(loc, newFuncName, newFuncType);
+  auto newFuncType = builder.getFunctionType(newInputTypes, newOutputTypes);
+  auto newFuncOp = func::FuncOp::create(loc, newFuncName, newFuncType, ArrayRef<NamedAttribute>{});
 
   // Create new block for insertion
   Block *entryBlock = newFuncOp.addEntryBlock();
@@ -209,6 +214,16 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
   auto block2It = block2.begin();
   bool foundDifference = false;
 
+  // Create IRMapping for latter cloning
+  IRMapping mapping1;
+  for (size_t i = 0; i < block1.getNumArguments(); ++i) {
+    mapping1.map(block1.getArgument(i), entryBlock->getArgument(i));
+  }
+  IRMapping mapping2;
+  for (size_t i = 0; i < block2.getNumArguments(); ++i) {
+    mapping2.map(block2.getArgument(i), entryBlock->getArgument(i));
+  }
+
   // Iterate over two FuncOps to find branch location
   while (block1It != block1.end() && block2It != block2.end()) {
     if (!foundDifference) {      
@@ -219,7 +234,7 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
         auto affineForOp2 = dyn_cast<affine::AffineForOp>(&(*block2It));
         if (affineForOp1 && affineForOp2 && 
             compareAffineForOps(affineForOp1, affineForOp2)) {
-          mergeLoop(builder, affineForOp1, affineForOp2, conditionArg, foundDifference);
+          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2, conditionArg, foundDifference);
         }
         else {
           foundDifference = true;
@@ -235,95 +250,56 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
     }
   }
 
+  auto &op1 = *block1It;
+  auto &op2 = *block2It;
+  auto returnOp1 = dyn_cast<func::ReturnOp>(&op1);
+  auto returnOp2 = dyn_cast<func::ReturnOp>(&op2);
   // Create branch for the rest after difference is found
-  IRMapping mapping1;
-  IRMapping mapping2;
-  // builder.create<scf::IfOp>(
-  //   loc, conditionArg,
-  //   [&](OpBuilder &thenBuilder, Location thenLoc) {
-  //     for (size_t i = 0; i < block1.getNumArguments(); ++i) {
-  //       mapping1.map(block1.getArgument(i), entryBlock->getArgument(i));
-  //     }
-  //     while (block1It != block1.end()) {
-  //       auto &op = *block1It;
-  //       if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-  //         break;
-  //       }
-  //       thenBuilder.clone(*block1It, mapping1);
-  //       ++block1It;
-  //     }
-  //     thenBuilder.create<scf::YieldOp>(thenLoc);
-  //   },
-  //   [&](OpBuilder &elseBuilder, Location elseLoc) {
-  //     for (size_t i = 0; i < block2.getNumArguments(); ++i) {
-  //       mapping2.map(block2.getArgument(i), entryBlock->getArgument(i));
-  //     }
-  //     while (block2It != block2.end()) {
-  //       auto &op = *block2It;
-  //       if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-  //         break;
-  //       }
-  //       elseBuilder.clone(*block2It, mapping2);
-  //       ++block2It;
-  //     }
-  //     elseBuilder.create<scf::YieldOp>(elseLoc);
-  //   }
-  // );
-  auto ifOp = builder.create<scf::IfOp>(loc, conditionArg, /*hasElse*/ true);
-
-  // Create then block
-  builder.setInsertionPointToStart(ifOp.thenBlock());
-  for (size_t i = 0; i < block1.getNumArguments(); ++i) {
-    mapping1.map(block1.getArgument(i), entryBlock->getArgument(i));
+  if (!returnOp1 || !returnOp2) {
+    builder.create<scf::IfOp>(
+      loc, conditionArg,
+      [&](OpBuilder &thenBuilder, Location thenLoc) {
+        while (block1It != block1.end()) {
+          auto &op = *block1It;
+          if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
+            break;
+          }
+          thenBuilder.clone(*block1It, mapping1);
+          ++block1It;
+        }
+        thenBuilder.create<scf::YieldOp>(thenLoc);
+      },
+      [&](OpBuilder &elseBuilder, Location elseLoc) {
+        while (block2It != block2.end()) {
+          auto &op = *block2It;
+          if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
+            break;
+          }
+          elseBuilder.clone(*block2It, mapping2);
+          ++block2It;
+        }
+        elseBuilder.create<scf::YieldOp>(elseLoc);
+      }
+    );
   }
-  while (block1It != block1.end()) {
-    auto &op = *block1It;
-    if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-      break;
-    }
-    builder.clone(*block1It, mapping1);
-    ++block1It;
-  }
-
-  // Create else block
-  builder.setInsertionPointToStart(ifOp.elseBlock());
-  for (size_t i = 0; i < block2.getNumArguments(); ++i) {
-    mapping2.map(block2.getArgument(i), entryBlock->getArgument(i));
-  }
-  while (block2It != block2.end()) {
-    auto &op = *block2It;
-    if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-      break;
-    }
-    builder.clone(*block2It, mapping2);
-    ++block2It;
-  }
-
-  // Create return Op
-  builder.setInsertionPointAfter(ifOp);
-
-  printIRMapping(mapping1);
-  printIRMapping(mapping2);
-
+  
+  // Create returnOp
+  // Todo: Now assume the return value is the same
   builder.clone(*block1It, mapping1);
-  // builder.clone(*block2It, mapping2);
 
   return newFuncOp;
 }
 
 /// Pass entry point
-ModuleOp applyUnifyKernels(ModuleOp &module1, ModuleOp &module2) {
+ModuleOp applyUnifyKernels(ModuleOp &module1, ModuleOp &module2, MLIRContext *context) {
   auto funcOps1 = module1.getOps<func::FuncOp>();
   auto funcOps2 = module2.getOps<func::FuncOp>();
 
   auto it1 = funcOps1.begin();
   auto it2 = funcOps2.begin();
 
-  MLIRContext *context = module1.getContext();
-  OpBuilder builder(context);
-
-  //
-  ModuleOp newModule = ModuleOp::create(module1.getLoc());
+  ModuleOp newModule = ModuleOp::create(UnknownLoc::get(context));
+  OpBuilder builder(newModule.getContext());
 
   while (it1 != funcOps1.end() && it2 != funcOps2.end()) {
     func::FuncOp funcOp1 = *it1;

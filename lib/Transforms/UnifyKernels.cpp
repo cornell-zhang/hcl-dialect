@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <iostream>
-
 #include "PassDetail.h"
 
 #include "hcl/Dialect/HeteroCLDialect.h"

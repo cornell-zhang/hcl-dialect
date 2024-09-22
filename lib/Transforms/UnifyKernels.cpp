@@ -10,20 +10,20 @@
 #include "hcl/Dialect/HeteroCLDialect.h"
 #include "hcl/Dialect/HeteroCLOps.h"
 #include "hcl/Dialect/HeteroCLTypes.h"
-#include "hcl/Transforms/Passes.h"
 #include "hcl/Dialect/TransformOps/HCLTransformOps.h"
+#include "hcl/Transforms/Passes.h"
 
 #include "hcl-c/Dialect/Dialects.h"
 #include "mlir/CAPI/IR.h"
 
-#include "mlir/InitAllDialects.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/IRMapping.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/AffineMap.h"
+#include "mlir/IR/IRMapping.h"
+#include "mlir/IR/OperationSupport.h"
+#include "mlir/InitAllDialects.h"
 
 using namespace mlir;
 using namespace hcl;
@@ -39,31 +39,31 @@ bool compareAffineExprs(AffineExpr lhsExpr, AffineExpr rhsExpr) {
 
   // Compare affine exprs based on kind
   switch (lhsExpr.getKind()) {
-    case AffineExprKind::Constant: {
-      auto lhsConst = lhsExpr.cast<AffineConstantExpr>();
-      auto rhsConst = rhsExpr.cast<AffineConstantExpr>();
-      return lhsConst.getValue() == rhsConst.getValue();
-    }
-    case AffineExprKind::DimId: {
-      auto lhsDim = lhsExpr.cast<AffineDimExpr>();
-      auto rhsDim = rhsExpr.cast<AffineDimExpr>();
-      return lhsDim.getPosition() == rhsDim.getPosition();
-    }
-    case AffineExprKind::SymbolId: {
-      auto lhsSymbol = lhsExpr.cast<AffineSymbolExpr>();
-      auto rhsSymbol = rhsExpr.cast<AffineSymbolExpr>();
-      return lhsSymbol.getPosition() == rhsSymbol.getPosition();
-    }
-    case AffineExprKind::Add:
-    case AffineExprKind::Mul:
-    case AffineExprKind::Mod:
-    case AffineExprKind::FloorDiv:
-    case AffineExprKind::CeilDiv: {
-      auto lhsBinary = lhsExpr.cast<AffineBinaryOpExpr>();
-      auto rhsBinary = rhsExpr.cast<AffineBinaryOpExpr>();
-      return compareAffineExprs(lhsBinary.getLHS(), rhsBinary.getLHS()) &&
-              compareAffineExprs(lhsBinary.getRHS(), rhsBinary.getRHS());
-    }
+  case AffineExprKind::Constant: {
+    auto lhsConst = lhsExpr.cast<AffineConstantExpr>();
+    auto rhsConst = rhsExpr.cast<AffineConstantExpr>();
+    return lhsConst.getValue() == rhsConst.getValue();
+  }
+  case AffineExprKind::DimId: {
+    auto lhsDim = lhsExpr.cast<AffineDimExpr>();
+    auto rhsDim = rhsExpr.cast<AffineDimExpr>();
+    return lhsDim.getPosition() == rhsDim.getPosition();
+  }
+  case AffineExprKind::SymbolId: {
+    auto lhsSymbol = lhsExpr.cast<AffineSymbolExpr>();
+    auto rhsSymbol = rhsExpr.cast<AffineSymbolExpr>();
+    return lhsSymbol.getPosition() == rhsSymbol.getPosition();
+  }
+  case AffineExprKind::Add:
+  case AffineExprKind::Mul:
+  case AffineExprKind::Mod:
+  case AffineExprKind::FloorDiv:
+  case AffineExprKind::CeilDiv: {
+    auto lhsBinary = lhsExpr.cast<AffineBinaryOpExpr>();
+    auto rhsBinary = rhsExpr.cast<AffineBinaryOpExpr>();
+    return compareAffineExprs(lhsBinary.getLHS(), rhsBinary.getLHS()) &&
+           compareAffineExprs(lhsBinary.getRHS(), rhsBinary.getRHS());
+  }
   }
   return false;
 }
@@ -74,12 +74,13 @@ bool compareAffineMaps(AffineMap lhsMap, AffineMap rhsMap) {
 
   if (simplifiedLhsMap.getNumDims() != simplifiedRhsMap.getNumDims() &&
       simplifiedLhsMap.getNumSymbols() != simplifiedRhsMap.getNumSymbols() &&
-      simplifiedLhsMap.getNumResults() != simplifiedRhsMap.getNumResults()) 
+      simplifiedLhsMap.getNumResults() != simplifiedRhsMap.getNumResults())
     return false;
 
   // Compare exprs
   for (unsigned i = 0; i < simplifiedLhsMap.getNumResults(); ++i) {
-    if (!compareAffineExprs(simplifiedLhsMap.getResult(i), simplifiedRhsMap.getResult(i))) {
+    if (!compareAffineExprs(simplifiedLhsMap.getResult(i),
+                            simplifiedRhsMap.getResult(i))) {
       return false;
     }
   }
@@ -88,19 +89,24 @@ bool compareAffineMaps(AffineMap lhsMap, AffineMap rhsMap) {
   return true;
 }
 
-bool compareAffineForOps(affine::AffineForOp &affineForOp1, affine::AffineForOp &affineForOp2) {
+bool compareAffineForOps(affine::AffineForOp &affineForOp1,
+                         affine::AffineForOp &affineForOp2) {
   if (affineForOp1 == affineForOp2)
     return true;
 
-  if (affineForOp1.getStep() != affineForOp2.getStep()) return false;
-  if (!compareAffineMaps(affineForOp1.getLowerBoundMap(), affineForOp2.getLowerBoundMap()) ||
-      !compareAffineMaps(affineForOp1.getUpperBoundMap(), affineForOp2.getUpperBoundMap()))
+  if (affineForOp1.getStep() != affineForOp2.getStep())
+    return false;
+  if (!compareAffineMaps(affineForOp1.getLowerBoundMap(),
+                         affineForOp2.getLowerBoundMap()) ||
+      !compareAffineMaps(affineForOp1.getUpperBoundMap(),
+                         affineForOp2.getUpperBoundMap()))
     return false;
   return true;
 }
 
-void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp &op2, IRMapping &mapping1, IRMapping &mapping2,
- Value conditionArg, bool &foundDifference) {
+void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1,
+               affine::AffineForOp &op2, IRMapping &mapping1,
+               IRMapping &mapping2, Value conditionArg, bool &foundDifference) {
   auto loc = op1->getLoc();
 
   // Save insertion point
@@ -108,13 +114,16 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
 
   // Create new affine.for with same arguments
   auto lowerBoundMap = op1.getLowerBoundMap();
-  auto lowerBoundOperands = llvm::SmallVector<Value, 4>(op1.getLowerBoundOperands().begin(), op1.getLowerBoundOperands().end());
+  auto lowerBoundOperands = llvm::SmallVector<Value, 4>(
+      op1.getLowerBoundOperands().begin(), op1.getLowerBoundOperands().end());
   auto upperBoundMap = op1.getUpperBoundMap();
-  auto upperBoundOperands = llvm::SmallVector<Value, 4>(op1.getUpperBoundOperands().begin(), op1.getUpperBoundOperands().end());
+  auto upperBoundOperands = llvm::SmallVector<Value, 4>(
+      op1.getUpperBoundOperands().begin(), op1.getUpperBoundOperands().end());
   int64_t step = op1.getStep();
 
   auto newAffineForOp = builder.create<mlir::affine::AffineForOp>(
-      loc, lowerBoundOperands, lowerBoundMap, upperBoundOperands, upperBoundMap, step);
+      loc, lowerBoundOperands, lowerBoundMap, upperBoundOperands, upperBoundMap,
+      step);
 
   Block *body1 = op1.getBody();
   Block *body2 = op2.getBody();
@@ -142,11 +151,11 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
         // Todo: Support dynamic loop range
         auto affineForOp1 = dyn_cast<affine::AffineForOp>(&(*body1It));
         auto affineForOp2 = dyn_cast<affine::AffineForOp>(&(*body2It));
-        if (affineForOp1 && affineForOp2 && 
+        if (affineForOp1 && affineForOp2 &&
             compareAffineForOps(affineForOp1, affineForOp2)) {
-          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2, conditionArg, foundDifference);
-        }
-        else {
+          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2,
+                    conditionArg, foundDifference);
+        } else {
           foundDifference = true;
           break;
         }
@@ -162,50 +171,54 @@ void mergeLoop(OpBuilder &builder, affine::AffineForOp &op1, affine::AffineForOp
 
   // Create branch for the rest after difference is found
   builder.create<scf::IfOp>(
-    loc, conditionArg,
-    [&](OpBuilder &thenBuilder, Location thenLoc) {
-      while (body1It != body1->end()) {
-        auto &op = *body1It;
-        if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
-          break;
+      loc, conditionArg,
+      [&](OpBuilder &thenBuilder, Location thenLoc) {
+        while (body1It != body1->end()) {
+          auto &op = *body1It;
+          if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
+            break;
+          }
+          thenBuilder.clone(*body1It, mapping1);
+          ++body1It;
         }
-        thenBuilder.clone(*body1It, mapping1);
-        ++body1It;
-      }
-      thenBuilder.create<scf::YieldOp>(thenLoc);
-    },
-    [&](OpBuilder &elseBuilder, Location elseLoc) {
-      while (body2It != body2->end()) {
-        auto &op = *body2It;
-        if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
-          break;
+        thenBuilder.create<scf::YieldOp>(thenLoc);
+      },
+      [&](OpBuilder &elseBuilder, Location elseLoc) {
+        while (body2It != body2->end()) {
+          auto &op = *body2It;
+          if (auto yieldOp = dyn_cast<affine::AffineYieldOp>(&op)) {
+            break;
+          }
+          elseBuilder.clone(*body2It, mapping2);
+          ++body2It;
         }
-        elseBuilder.clone(*body2It, mapping2);
-        ++body2It;
-      }
-      elseBuilder.create<scf::YieldOp>(elseLoc);
-    }
-  );
+        elseBuilder.create<scf::YieldOp>(elseLoc);
+      });
 }
 
-func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &builder) {
-  std::string newFuncName = func1.getName().str() + "_" + func2.getName().str() + "_unified";
+func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2,
+                          OpBuilder &builder) {
+  std::string newFuncName =
+      func1.getName().str() + "_" + func2.getName().str() + "_unified";
 
   // Todo: Now assuming return types and input types are the same
   // Create new FuncOp with additional parameter
   auto oldFuncType = func1.getFunctionType();
   auto oldInputTypes = oldFuncType.getInputs();
   auto loc = builder.getUnknownLoc();
-  SmallVector<Type, 4> newInputTypes(oldInputTypes.begin(), oldInputTypes.end());
+  SmallVector<Type, 4> newInputTypes(oldInputTypes.begin(),
+                                     oldInputTypes.end());
   auto newOutputTypes = oldFuncType.getResults();
   Type instType = builder.getI1Type();
   newInputTypes.push_back(instType);
   auto newFuncType = builder.getFunctionType(newInputTypes, newOutputTypes);
-  auto newFuncOp = func::FuncOp::create(loc, newFuncName, newFuncType, ArrayRef<NamedAttribute>{});
+  auto newFuncOp = func::FuncOp::create(loc, newFuncName, newFuncType,
+                                        ArrayRef<NamedAttribute>{});
 
   // Create new block for insertion
   Block *entryBlock = newFuncOp.addEntryBlock();
-  auto conditionArg = entryBlock->getArgument(entryBlock->getNumArguments() - 1);
+  auto conditionArg =
+      entryBlock->getArgument(entryBlock->getNumArguments() - 1);
   builder.setInsertionPointToStart(entryBlock);
 
   auto &block1 = func1.front();
@@ -226,17 +239,17 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
 
   // Iterate over two FuncOps to find branch location
   while (block1It != block1.end() && block2It != block2.end()) {
-    if (!foundDifference) {      
+    if (!foundDifference) {
       if (!(&(*block1It) == &(*block2It))) {
         // If we found an affine.for to merge
         // Todo: Support dynamic loop range
         auto affineForOp1 = dyn_cast<affine::AffineForOp>(&(*block1It));
         auto affineForOp2 = dyn_cast<affine::AffineForOp>(&(*block2It));
-        if (affineForOp1 && affineForOp2 && 
+        if (affineForOp1 && affineForOp2 &&
             compareAffineForOps(affineForOp1, affineForOp2)) {
-          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2, conditionArg, foundDifference);
-        }
-        else {
+          mergeLoop(builder, affineForOp1, affineForOp2, mapping1, mapping2,
+                    conditionArg, foundDifference);
+        } else {
           foundDifference = true;
           break;
         }
@@ -257,32 +270,31 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
   // Create branch for the rest after difference is found
   if (!returnOp1 || !returnOp2) {
     builder.create<scf::IfOp>(
-      loc, conditionArg,
-      [&](OpBuilder &thenBuilder, Location thenLoc) {
-        while (block1It != block1.end()) {
-          auto &op = *block1It;
-          if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-            break;
+        loc, conditionArg,
+        [&](OpBuilder &thenBuilder, Location thenLoc) {
+          while (block1It != block1.end()) {
+            auto &op = *block1It;
+            if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
+              break;
+            }
+            thenBuilder.clone(*block1It, mapping1);
+            ++block1It;
           }
-          thenBuilder.clone(*block1It, mapping1);
-          ++block1It;
-        }
-        thenBuilder.create<scf::YieldOp>(thenLoc);
-      },
-      [&](OpBuilder &elseBuilder, Location elseLoc) {
-        while (block2It != block2.end()) {
-          auto &op = *block2It;
-          if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
-            break;
+          thenBuilder.create<scf::YieldOp>(thenLoc);
+        },
+        [&](OpBuilder &elseBuilder, Location elseLoc) {
+          while (block2It != block2.end()) {
+            auto &op = *block2It;
+            if (auto returnOp = dyn_cast<func::ReturnOp>(&op)) {
+              break;
+            }
+            elseBuilder.clone(*block2It, mapping2);
+            ++block2It;
           }
-          elseBuilder.clone(*block2It, mapping2);
-          ++block2It;
-        }
-        elseBuilder.create<scf::YieldOp>(elseLoc);
-      }
-    );
+          elseBuilder.create<scf::YieldOp>(elseLoc);
+        });
   }
-  
+
   // Create returnOp
   // Todo: Now assume the return value is the same
   builder.clone(*block1It, mapping1);
@@ -291,7 +303,8 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2, OpBuilder &b
 }
 
 /// Pass entry point
-ModuleOp applyUnifyKernels(ModuleOp &module1, ModuleOp &module2, MLIRContext *context) {
+ModuleOp applyUnifyKernels(ModuleOp &module1, ModuleOp &module2,
+                           MLIRContext *context) {
   auto funcOps1 = module1.getOps<func::FuncOp>();
   auto funcOps2 = module2.getOps<func::FuncOp>();
 

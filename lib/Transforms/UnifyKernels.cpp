@@ -21,6 +21,7 @@
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/InitAllDialects.h"
 
 using namespace mlir;
@@ -207,17 +208,22 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2,
   SmallVector<Type, 4> newInputTypes(oldInputTypes.begin(),
                                      oldInputTypes.end());
   auto newOutputTypes = oldFuncType.getResults();
-  Type instType = builder.getI1Type();
-  newInputTypes.push_back(instType);
+  Type i1Type = builder.getI1Type();
+  Type memrefType = MemRefType::get({2}, i1Type);
+  newInputTypes.push_back(memrefType);
   auto newFuncType = builder.getFunctionType(newInputTypes, newOutputTypes);
   auto newFuncOp = func::FuncOp::create(loc, newFuncName, newFuncType,
                                         ArrayRef<NamedAttribute>{});
 
   // Create new block for insertion
   Block *entryBlock = newFuncOp.addEntryBlock();
-  auto conditionArg =
-      entryBlock->getArgument(entryBlock->getNumArguments() - 1);
+  auto inst = entryBlock->getArgument(entryBlock->getNumArguments() - 1);
   builder.setInsertionPointToStart(entryBlock);
+
+  auto outterLoop = builder.create<mlir::affine::AffineForOp>(loc, 0, 2, 1);
+  mlir::Value loopIndex = outterLoop.getInductionVar();
+  builder.setInsertionPointToStart(outterLoop.getBody());
+  mlir::Value conditionArg = builder.create<mlir::affine::AffineLoadOp>(loc, inst, loopIndex);
 
   auto &block1 = func1.front();
   auto &block2 = func2.front();
@@ -295,6 +301,7 @@ func::FuncOp unifyKernels(func::FuncOp &func1, func::FuncOp &func2,
 
   // Create returnOp
   // Todo: Now assume the return value is the same
+  builder.setInsertionPointToEnd(entryBlock);
   builder.clone(*block1It, mapping1);
 
   return newFuncOp;
